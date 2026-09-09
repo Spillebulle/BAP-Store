@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["crates/bap-core", "crates/bap-helper", "crates/bap-store"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Spillebulle/BAP-Store"
+authors = ["Spillebulle <spillebulle@gmail.com>"]
+
+[workspace.dependencies]
+bap-core = { path = "crates/bap-core" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+# One HTTP client for the whole workspace. rustls and compiled-in roots so the
+# same binary works inside an AppImage and on a distribution whose certificate
+# store is somewhere else; blocking because every source is a plain function
+# that the application runs on a worker thread.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls", "json", "gzip"] }
+quick-xml = "0.42"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+ruzstd = "0.9"
+tar = "0.4"
+directories = "6"
+regex = "1"
+
+# Debug builds keep our own crates cheap to recompile while dependencies are
+# built optimised: parsing a 36 MB package database in an unoptimised
+# quick-xml measures the debug build rather than the design.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
