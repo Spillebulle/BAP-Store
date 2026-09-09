@@ -384,3 +384,54 @@ impl SystemInfo {
         self.distro_id == "fedora" || self.distro_like.iter().any(|d| d == "fedora" || d == "rhel")
     }
 }
+
+/// One driver profile a manager offers for a device.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriverProfile {
+    /// The manager's own name for it: "nvidia-open-dkms.prime".
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub installed: bool,
+    pub recommended: bool,
+    /// What installing it would put on the machine, where known.
+    pub packages: Vec<String>,
+}
+
+/// A device the driver manager knows about, with its profiles.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriverDevice {
+    /// PCI address or the manager's id: "0000:01:00.0".
+    pub id: String,
+    pub name: String,
+    pub vendor: Option<String>,
+    /// "VGA compatible controller", "Network controller".
+    pub class: Option<String>,
+    pub profiles: Vec<DriverProfile>,
+}
+
+/// One device fwupd reports, and the update it has for it if any.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirmwareDevice {
+    pub id: String,
+    pub name: String,
+    pub vendor: Option<String>,
+    pub version: Option<String>,
+    pub update_version: Option<String>,
+    pub update_summary: Option<String>,
+    pub update_size: Option<u64>,
+    pub needs_reboot: bool,
+}
+
+/// What the Drivers page draws.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriversReport {
+    /// "chwd", or `None` when no driver manager this store knows is present.
+    pub manager: Option<String>,
+    /// One sentence for the page when there is no manager or it failed.
+    pub manager_note: Option<String>,
+    pub devices: Vec<DriverDevice>,
+    pub firmware_available: bool,
+    pub firmware_note: Option<String>,
+    pub firmware: Vec<FirmwareDevice>,
+}

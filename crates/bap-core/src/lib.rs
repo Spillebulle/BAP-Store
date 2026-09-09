@@ -10,6 +10,7 @@
 //! sending the root steps to the helper and running the rest in the session.
 
 pub mod appstream;
+pub mod drivers;
 pub mod group;
 pub mod http;
 pub mod model;

@@ -59,6 +59,16 @@ cd frontend && npm run tauri build
 sh packaging/check.sh
 ```
 
+## Building without root
+
+The development machine has no `webkit2gtk-4.1` installed and `sudo` needs a
+password, so the package and its six missing dependencies were extracted from
+the Arch repositories into `~/.local/opt/webkit` (no root needed) and Node into
+`~/.local/opt/node`. `. tools/dev-env.sh` points pkg-config, the loader and
+WebKit's process path at them; source it before `cargo check -p bap-store` or
+`npm run app:dev`. On a machine with the package installed the script does
+nothing. Installing it properly is `sudo pacman -S --needed webkit2gtk-4.1`.
+
 ## Layout
 
 ```

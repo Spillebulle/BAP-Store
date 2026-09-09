@@ -6,7 +6,7 @@ use crate::{Op, Query, Result, Source};
 pub struct Aur;
 
 impl Aur {
-    pub fn new(_system: &SystemInfo, _client: std::sync::Arc<crate::http::Client>) -> Aur {
+    pub fn new(_system: &SystemInfo, _client: std::sync::Arc<crate::http::Client>, _catalogue: std::sync::Arc<crate::appstream::Catalogue>) -> Aur {
         Aur
     }
 }
