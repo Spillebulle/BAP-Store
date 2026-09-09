@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  # The packaging files are only exercised when a release is built, which is
+  # the worst moment to discover a typo in one. They cost seconds to check.
+  packaging:
+    name: packaging files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse
+        run: |
+          python3 - <<'PY'
+          import sys, xml.dom.minidom, yaml
+          bad = False
+          for f in ['packaging/io.github.spillebulle.bapstore.metainfo.xml',
+                    'packaging/io.github.spillebulle.bapstore.policy']:
+              try:
+                  xml.dom.minidom.parse(f)
+              except Exception as e:
+                  bad = True
+                  print(f'{f}: {e}')
+          for f in ['.github/workflows/ci.yml', '.github/workflows/release.yml']:
+              try:
+                  yaml.safe_load(open(f, encoding='utf-8'))
+              except Exception as e:
+                  bad = True
+                  print(f'{f}: {e}')
+          sys.exit(1 if bad else 0)
+          PY
+      - name: Shell syntax
+        run: |
+          for f in packaging/linux/build-packages.sh tools/*.sh; do bash -n "$f"; done
+      - name: Desktop entry
+        run: |
+          sudo apt-get update && sudo apt-get install -y desktop-file-utils
+          desktop-file-validate packaging/io.github.spillebulle.bapstore.desktop
+      - name: Metadata consistency
+        run: sh packaging/check.sh
+
+  # The page: types, the build, and the design check (no raw hex, no em dash,
+  # no web scale).
+  page:
+    name: page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run check:design
+      - run: npm run build
+
+  # ubuntu-22.04 rather than latest, matching the release: a binary built
+  # against an old glibc runs on newer distributions and not the other way
+  # round, so that is the machine whose answer matters.
+  rust:
+    name: rust ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # The Tauri build script wants frontend/dist to exist.
+      - run: npm run build
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+      - name: Test
+        run: cargo test --workspace
+
+  # The reference platform. An Arch container has real pacman databases once
+  # `pacman -Sy` has run, so the pacman source's live tests run here against
+  # the actual format, which no fixture can promise to match for ever.
+  arch:
+    name: arch live
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install
+        run: |
+          pacman -Syu --noconfirm --needed rust webkit2gtk-4.1 gtk3 nodejs npm \
+            archlinux-appstream-data pkgconf git
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Test, including the live pacman and AppStream tests
+        run: |
+          cargo test -p bap-core
+          cargo test -p bap-core -- --ignored live_pacman live_appstream live_this_machine
+      - name: Text mode against real databases
+        run: |
+          cargo run --release -p bap-store -- sources
+          cargo run --release -p bap-store -- search steam

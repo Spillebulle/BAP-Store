@@ -1,0 +1,199 @@
+name: Release
+
+# Cutting a release is pushing a tag; everything below follows from that.
+# `tools/release.sh` pushes it after running the same gates CI runs.
+# `workflow_dispatch` builds and packages everything but publishes nothing,
+# which is how a change to this file gets rehearsed without spending a tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04,     target: x86_64-unknown-linux-gnu,  arch: amd64, rpm: x86_64  }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, arch: arm64, rpm: aarch64 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf \
+            rpm file desktop-file-utils
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Test
+        run: |
+          npm run lint
+          npm run build
+          cargo test --workspace
+
+      # The bundler builds the application in release and wraps it as an
+      # AppImage with WebKit's libraries inside. The helper is a separate
+      # crate, built beside it.
+      - name: Build
+        run: |
+          set -eu
+          npm run app:build -- --bundles appimage
+          cargo build --release -p bap-helper
+
+      - name: Stage
+        run: |
+          set -eu
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          stage="bap-store-${version}-${{ matrix.target }}"
+          mkdir -p "staging/$stage" dist
+          cp target/release/bap-store target/release/bap-helper "staging/$stage/"
+          cp README.md CHANGELOG.md LICENSE "staging/$stage/"
+          cp -r packaging "staging/$stage/"
+          cp -r assets/icons "staging/$stage/icons"
+          tar czf "dist/${stage}.tar.gz" -C staging "$stage"
+          # The bundler names the AppImage after productName, with a space;
+          # the release asset names are the ones `selfupdate` expects.
+          mv target/release/bundle/appimage/*.AppImage "dist/BAP-Store-${version}-${{ matrix.rpm }}.AppImage"
+
+      - name: Build .deb and .rpm
+        run: |
+          packaging/linux/build-packages.sh "$VERSION" \
+            target/release/bap-store target/release/bap-helper "${{ matrix.arch }}" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  # makepkg needs an Arch userland; a container is the cheapest way to get one.
+  arch:
+    name: build Arch package
+    needs: build
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: x86_64-unknown-linux-gnu
+          path: dist
+      - name: Build
+        run: |
+          set -eu
+          pacman -Sy --noconfirm --needed git
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          useradd -m builder
+          work=/home/builder/build
+          install -d -o builder "$work"
+          cp packaging/linux/PKGBUILD-bin "$work/PKGBUILD"
+          cp "dist/bap-store-${version}-x86_64-unknown-linux-gnu.tar.gz" "$work/"
+          sed -i "s/^pkgver=.*/pkgver=${version}/" "$work/PKGBUILD"
+          chown -R builder "$work"
+          su builder -c "cd $work && makepkg --noconfirm --nodeps"
+          mkdir -p out
+          cp "$work"/*.pkg.tar.zst out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [build, arch]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Release notes
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          manifest=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          if [ "$version" != "$manifest" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml's ${manifest}" >&2
+            exit 1
+          fi
+          sh tools/release-notes.sh "$version" > notes.md
+          cat notes.md
+
+      # The title is the bare version, built from the tag so it cannot drift
+      # (STYLE-GUIDE.md §17.2). The body is the changelog section, verbatim.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la artifacts
+          gh release create "$GITHUB_REF_NAME" \
+            --title "${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            artifacts/*
+
+      # The apt and rpm archive rebuilds itself from the newest release of
+      # every project it carries. Skipped when the token is absent.
+      - name: Tell the archive
+        env:
+          ARCHIVE_DISPATCH_TOKEN: ${{ secrets.ARCHIVE_DISPATCH_TOKEN }}
+        if: env.ARCHIVE_DISPATCH_TOKEN != ''
+        run: |
+          set -eu
+          GH_TOKEN="$ARCHIVE_DISPATCH_TOKEN" gh api \
+            /repos/Spillebulle/packages/dispatches \
+            -f event_type=package \
+            -f "client_payload[repository]=$GITHUB_REPOSITORY" \
+            -f "client_payload[tag]=$GITHUB_REF_NAME"
+
+      # The AUR package `bap-store` builds from the tagged source. Pushed only
+      # when an SSH key for the AUR account is configured; otherwise the
+      # PKGBUILD in packaging/linux/ is what a maintainer pushes by hand.
+      - name: Publish to the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur"
+          git clone ssh://aur@aur.archlinux.org/bap-store.git aur
+          cp packaging/linux/PKGBUILD aur/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${version}/" aur/PKGBUILD
+          sum=$(curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/v${version}.tar.gz" | sha256sum | cut -d' ' -f1)
+          sed -i "s/^sha256sums=.*/sha256sums=('${sum}')/" aur/PKGBUILD
+          docker run --rm -v "$PWD/aur:/pkg" -w /pkg archlinux:base-devel \
+            sh -c "useradd -m b && chown -R b /pkg && su b -c 'makepkg --printsrcinfo' > .SRCINFO"
+          cd aur
+          git config user.name "Spillebulle"
+          git config user.email "spillebulle@gmail.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${version}"
+          git push

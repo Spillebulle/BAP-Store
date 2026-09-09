@@ -1,0 +1,28 @@
+# Configuration
+
+Every setting BAP Store keeps, where it lives, and when to change it.
+
+Settings save as they are changed, to a flat `key = value` file at
+`~/.config/bap-store/settings.conf`. Unknown keys are kept; a value that does
+not parse falls back to its default and nothing else is lost. The Settings
+page edits every key below; the file is for a machine set up by hand.
+
+| Key | Default | What it does |
+|---|---|---|
+| `theme` | `system` | `dark`, `light`, or `system` to follow the desktop. |
+| `enabled_sources` | all | Comma list of sources searched by default: `pacman,aur,flatpak,snap,apt,dnf,github,fwupd,chwd`. A source not on this machine stays listed, disabled, with the reason. |
+| `show_packages` | `false` | Search shows only applications unless this is on or the toolbar toggle is used. |
+| `aur_helper` | `auto` | `auto` uses paru, then yay, then the built-in makepkg path. `paru`, `yay` or `builtin` force one. |
+| `flatpak_scope` | `system` | Whether Flatpak installs go to the system installation (asks polkit) or to `~/.local/share/flatpak` (`user`, no password). |
+| `check_updates_on_start` | `true` | Check every source for updates when the window opens. |
+| `self_update_check` | `true` | Ask GitHub for a newer BAP Store when the window opens, at most once every six hours. |
+| `update_check_minutes` | `60` | How often the Updates page re-checks while the window is open. |
+| `split` | empty | Editions the user has split out of a grouped row, as `source:id`, so the grouper keeps them apart. |
+
+Environment variables, for development and for unusual machines:
+
+| Variable | Effect |
+|---|---|
+| `BAP_HELPER` | Path to the privileged helper, instead of `/usr/lib/bap-store/bap-helper` or the one beside the executable. |
+| `BAP_APPSTREAM_DIR` | Colon-separated extra AppStream roots (each with `xml/` and `icons/`), read after the system ones. |
+| `WEBKIT_DISABLE_DMABUF_RENDERING` | Set to `1` by BAP Store itself on machines with an NVIDIA device, where WebKitGTK otherwise renders a black window. Set it yourself to any value to stop that. |

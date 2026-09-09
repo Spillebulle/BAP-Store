@@ -1,0 +1,130 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/banner-paper.png">
+    <img src="docs/images/banner.png" alt="BAP Store" width="560">
+  </picture>
+</p>
+
+<p align="center">
+  One store for every way a Linux machine gets software, built for one thing above all others: <b>one search, one install, every source</b>.
+</p>
+
+<p align="center">
+  Searches pacman, the AUR, Flatpak, Snap, apt, dnf and GitHub releases · installs through one flow ·
+  updates everything from one page · drivers and firmware · keeps itself current
+</p>
+
+![The BAP Store window: a search for "steam" with the pacman, Flatpak and Snap editions grouped as one row, the sidebar and the status bar](docs/images/window.png)
+
+> **Early days.** Searching, installing, removing and updating work on Arch and its derivatives, with Flatpak and Snap wherever they are installed. apt and dnf are written but have not yet run on a real Debian or Fedora. [What is not there yet](#what-is-not-there-yet) is honest about the rest.
+
+## Install
+
+**BAP Store 0.1.0.** Take the file for your system, or browse the
+[release itself](https://github.com/Spillebulle/BAP-Store/releases/latest) for the
+notes and the checksums.
+
+| Your system | x86-64 | ARM64 |
+|---|---|---|
+| Arch, CachyOS, EndeavourOS, Manjaro | [`.pkg.tar.zst`](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/bap-store-bin-0.1.0-1-x86_64.pkg.tar.zst), or `bap-store` from the AUR | from the AUR |
+| Debian, Ubuntu, Mint, Pop!_OS | [`.deb`](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/bap-store_0.1.0_amd64.deb) | [`.deb`](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/bap-store_0.1.0_arm64.deb) |
+| Fedora, RHEL, openSUSE | [`.rpm`](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/bap-store-0.1.0-1.x86_64.rpm) | [`.rpm`](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/bap-store-0.1.0-1.aarch64.rpm) |
+| Any other Linux | [AppImage](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/BAP-Store-0.1.0-x86_64.AppImage), one file with nothing to install | [AppImage](https://github.com/Spillebulle/BAP-Store/releases/download/v0.1.0/BAP-Store-0.1.0-aarch64.AppImage) |
+
+The `.deb` and `.rpm` add the [Spillebulle archive](https://spillebulle.github.io/packages/)
+as they install, so `apt upgrade` or your usual system update carries BAP Store
+along with everything else. On Arch, the AUR package updates through BAP Store's
+own Updates page like everything else.
+
+You need WebKitGTK 4.1 and polkit, which every desktop distribution ships and the
+packages pull in. Installing packages asks for your password once per batch,
+through the same prompt your desktop uses for everything else.
+
+BAP Store checks for its own new versions when it starts and shows a notice with
+the release notes. You can turn that off in **Settings**.
+
+## Search
+
+<img src="docs/images/search.png" alt="Search results for gimp: one row for GIMP with pacman, Flatpak and AUR editions, filters for source and kind in the toolbar" align="right" width="300">
+
+One box searches every source the machine has at once. The same application
+from several sources is **one row with several editions**, joined by its
+AppStream id where both sides have one and by name where they do not; a match
+by name says so, and can be split if it is wrong.
+
+Filter by source, by applications or every package, by installed; sort by
+relevance, name, last updated, popularity or size. A source that cannot be
+used on this machine is listed disabled with the reason in its tooltip.
+
+<br clear="right">
+
+## Details and install
+
+<img src="docs/images/detail.png" alt="The Steam detail page: a screenshot as backdrop, the icon and facts, the editions dropdown, the install button" align="right" width="300">
+
+Icons, descriptions and screenshots come from AppStream and Flathub. The
+facts column shows the version, size, licence and last update of the edition
+in hand; the dropdown picks which edition to install.
+
+Installing runs through one activity panel: what is happening, a progress
+rail when the total is known and a sentence when it is not, and the full log
+a click away. Everything that needs root goes through one small helper with a
+closed list of commands, so the window itself never runs as root.
+
+<br clear="right">
+
+## Updates
+
+<img src="docs/images/updates.png" alt="The Updates page: BAP Store's own update first, then applications and packages with tick boxes, sizes and an Update all button" align="right" width="300">
+
+Every source is checked, without root, and the list can be updated whole or
+by selection. On Arch a selection draws a notice: partial upgrades are not
+supported there, and Update all is the safe choice.
+
+BAP Store's own update appears at the top and installs the way this copy was
+installed.
+
+<br clear="right">
+
+## Drivers and firmware
+
+On CachyOS the Drivers page lists each device with the profiles chwd offers
+and which is installed. Firmware updates come from fwupd on every
+distribution. Where no driver manager is known, the page says so rather than
+guessing.
+
+## What is not there yet
+
+- apt and dnf are written to the same interface as pacman but have not run on a real Debian or Fedora. They are marked untested in the sources list until they have.
+- Snap needs snapd; the Snap Store is not searched without it, because a result that cannot be installed is not a result.
+- Drivers are managed only through chwd (CachyOS). Elsewhere they install as ordinary packages.
+- No reviews or ratings.
+- AppImages from GitHub releases are placed in `~/.local/bin` without a menu entry yet.
+- A Flatpak of BAP Store itself is not published: a sandboxed store cannot reach the helper.
+
+## Controls
+
+| Key | Does |
+|---|---|
+| `Ctrl` `F` or `/` | Focus the search box |
+| `Escape` | Clear the search, close a menu or a dialog |
+| `Enter` | Open the selected row |
+| `Backspace` | Back to the results from a detail page |
+| `Ctrl` `,` | Settings |
+
+## Building from source
+
+```sh
+git clone https://github.com/Spillebulle/BAP-Store && cd BAP-Store
+npm ci                        # the page
+cargo build --release         # bap-store, bap-helper
+cargo run -p bap-store -- search steam     # the text mode, no window needed
+npm run app:dev               # the window, needs webkit2gtk-4.1 and its headers
+```
+
+How the sources, the grouping and the helper fit together is in `docs/architecture.md`.
+
+## Licence
+
+GPL-3.0-or-later. Archivo is bundled under the SIL Open Font Licence
+(`assets/fonts/OFL.txt`); icons are [Lucide](https://lucide.dev), ISC.
