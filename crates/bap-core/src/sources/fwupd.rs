@@ -132,18 +132,19 @@ pub fn package(device: &Device) -> Option<Package> {
     Some(p)
 }
 
+/// The detail page's key/value list. fwupd's plugin name is the one
+/// internal that says something a user can place ("uefi_capsule" is the
+/// firmware capsule path, "nvme" the drive), so it is kept under a plain
+/// key; the flag list and the GUID count are jargon nothing on the page can
+/// act on, and "Needs reboot" already says the one flag that matters.
 fn facts(device: &Device) -> Vec<(String, String)> {
     let mut facts = Vec::new();
     if let Some(plugin) = &device.plugin {
-        facts.push(("Plugin".to_string(), plugin.clone()));
+        facts.push(("Updated through".to_string(), plugin.clone()));
     }
     if let Some(format) = &device.version_format {
         facts.push(("Version format".to_string(), format.clone()));
     }
-    if !device.flags.is_empty() {
-        facts.push(("Flags".to_string(), device.flags.join(", ")));
-    }
-    facts.push(("GUIDs".to_string(), device.guids.len().to_string()));
     if let Some(error) = &device.update_error {
         facts.push(("Update error".to_string(), error.clone()));
     }

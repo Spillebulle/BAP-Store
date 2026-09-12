@@ -14,10 +14,15 @@
 //! repository's `.db` into the store's cache directory and `updates` prefers
 //! that copy whenever it is newer than the system's, which is exactly what
 //! pacman-contrib's `checkupdates` does with its private `--dbpath`. Search
-//! and the installed list keep using the system's databases, because that is
-//! what `pacman -S` will act on.
+//! and the installed list read the system's databases, which are what the
+//! machine has installed against. An install or an update is planned as
+//! `pacman -Syu` with the name: pacman refreshes its own databases and
+//! upgrades the whole system in the same transaction, which is the only
+//! shape Arch supports. `pacman -S name` against a days-old system database
+//! asks the mirror for files it no longer has, and `-Sy name` is the
+//! partial upgrade the design refuses, so neither is ever planned.
 
-use super::alpmdb::{Desc, LocalDb, SyncDb, repos};
+use super::alpmdb::{Desc, LocalDb, SyncDb, glob_matches, is_package_name, read_includes, repos};
 use crate::appstream::{Catalogue, Component};
 use crate::http::Client;
 use crate::model::*;
@@ -26,13 +31,22 @@ use crate::{Error, Op, Query, Result, Source};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// How many of a repository's mirrors a refresh tries before giving up on
-/// it. pacman tries every one; three bounds the wait to well under a minute
-/// when a whole country is offline.
+/// it. pacman tries every one; three bounds the wait when a whole country
+/// is offline.
 const MIRRORS_TRIED: usize = 3;
+
+/// How long a whole refresh may take. The repositories are fetched in
+/// parallel and each request is cut off at the deadline, so an updates
+/// check never waits longer than this on a mirror that answers slowly.
+pub const REFRESH_BUDGET: Duration = Duration::from_secs(20);
+
+/// What a repository is marked with when the deadline passed before any of
+/// its mirrors could be asked.
+pub const SKIPPED_FOR_TIME: &str = "Not refreshed: the earlier repositories used the time budget.";
 
 /// Where pacman keeps its files on this machine, and where the store keeps
 /// its own copies of the sync databases. Tests point every field at a
@@ -201,48 +215,6 @@ fn server_url(template: &str, repo: &str, arch: &str) -> String {
         .to_string()
 }
 
-/// Read the files an `Include =` names. A glob (`/etc/pacman.d/*.conf`) is
-/// matched on the file name within its directory, in name order, as
-/// pacman's `glob()` does.
-fn read_includes(pattern: &str) -> Vec<String> {
-    let path = Path::new(pattern);
-    if !pattern.contains(['*', '?', '[']) {
-        return std::fs::read_to_string(path).into_iter().collect();
-    }
-    let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|f| f.to_str())) else {
-        return Vec::new();
-    };
-    let mut expression = String::from("^");
-    for ch in file.chars() {
-        match ch {
-            '*' => expression.push_str(".*"),
-            '?' => expression.push('.'),
-            other => expression.push_str(&regex::escape(&other.to_string())),
-        }
-    }
-    expression.push('$');
-    let Ok(re) = regex::Regex::new(&expression) else {
-        return Vec::new();
-    };
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut names: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .and_then(|f| f.to_str())
-                .is_some_and(|f| re.is_match(f))
-        })
-        .collect();
-    names.sort();
-    names
-        .into_iter()
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .collect()
-}
-
 /// What a refresh did, per repository. A repository whose mirrors all
 /// failed is listed with the last sentence they failed with; the others are
 /// still refreshed, because one dead mirrorlist should not hide the updates
@@ -252,6 +224,42 @@ pub struct Refreshed {
     pub downloaded: Vec<String>,
     pub unchanged: Vec<String>,
     pub failed: Vec<(String, String)>,
+}
+
+impl Refreshed {
+    /// The sentence for a refresh that achieved nothing: every repository
+    /// failed and none was downloaded or found unchanged. `None` when at
+    /// least one repository is fresh, or there was nothing to refresh. The
+    /// reasons are grouped so one dead mirror is named once, with the
+    /// repositories it took down.
+    pub fn failure(&self) -> Option<String> {
+        if self.failed.is_empty() || !self.downloaded.is_empty() || !self.unchanged.is_empty() {
+            return None;
+        }
+        let mut reasons: Vec<(&str, Vec<&str>)> = Vec::new();
+        for (name, why) in &self.failed {
+            match reasons.iter_mut().find(|(w, _)| *w == why.as_str()) {
+                Some((_, names)) => names.push(name),
+                None => reasons.push((why, vec![name])),
+            }
+        }
+        let detail: Vec<String> = reasons
+            .iter()
+            .map(|(why, names)| format!("{} ({})", why.trim_end_matches('.'), names.join(", ")))
+            .collect();
+        Some(format!(
+            "No package list could be refreshed, so updates are checked against the lists the machine has. {}.",
+            detail.join(". ")
+        ))
+    }
+}
+
+/// One repository's outcome inside a refresh, before it is sorted into
+/// `Refreshed`.
+enum Outcome {
+    Downloaded,
+    Unchanged,
+    Failed(String),
 }
 
 /// An installed package that no enabled repository provides: built from
@@ -358,12 +366,6 @@ pub struct Pacman {
     paths: Paths,
     catalogue: Arc<Catalogue>,
     dbs: Mutex<Option<Arc<Loaded>>>,
-    /// `pkgname` to component index, built once from the catalogue.
-    /// TODO: delete once `Catalogue::by_pkgname` is real. On this branch the
-    /// catalogue is a stub that answers nothing even for components handed
-    /// to `from_components`, so this index is what the tests exercise; with
-    /// the real catalogue `by_pkgname` is asked first and this only backs it.
-    pkgnames: OnceLock<HashMap<String, usize>>,
 }
 
 impl Pacman {
@@ -376,7 +378,6 @@ impl Pacman {
             paths,
             catalogue,
             dbs: Mutex::new(None),
-            pkgnames: OnceLock::new(),
         }
     }
 
@@ -432,7 +433,26 @@ impl Pacman {
     /// small round trip rather than a download. The mtime of a downloaded
     /// file is set from the server's `Last-Modified`, as pacman does, which
     /// is what makes "newer than the system's" a fair comparison.
+    ///
+    /// The whole refresh is bounded by [`REFRESH_BUDGET`]. `Err` when the
+    /// configuration or the cache directory cannot be used, and when every
+    /// repository failed so that nothing is fresh: the caller then has a
+    /// sentence to report rather than a silent stale answer.
     pub fn refresh_into_cache(&self, client: &Client) -> Result<Refreshed> {
+        let refreshed = self.refresh_with_deadline(client, Instant::now() + REFRESH_BUDGET)?;
+        match refreshed.failure() {
+            Some(sentence) => Err(self.error(sentence)),
+            None => Ok(refreshed),
+        }
+    }
+
+    /// [`refresh_into_cache`](Self::refresh_into_cache) with the deadline
+    /// as a parameter and every per-repository outcome reported in the
+    /// result, so the budget can be tested without a slow mirror. The
+    /// repositories are fetched in parallel; a request is cut off at the
+    /// deadline, and a repository that could not be started before it is
+    /// listed as failed with [`SKIPPED_FOR_TIME`].
+    pub fn refresh_with_deadline(&self, client: &Client, deadline: Instant) -> Result<Refreshed> {
         let conf = std::fs::read_to_string(&self.paths.conf).map_err(|e| {
             self.error(format!(
                 "Could not read {}: {e}. The repositories are not known without it.",
@@ -447,53 +467,66 @@ impl Pacman {
                 self.paths.cache_dir.display()
             ))
         })?;
+        let outcomes: Vec<Outcome> = std::thread::scope(|scope| {
+            let handles: Vec<_> = list
+                .iter()
+                .map(|repo| scope.spawn(move || self.refresh_one(client, repo, deadline)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("refreshing a repository does not panic"))
+                .collect()
+        });
         let mut out = Refreshed::default();
-        for repo in list {
-            let target = self.paths.cache_dir.join(format!("{}.db", repo.name));
-            let system = self.paths.sync_dir.join(format!("{}.db", repo.name));
-            let since = [mtime(&system), mtime(&target)].into_iter().flatten().max();
-            if repo.servers.is_empty() {
-                out.failed.push((
-                    repo.name.clone(),
-                    "No Server line in pacman.conf or its mirrorlist.".to_string(),
-                ));
-                continue;
-            }
-            let mut last_error = None;
-            for server in repo.servers.iter().take(MIRRORS_TRIED) {
-                let url = format!("{server}/{}.db", repo.name);
-                match fetch(client, &url, since) {
-                    Ok(Fetched::Unchanged) => {
-                        log::debug!("pacman: {} is unchanged at {url}", repo.name);
-                        out.unchanged.push(repo.name.clone());
-                        last_error = None;
-                        break;
-                    }
-                    Ok(Fetched::Body(bytes, last_modified)) => {
-                        if let Err(e) = write_db(&target, &bytes, last_modified) {
-                            last_error = Some(e);
-                            break;
-                        }
-                        log::debug!(
-                            "pacman: downloaded {} ({} bytes) from {url}",
-                            repo.name,
-                            bytes.len()
-                        );
-                        out.downloaded.push(repo.name.clone());
-                        last_error = None;
-                        break;
-                    }
-                    Err(e) => {
-                        log::debug!("pacman: {url}: {}", e.message);
-                        last_error = Some(e);
-                    }
-                }
-            }
-            if let Some(e) = last_error {
-                out.failed.push((repo.name.clone(), e.message));
+        for (repo, outcome) in list.iter().zip(outcomes) {
+            match outcome {
+                Outcome::Downloaded => out.downloaded.push(repo.name.clone()),
+                Outcome::Unchanged => out.unchanged.push(repo.name.clone()),
+                Outcome::Failed(why) => out.failed.push((repo.name.clone(), why)),
             }
         }
         Ok(out)
+    }
+
+    /// One repository: its mirrors in order until one answers, each request
+    /// given what is left of the budget.
+    fn refresh_one(&self, client: &Client, repo: &RepoMirrors, deadline: Instant) -> Outcome {
+        let target = self.paths.cache_dir.join(format!("{}.db", repo.name));
+        let system = self.paths.sync_dir.join(format!("{}.db", repo.name));
+        let since = [mtime(&system), mtime(&target)].into_iter().flatten().max();
+        if repo.servers.is_empty() {
+            return Outcome::Failed("No Server line in pacman.conf or its mirrorlist.".to_string());
+        }
+        let mut last_error: Option<String> = None;
+        for server in repo.servers.iter().take(MIRRORS_TRIED) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let url = format!("{server}/{}.db", repo.name);
+            match fetch(client, &url, since, remaining) {
+                Ok(Fetched::Unchanged) => {
+                    log::debug!("pacman: {} is unchanged at {url}", repo.name);
+                    return Outcome::Unchanged;
+                }
+                Ok(Fetched::Body(bytes, last_modified)) => {
+                    if let Err(e) = write_db(&target, &bytes, last_modified) {
+                        return Outcome::Failed(e.message);
+                    }
+                    log::debug!(
+                        "pacman: downloaded {} ({} bytes) from {url}",
+                        repo.name,
+                        bytes.len()
+                    );
+                    return Outcome::Downloaded;
+                }
+                Err(e) => {
+                    log::debug!("pacman: {url}: {}", e.message);
+                    last_error = Some(e.message);
+                }
+            }
+        }
+        Outcome::Failed(last_error.unwrap_or_else(|| SKIPPED_FOR_TIME.to_string()))
     }
 
     fn error(&self, message: String) -> Error {
@@ -511,7 +544,7 @@ impl Pacman {
                 self.paths.conf.display()
             ))
         })?;
-        let repo_dbs = repos(&conf, &self.paths.sync_dir);
+        let repo_dbs = repos(&conf, &self.paths.sync_dir, &read_includes);
         let stamp = Stamp::take(&self.paths, &repo_dbs);
         if let Some(loaded) = guard.as_ref()
             && loaded.stamp == stamp
@@ -596,7 +629,7 @@ impl Pacman {
         for result in results {
             let (system, cache) = result.map_err(|e| {
                 self.error(format!(
-                    "Could not read a package list ({}). Run pacman -Sy to download it again.",
+                    "Could not read a package list ({}). Refresh the package lists to download it again.",
                     e.message
                 ))
             })?;
@@ -668,27 +701,11 @@ impl Pacman {
             .collect()
     }
 
+    /// The component the catalogue chose for the package: the desktop
+    /// application named like it where the package carries several
+    /// (`Catalogue::by_pkgname` ranks them).
     fn component_for(&self, name: &str) -> Option<&Component> {
-        if let Some(c) = self.catalogue.by_pkgname(name) {
-            return Some(c);
-        }
-        let index = self.pkgnames.get_or_init(|| {
-            let mut map: HashMap<String, usize> = HashMap::new();
-            for (i, c) in self.catalogue.components().iter().enumerate() {
-                let Some(pkgname) = &c.pkgname else { continue };
-                // A package can carry several components (a suite with two
-                // desktop entries); the application beats the addon.
-                match map.get(pkgname) {
-                    Some(&existing)
-                        if self.catalogue.components()[existing].is_app || !c.is_app => {}
-                    _ => {
-                        map.insert(pkgname.clone(), i);
-                    }
-                }
-            }
-            map
-        });
-        index.get(name).map(|&i| &self.catalogue.components()[i])
+        self.catalogue.by_pkgname(name)
     }
 
     /// The `Package` for one name in a view. `full` adds what only the
@@ -811,7 +828,7 @@ impl Source for Pacman {
             };
         }
         let conf = std::fs::read_to_string(&self.paths.conf).unwrap_or_default();
-        let present: Vec<String> = repos(&conf, &self.paths.sync_dir)
+        let present: Vec<String> = repos(&conf, &self.paths.sync_dir, &read_includes)
             .into_iter()
             .filter(|(_, path)| path.is_file())
             .map(|(name, _)| name)
@@ -896,12 +913,7 @@ impl Source for Pacman {
             .iter()
             .filter_map(|(name, local)| {
                 let (desc, _) = view.get(name)?;
-                if options.ignore_pkg.iter().any(|p| p == name)
-                    || desc
-                        .all("GROUPS")
-                        .iter()
-                        .any(|g| options.ignore_group.contains(g))
-                {
+                if is_ignored(options, name, desc.all("GROUPS")) {
                     return None;
                 }
                 (vercmp(desc.version(), local.version()) == Ordering::Greater)
@@ -919,19 +931,27 @@ impl Source for Pacman {
     }
 
     /// Fresh sync databases into the cache, the way `checkupdates` does,
-    /// so a check for updates needs no root.
+    /// so a check for updates needs no root. `Err` when nothing could be
+    /// refreshed, with the sentence the caller reports.
     fn refresh_index(&self) -> Result<()> {
         self.refresh_into_cache(&crate::http::Client::shared())
             .map(|_| ())
     }
 
+    /// An install or an update is `pacman -Syu --needed <name>`: the
+    /// databases pacman acts on are refreshed and the whole system brought
+    /// up to date in the one transaction, which is what pamac does and the
+    /// only install Arch supports. `--needed` keeps an already current name
+    /// from being reinstalled. A refresh plans nothing, because
+    /// [`refresh_index`](Source::refresh_index) does it without root and a
+    /// bare `-Sy` would set up the partial upgrade the design refuses.
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         let step = match op {
             Op::Install { package } => {
                 let name = self.own(package)?;
                 self.step(
-                    format!("Installing {name}"),
-                    &["-S", "--noconfirm", "--needed", name],
+                    format!("Installing {name} and updating the system"),
+                    &["-Syu", "--noconfirm", "--needed", name],
                     3,
                 )
             }
@@ -941,7 +961,11 @@ impl Source for Pacman {
             }
             Op::Update { package } => {
                 let name = self.own(package)?;
-                self.step(format!("Updating {name}"), &["-S", "--noconfirm", name], 3)
+                self.step(
+                    format!("Updating {name} and the system"),
+                    &["-Syu", "--noconfirm", "--needed", name],
+                    3,
+                )
             }
             Op::UpdateAll { source } => {
                 self.own_source(*source)?;
@@ -953,7 +977,7 @@ impl Source for Pacman {
             }
             Op::Refresh { source } => {
                 self.own_source(*source)?;
-                self.step("Refreshing package lists".to_string(), &["-Sy"], 1)
+                return Ok(Vec::new());
             }
         };
         Ok(vec![step])
@@ -1042,6 +1066,22 @@ fn score(
     all_terms.then_some(0.4)
 }
 
+/// Whether `IgnorePkg` or `IgnoreGroup` in `pacman.conf` keeps the package
+/// out of an upgrade. Both allow shell globs (`nvidia*`), matched the way
+/// pacman matches them.
+fn is_ignored(options: &Options, name: &str, groups: &[String]) -> bool {
+    options
+        .ignore_pkg
+        .iter()
+        .any(|pattern| glob_matches(pattern, name))
+        || groups.iter().any(|group| {
+            options
+                .ignore_group
+                .iter()
+                .any(|pattern| glob_matches(pattern, group))
+        })
+}
+
 fn word_contains(text_l: &str, term: &str) -> bool {
     text_l
         .split(|c: char| !c.is_alphanumeric())
@@ -1115,16 +1155,6 @@ fn count(n: usize, noun: &str) -> String {
     } else {
         format!("{n} {noun}s")
     }
-}
-
-/// pacman's rule for a package name: lower-case letters, digits and
-/// `@ . _ + -`, not starting with a hyphen or a dot.
-fn is_package_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with(['-', '.'])
-        && name
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c))
 }
 
 /// Unix seconds as an ISO date in UTC, "2026-08-21". Build dates are what
@@ -1212,14 +1242,21 @@ enum Fetched {
     Body(Vec<u8>, Option<i64>),
 }
 
-fn fetch(client: &Client, url: &str, since: Option<SystemTime>) -> Result<Fetched> {
+/// One conditional request, allowed at most `timeout` (what is left of the
+/// refresh budget) for the whole exchange.
+fn fetch(
+    client: &Client,
+    url: &str,
+    since: Option<SystemTime>,
+    timeout: Duration,
+) -> Result<Fetched> {
     let host = url
         .split("://")
         .nth(1)
         .and_then(|r| r.split('/').next())
         .unwrap_or(url)
         .to_string();
-    let mut request = client.raw().get(url);
+    let mut request = client.raw().get(url).timeout(timeout);
     if let Some(t) = since.and_then(unix_of) {
         request = request.header("If-Modified-Since", http_date(t));
     }
@@ -1298,7 +1335,7 @@ fn write_db(target: &Path, bytes: &[u8], last_modified: Option<i64>) -> Result<(
 mod tests {
     use super::*;
 
-    const CONF: &str = "[options]\nHoldPkg = pacman glibc\nArchitecture = auto\nIgnorePkg = linux-cachyos\nIgnorePkg = steam paru\nIgnoreGroup = base-devel\n\n[cachyos-v3] \nInclude = /etc/pacman.d/cachyos-v3-mirrorlist \n\n#[core-testing]\n#Include = /etc/pacman.d/mirrorlist\n\n[core]\nServer = https://first.example/$repo/os/$arch\nInclude = /etc/pacman.d/mirrorlist\n\n[custom]\nSigLevel = Optional TrustAll\nServer = file:///home/custompkgs\n";
+    const CONF: &str = "[options]\nHoldPkg = pacman glibc\nArchitecture = auto\nIgnorePkg = linux-cachyos\nIgnorePkg = steam paru nvidia*\nIgnoreGroup = base-devel\n\n[cachyos-v3] \nInclude = /etc/pacman.d/cachyos-v3-mirrorlist \n\n#[core-testing]\n#Include = /etc/pacman.d/mirrorlist\n\n[core]\nServer = https://first.example/$repo/os/$arch\nInclude = /etc/pacman.d/mirrorlist\n\n[custom]\nSigLevel = Optional TrustAll\nServer = file:///home/custompkgs\n";
 
     fn includes(path: &str) -> Vec<String> {
         match path {
@@ -1315,7 +1352,7 @@ mod tests {
         let o = options(CONF);
         assert_eq!(o.db_path, None);
         assert_eq!(o.architecture, None);
-        assert_eq!(o.ignore_pkg, ["linux-cachyos", "steam", "paru"]);
+        assert_eq!(o.ignore_pkg, ["linux-cachyos", "steam", "paru", "nvidia*"]);
         assert_eq!(o.ignore_group, ["base-devel"]);
         let explicit = options(
             "[options]\nDBPath = /mnt/pacman/\nArchitecture = x86_64 x86_64_v3\n[core]\nIgnorePkg = not-here\n",
@@ -1452,16 +1489,49 @@ mod tests {
     }
 
     #[test]
-    fn package_names_that_look_like_options_are_refused() {
-        assert!(is_package_name("steam"));
-        assert!(is_package_name("lib32-gcc-libs"));
-        assert!(is_package_name("python-pyqt6.sip"));
-        assert!(is_package_name("nvidia-open-dkms+"));
-        assert!(!is_package_name("-Rs"));
-        assert!(!is_package_name("Steam"));
-        assert!(!is_package_name("a b"));
-        assert!(!is_package_name(""));
-        assert!(!is_package_name("--noconfirm"));
+    fn ignorepkg_and_ignoregroup_take_globs_as_pacman_conf_allows() {
+        let o = options(CONF);
+        let none: &[String] = &[];
+        let games = &["games".to_string()];
+        assert!(is_ignored(&o, "linux-cachyos", none), "an exact entry");
+        assert!(
+            !is_ignored(&o, "linux-cachyos-headers", none),
+            "exact means exact"
+        );
+        assert!(is_ignored(&o, "nvidia-utils", none), "IgnorePkg = nvidia*");
+        assert!(is_ignored(&o, "nvidia", none));
+        assert!(
+            !is_ignored(&o, "lib32-nvidia-utils", none),
+            "the glob is anchored"
+        );
+        assert!(
+            is_ignored(&o, "gcc", &["base-devel".to_string()]),
+            "by group"
+        );
+        assert!(!is_ignored(&o, "gcc", games));
+        let globbed = options("[options]\nIgnoreGroup = base-*\nIgnorePkg = linux-cachyos*\n");
+        assert!(is_ignored(&globbed, "gcc", &["base-devel".to_string()]));
+        assert!(is_ignored(&globbed, "linux-cachyos-headers", none));
+        assert!(!is_ignored(&globbed, "firefox", games));
+    }
+
+    #[test]
+    fn a_refresh_with_nothing_fresh_is_a_sentence_and_one_fresh_repository_is_not() {
+        let mut r = Refreshed::default();
+        assert_eq!(r.failure(), None, "nothing to refresh is not a failure");
+        r.failed
+            .push(("core".into(), "Could not reach mirror.example.".into()));
+        r.failed
+            .push(("extra".into(), "Could not reach mirror.example.".into()));
+        r.failed.push(("custom".into(), SKIPPED_FOR_TIME.into()));
+        assert_eq!(
+            r.failure().as_deref(),
+            Some(
+                "No package list could be refreshed, so updates are checked against the lists the machine has. Could not reach mirror.example (core, extra). Not refreshed: the earlier repositories used the time budget (custom)."
+            )
+        );
+        r.unchanged.push("multilib".into());
+        assert_eq!(r.failure(), None, "one fresh repository is a refresh");
     }
 
     #[test]
@@ -1527,11 +1597,11 @@ mod tests {
             })
             .unwrap();
         assert_eq!(install.len(), 1);
-        assert_eq!(install[0].title, "Installing steam");
+        assert_eq!(install[0].title, "Installing steam and updating the system");
         assert_eq!(install[0].command.program, "pacman");
         assert_eq!(
             install[0].command.args,
-            ["-S", "--noconfirm", "--needed", "steam"]
+            ["-Syu", "--noconfirm", "--needed", "steam"]
         );
         assert!(install[0].needs_root);
         assert_eq!(install[0].weight, 3);
@@ -1551,8 +1621,11 @@ mod tests {
                 package: r("steam"),
             })
             .unwrap();
-        assert_eq!(update[0].command.args, ["-S", "--noconfirm", "steam"]);
-        assert_eq!(update[0].title, "Updating steam");
+        assert_eq!(
+            update[0].command.args,
+            ["-Syu", "--noconfirm", "--needed", "steam"]
+        );
+        assert_eq!(update[0].title, "Updating steam and the system");
         let all = pacman
             .plan(&Op::UpdateAll {
                 source: SourceKind::Pacman,
@@ -1561,14 +1634,21 @@ mod tests {
         assert_eq!(all[0].command.args, ["-Syu", "--noconfirm"]);
         assert_eq!(all[0].weight, 10);
         assert_eq!(all[0].title, "Updating the system");
+        // A refresh needs no root step: refresh_index does it into the
+        // cache, and a bare -Sy is the partial-upgrade setup.
         let refresh = pacman
             .plan(&Op::Refresh {
                 source: SourceKind::Pacman,
             })
             .unwrap();
-        assert_eq!(refresh[0].command.args, ["-Sy"]);
-        assert_eq!(refresh[0].weight, 1);
-        assert_eq!(refresh[0].title, "Refreshing package lists");
+        assert!(refresh.is_empty());
+        assert!(
+            pacman
+                .plan(&Op::Refresh {
+                    source: SourceKind::Aur
+                })
+                .is_err()
+        );
         assert!(pacman.plan(&Op::Install { package: r("-Rs") }).is_err());
         assert!(
             pacman

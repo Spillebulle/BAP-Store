@@ -228,9 +228,11 @@ impl Catalogue {
     }
 
     /// The component a package provides. A package can provide several (a
-    /// synthesiser with three desktop entries); the desktop application wins,
-    /// then the first listed. [`by_pkgname_all`](Self::by_pkgname_all) has
-    /// the rest.
+    /// synthesiser with three desktop entries, Emacs and its client, every
+    /// LibreOffice module); the desktop application named like the package
+    /// wins, then the one whose id ends in the package name, then a
+    /// reverse-DNS id over a legacy one, then the shortest name.
+    /// [`by_pkgname_all`](Self::by_pkgname_all) has the rest.
     pub fn by_pkgname(&self, pkgname: &str) -> Option<&Component> {
         self.index.by_pkgname(pkgname).map(|i| &self.components[i])
     }

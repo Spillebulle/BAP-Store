@@ -4,7 +4,7 @@
 //! databases and, for the refresh, the real mirrors.
 
 use bap_core::appstream::{Catalogue, Component};
-use bap_core::sources::pacman::{Pacman, Paths, mirrors};
+use bap_core::sources::pacman::{Pacman, Paths, SKIPPED_FOR_TIME, mirrors};
 use bap_core::{Op, PackageKind, PackageRef, Picture, Query, Screenshot, Source, SourceKind};
 use std::fs;
 use std::io::Write;
@@ -149,6 +149,28 @@ fn catalogue() -> Arc<Catalogue> {
             is_app: true,
             ..Default::default()
         },
+        // firefox carries two desktop entries, the safe-mode one first in
+        // the catalogue; the package is named by the one whose id ends in
+        // its name.
+        Component {
+            id: "firefox-safe-mode".into(),
+            origin: "archlinux-arch-extra".into(),
+            pkgname: Some("firefox".into()),
+            name: "Firefox (Safe Mode)".into(),
+            is_app: true,
+            component_type: "desktop-application".into(),
+            ..Default::default()
+        },
+        Component {
+            id: "org.mozilla.firefox".into(),
+            origin: "archlinux-arch-extra".into(),
+            pkgname: Some("firefox".into()),
+            name: "Firefox".into(),
+            summary: Some("Fast, private and secure web browser".into()),
+            is_app: true,
+            component_type: "desktop-application".into(),
+            ..Default::default()
+        },
     ]))
 }
 
@@ -256,6 +278,14 @@ fn search_scores_the_name_first_and_lists_a_name_once() {
     assert_eq!(firefox.len(), 1);
     assert_eq!(firefox[0].repo.as_deref(), Some("cachyos-v3"));
     assert_eq!(firefox[0].version.as_deref(), Some("130.0-2"));
+    // Of its two desktop entries the catalogue's ranked choice names it,
+    // not the one listed first.
+    assert_eq!(firefox[0].name, "Firefox");
+    assert_eq!(
+        firefox[0].appstream_id.as_deref(),
+        Some("org.mozilla.firefox")
+    );
+    assert_eq!(firefox[0].kind, PackageKind::App);
 
     // A component's name and keywords count, so the launcher's words work.
     let gimp = p.search(&Query::new("image manipulation")).unwrap();
@@ -349,6 +379,37 @@ fn updates_compare_by_vercmp_and_honour_ignorepkg() {
     let ids: Vec<&str> = updates.iter().map(|u| u.package.id.as_str()).collect();
     // bash is current; linux-cachyos is behind but in IgnorePkg.
     assert_eq!(ids, ["bap-store", "steam"]);
+
+    // pacman.conf allows shell globs in both: `nvidia*` is the common
+    // shape on an NVIDIA machine, and what pacman -Syu skips must not be
+    // listed as an update.
+    let conf = fs::read_to_string(&m.paths.conf).unwrap();
+    let ignoring = |ignore: &str| {
+        fs::write(
+            &m.paths.conf,
+            conf.replace("IgnorePkg   = linux-cachyos", ignore),
+        )
+        .unwrap();
+        let updates = pacman(&m).updates().unwrap();
+        updates
+            .iter()
+            .map(|u| u.package.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        ignoring("IgnorePkg = nvidia* bap-st*"),
+        ["linux-cachyos", "steam"]
+    );
+    assert_eq!(
+        ignoring("IgnorePkg = nvidia*\nIgnoreGroup = gam*"),
+        ["bap-store", "linux-cachyos"],
+        "steam is in the games group"
+    );
+    assert_eq!(
+        ignoring("IgnorePkg = nvidia*\nIgnoreGroup = base-devel"),
+        ["bap-store", "linux-cachyos", "steam"],
+        "a glob that matches nothing here hides nothing"
+    );
 
     let store = &updates[0];
     assert!(store.is_self);
@@ -493,10 +554,13 @@ fn a_plan_is_one_pacman_step_per_operation() {
     assert_eq!(steps.len(), 1);
     assert_eq!(steps[0].source, SourceKind::Pacman);
     assert_eq!(steps[0].command.program, "pacman");
+    // The system's databases are days old and the mirrors have moved on,
+    // so an install refreshes and upgrades in the one transaction.
     assert_eq!(
         steps[0].command.args,
-        ["-S", "--noconfirm", "--needed", "steam"]
+        ["-Syu", "--noconfirm", "--needed", "steam"]
     );
+    assert_eq!(steps[0].title, "Installing steam and updating the system");
     assert!(steps[0].needs_root);
     assert!(
         steps[0]
@@ -504,6 +568,16 @@ fn a_plan_is_one_pacman_step_per_operation() {
             .env
             .contains(&("LC_ALL".to_string(), "C.UTF-8".to_string()))
     );
+    let update = p
+        .plan(&Op::Update {
+            package: reference("steam"),
+        })
+        .unwrap();
+    assert_eq!(
+        update[0].command.args,
+        ["-Syu", "--noconfirm", "--needed", "steam"]
+    );
+    assert_eq!(update[0].title, "Updating steam and the system");
     let all = p
         .plan(&Op::UpdateAll {
             source: SourceKind::Pacman,
@@ -511,6 +585,15 @@ fn a_plan_is_one_pacman_step_per_operation() {
         .unwrap();
     assert_eq!(all[0].command.args, ["-Syu", "--noconfirm"]);
     assert_eq!(all[0].title, "Updating the system");
+    // A refresh is done without root by refresh_index; a root -Sy on its
+    // own would leave the system set up for a partial upgrade.
+    assert!(
+        p.plan(&Op::Refresh {
+            source: SourceKind::Pacman,
+        })
+        .unwrap()
+        .is_empty()
+    );
 }
 
 #[test]
@@ -560,7 +643,9 @@ fn a_refresh_that_cannot_reach_a_mirror_says_so_per_repository() {
     .unwrap();
     let p = pacman(&m);
     let client = bap_core::http::Client::new(m.root.join("http"));
-    let r = p.refresh_into_cache(&client).unwrap();
+    let r = p
+        .refresh_with_deadline(&client, Instant::now() + Duration::from_secs(20))
+        .unwrap();
     assert!(r.downloaded.is_empty());
     assert!(r.unchanged.is_empty());
     let names: Vec<&str> = r.failed.iter().map(|(n, _)| n.as_str()).collect();
@@ -569,11 +654,80 @@ fn a_refresh_that_cannot_reach_a_mirror_says_so_per_repository() {
         assert!(why.ends_with('.'), "{name}: {why}");
         assert!(!why.contains('\u{2014}'), "{name}: {why}");
     }
+    assert!(
+        r.failed[0].1.starts_with("Could not reach 127.0.0.1:9"),
+        "{}",
+        r.failed[0].1
+    );
     assert_eq!(
         r.failed[2].1,
         "No Server line in pacman.conf or its mirrorlist."
     );
     assert!(m.root.join("cache").is_dir());
+    assert_eq!(fs::read_dir(m.root.join("cache")).unwrap().count(), 0);
+
+    // Nothing fresh at all is an error the caller reports, in one sentence
+    // that names each reason once with the repositories it took down.
+    let e = p.refresh_into_cache(&client).unwrap_err();
+    assert_eq!(e.source_kind, Some(SourceKind::Pacman));
+    assert_eq!(
+        e.message,
+        "No package list could be refreshed, so updates are checked against the lists the machine has. Could not reach 127.0.0.1:9 (core, extra). No Server line in pacman.conf or its mirrorlist (empty)."
+    );
+    assert_eq!(
+        p.refresh_index().unwrap_err().message,
+        e.message,
+        "the Source method carries the same sentence"
+    );
+}
+
+#[test]
+fn a_refresh_past_its_deadline_asks_no_mirror_and_names_the_repositories_it_skipped() {
+    let m = machine();
+    fs::write(
+        &m.paths.conf,
+        "[options]\nArchitecture = x86_64\n[core]\nServer = http://127.0.0.1:9/$repo/os/$arch\n[extra]\nServer = http://127.0.0.1:9/$repo/os/$arch\n[empty]\n",
+    )
+    .unwrap();
+    let p = pacman(&m);
+    let client = bap_core::http::Client::new(m.root.join("http"));
+    // The budget was used up before these repositories could start: no
+    // mirror is asked (a request would have failed with "Could not reach"),
+    // and each is listed with the sentence that says so.
+    let r = p
+        .refresh_with_deadline(&client, Instant::now() - Duration::from_secs(1))
+        .unwrap();
+    assert!(r.downloaded.is_empty() && r.unchanged.is_empty());
+    assert_eq!(
+        r.failed,
+        [
+            ("core".to_string(), SKIPPED_FOR_TIME.to_string()),
+            ("extra".to_string(), SKIPPED_FOR_TIME.to_string()),
+            (
+                "empty".to_string(),
+                "No Server line in pacman.conf or its mirrorlist.".to_string()
+            ),
+        ]
+    );
+    assert_eq!(
+        SKIPPED_FOR_TIME,
+        "Not refreshed: the earlier repositories used the time budget."
+    );
+    let sentence = r.failure().unwrap();
+    assert!(
+        sentence
+            .contains("Not refreshed: the earlier repositories used the time budget (core, extra)"),
+        "{sentence}"
+    );
+    // With time left the same repositories are asked, and fail for real.
+    let r = p
+        .refresh_with_deadline(&client, Instant::now() + Duration::from_secs(20))
+        .unwrap();
+    assert!(
+        r.failed[0].1.starts_with("Could not reach"),
+        "{}",
+        r.failed[0].1
+    );
     assert_eq!(fs::read_dir(m.root.join("cache")).unwrap().count(), 0);
 }
 

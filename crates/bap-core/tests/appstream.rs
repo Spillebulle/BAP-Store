@@ -373,10 +373,12 @@ fn the_component_type_decides_what_is_an_application() {
 #[test]
 fn a_package_maps_to_its_desktop_application_first_and_keeps_the_rest() {
     let catalogue = system();
-    // Two desktop applications from one package: the first listed.
+    // Two desktop applications from one package, neither named like it,
+    // both legacy ids: the shorter name ("ZynAddSubFX - OSS") stands for
+    // the package, whatever the catalogue's order.
     assert_eq!(
         catalogue.by_pkgname("zynaddsubfx").unwrap().id,
-        "zynaddsubfx-alsa"
+        "zynaddsubfx-oss"
     );
     assert_eq!(
         ids(&catalogue.by_pkgname_all("zynaddsubfx")),

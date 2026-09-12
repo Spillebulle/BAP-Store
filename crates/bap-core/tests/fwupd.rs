@@ -38,12 +38,19 @@ fn named_versioned_devices_become_installed_firmware() {
         cpu.summary.as_deref(),
         Some("Intel Core™ i7-9750H CPU @ 2.60GHz")
     );
-    assert_eq!(fact(&cpu.facts, "Plugin"), Some("cpu"));
+    assert_eq!(fact(&cpu.facts, "Updated through"), Some("cpu"));
     assert_eq!(fact(&cpu.facts, "Version format"), Some("hex"));
-    assert_eq!(fact(&cpu.facts, "Flags"), Some("internal"));
-    assert_eq!(fact(&cpu.facts, "GUIDs"), Some("2"));
     assert_eq!(fact(&cpu.facts, "Needs reboot"), Some("No"));
     assert_eq!(fact(&cpu.facts, "Update error"), None);
+    // fwupd's internals stay out of the facts: nothing on the page can act
+    // on a flag list or a count of GUIDs, and "Needs reboot" is the one
+    // flag that matters.
+    let keys: Vec<&str> = cpu.facts.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(
+        keys,
+        ["Updated through", "Version format", "Needs reboot"],
+        "{keys:?}"
+    );
 
     let bios = &packages[1];
     assert_eq!(bios.name, "System Firmware");
@@ -53,14 +60,16 @@ fn named_versioned_devices_become_installed_firmware() {
         bios.summary.as_deref(),
         Some("UEFI System Resource Table device (updated via NVRAM)")
     );
-    assert_eq!(fact(&bios.facts, "Plugin"), Some("uefi_capsule"));
+    assert_eq!(fact(&bios.facts, "Updated through"), Some("uefi_capsule"));
     assert_eq!(fact(&bios.facts, "Needs reboot"), Some("Yes"));
     assert!(
         fact(&bios.facts, "Update error")
             .unwrap()
             .starts_with("failed to update")
     );
-    assert!(fact(&bios.facts, "Flags").unwrap().contains("needs-reboot"));
+    assert_eq!(fact(&bios.facts, "Flags"), None);
+    assert_eq!(fact(&bios.facts, "GUIDs"), None);
+    assert_eq!(fact(&bios.facts, "Plugin"), None);
 }
 
 #[test]
