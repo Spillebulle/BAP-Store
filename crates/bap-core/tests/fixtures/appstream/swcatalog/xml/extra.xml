@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cut from the Arch Linux extra catalogue of 2026-08-21. Translations are
+     trimmed to a few per component; everything else is as the generator wrote
+     it. Icons for these components live under ../icons/archlinux-arch-extra/
+     only where the tests need them to. -->
+<components version="1.0" origin="archlinux-arch-extra" time="2026-08-21T22:21:05Z">
+<component type="desktop-application">
+  <id>zynaddsubfx-alsa.desktop</id>
+  <name>ZynAddSubFX - Alsa</name>
+  <summary>A powerful realtime software synthesizer</summary>
+  <summary xml:lang="fr">Un synthétiseur logiciel temps-réel puissant</summary>
+  <summary xml:lang="pl">Funkcjonalny syntezator wirtualny czasu rzeczywistego</summary>
+  <description>
+    <p>Opensource software synthesizer capable of making a countless number of instruments.</p>
+  </description>
+  <pkgname>zynaddsubfx</pkgname>
+  <launchable type="desktop-id">zynaddsubfx-alsa.desktop</launchable>
+  <icon type="cached" width="48" height="48">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="cached" width="64" height="64">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="cached" width="128" height="128">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="stock">zynaddsubfx</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <keywords>
+    <keyword>audio</keyword>
+    <keyword>sound</keyword>
+    <keyword>alsa</keyword>
+    <keyword>midi</keyword>
+    <keyword>synth</keyword>
+    <keyword>synthesizer</keyword>
+  </keywords>
+</component>
+<component type="desktop-application">
+  <id>zynaddsubfx-oss.desktop</id>
+  <name>ZynAddSubFX - OSS</name>
+  <summary>A powerful realtime software synthesizer</summary>
+  <summary xml:lang="fr">Un synthétiseur logiciel temps-réel puissant</summary>
+  <description>
+    <p>Opensource software synthesizer capable of making a countless number of instruments.</p>
+  </description>
+  <pkgname>zynaddsubfx</pkgname>
+  <launchable type="desktop-id">zynaddsubfx-oss.desktop</launchable>
+  <icon type="cached" width="48" height="48">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="cached" width="64" height="64">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="cached" width="128" height="128">zynaddsubfx_zynaddsubfx.png</icon>
+  <icon type="stock">zynaddsubfx</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <keywords>
+    <keyword>audio</keyword>
+    <keyword>sound</keyword>
+    <keyword>oss</keyword>
+    <keyword>midi</keyword>
+    <keyword>synth</keyword>
+    <keyword>synthesizer</keyword>
+  </keywords>
+</component>
+<component type="desktop-application">
+  <id>org.gimp.GIMP</id>
+  <name xml:lang="ar">برنامج جنو لمعالجة الصور</name>
+  <name xml:lang="bg">Редактор на изображения на GNU (GIMP)</name>
+  <name>GNU Image Manipulation Program</name>
+  <name xml:lang="de">GNU Image Manipulation Program</name>
+  <name xml:lang="fr">Éditeur d’image GIMP</name>
+  <name xml:lang="zh-Hans-CN">GNU 图像处理程序</name>
+  <summary xml:lang="bg">Висококачествени създаване и обработка на изображения</summary>
+  <summary>High-end image creation and manipulation</summary>
+  <summary xml:lang="fr">Création et manipulation d’images de haute qualité</summary>
+  <project_license>GPL-3.0+ AND LGPL-3.0+</project_license>
+  <description xml:lang="bg">
+    <p>GIMP е съкращение от GNU Image Manipulation Program. Тя е свободен софтуер.</p>
+    <p>Може да се ползва по много начини.</p>
+  </description>
+  <description>
+    <p>
+      GIMP is an acronym for GNU Image Manipulation Program. It is
+      Community-driven Free Software for high-end image creation and manipulation.
+    </p>
+    <p>
+      It has many capabilities. It can be used as a paint program,
+      an expert quality photo retouching program, image composition,
+      an online batch processing system, a mass production image
+      renderer, an image format converter, etc.
+    </p>
+    <p>
+      GIMP is expandable and extensible. It is designed to be
+      augmented with plug-ins and extensions to do just about
+      anything. The advanced scripting interface allows everything
+      from the simplest task to the most complex image manipulation
+      procedures to be easily scripted. GIMP is available for Linux,
+      Microsoft Windows and macOS.
+    </p>
+  </description>
+  <description xml:lang="fr">
+    <p>GIMP est l’acronyme de GNU Image Manipulation Program.</p>
+  </description>
+  <developer>
+    <name>The GIMP team</name>
+    <name xml:lang="fr">L’équipe GIMP</name>
+  </developer>
+  <developer_name>The GIMP team</developer_name>
+  <pkgname>gimp</pkgname>
+  <launchable type="desktop-id">gimp.desktop</launchable>
+  <icon type="cached" width="48" height="48">gimp_gimp.png</icon>
+  <icon type="cached" width="64" height="64">gimp_gimp.png</icon>
+  <icon type="cached" width="128" height="128">gimp_gimp.png</icon>
+  <icon type="stock">gimp</icon>
+  <url type="homepage">https://www.gimp.org/</url>
+  <url type="bugtracker">https://gitlab.archlinux.org/archlinux/packaging/packages/gimp/-/issues</url>
+  <url type="help">https://www.gimp.org/docs/</url>
+  <url type="donation">https://www.gimp.org/donating/</url>
+  <url type="vcs-browser">https://gitlab.gnome.org/GNOME/gimp/</url>
+  <url type="contribute">https://www.gimp.org/develop/</url>
+  <categories>
+    <category>Graphics</category>
+    <category>2DGraphics</category>
+    <category>RasterGraphics</category>
+  </categories>
+  <provides>
+    <binary>gimp-3.2</binary>
+    <id>gimp.desktop</id>
+  </provides>
+  <languages>
+    <lang percentage="100">de</lang>
+    <lang percentage="97">fr</lang>
+  </languages>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Scene 4 cut 15 of "ZeMarmot" being edited in GIMP. Illustration by Aryeom (CC by-sa 4.0 International)</caption>
+      <caption xml:lang="fr">Scène 4 plan 15 de « ZeMarmot » en cours d’édition dans GIMP.</caption>
+      <image type="source">https://www.gimp.org/screenshots/Screenshot-gimp-3.0-painting.jpg</image>
+    </screenshot>
+    <screenshot type="default">
+      <caption>Gull on beach photograph being edited in GIMP. Photo by Iana (CC by-sa 4.0 International)</caption>
+      <image type="source">https://www.gimp.org/screenshots/Screenshot-gimp-3.0-photo-editing-1.jpg</image>
+    </screenshot>
+    <screenshot type="default">
+      <caption>Portrait of Sofiia being edited in GIMP. Photo by Sofia (CC by-sa 4.0 International)</caption>
+      <image type="source">https://www.gimp.org/screenshots/Screenshot-gimp-3.0-photo-editing-2.jpg</image>
+    </screenshot>
+    <screenshot type="default">
+      <caption>Scanned engraving being edited in GIMP. Artwork by Liam (CC0)</caption>
+      <image type="source">https://www.gimp.org/screenshots/Screenshot-gimp-3.0-engraving.jpg</image>
+    </screenshot>
+  </screenshots>
+  <keywords>
+    <keyword>GIMP</keyword>
+    <keyword>Photoshop</keyword>
+  </keywords>
+  <keywords xml:lang="fr">
+    <keyword>GIMP</keyword>
+    <keyword>graphisme</keyword>
+    <keyword>dessin</keyword>
+  </keywords>
+  <releases>
+    <release type="stable" version="3.2.4" timestamp="1776384000">
+      <description>
+        <p>
+        The second bugfix release of the GIMP 3.2 series brings it to quite a stable state again as bugs reports are slowing down.
+        </p>
+        <ul>
+          <li>Bug fixed where GIMP would fail to open some XCF</li>
+          <li>Better temporary folder handling</li>
+        </ul>
+      </description>
+      <url>https://www.gimp.org/release/3.2.4/</url>
+    </release>
+    <release type="stable" version="3.2.2" timestamp="1774656000">
+      <description>
+        <p>
+        Here we go! The first bugfix release for the GIMP 3.2 series is here.
+        </p>
+      </description>
+      <url>https://www.gimp.org/release/3.2.2/</url>
+    </release>
+    <release type="development" version="3.2.0~rc3" timestamp="1772409600"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>
+<component type="desktop-application">
+  <id>org.gnome.Decibels</id>
+  <name>Audio Player</name>
+  <name xml:lang="de">Audioplayer</name>
+  <summary>Play audio files</summary>
+  <summary xml:lang="de">Audiodateien abspielen</summary>
+  <project_license>GPL-3.0</project_license>
+  <description xml:lang="de">
+    <p>Ein Audioplayer, der Audiodateien einfach abspielt.</p>
+    <ul>
+      <li>Eine elegante Wellenform des Titels</li>
+    </ul>
+  </description>
+  <description>
+    <p>An audio player that just plays audio files. It doesn't require an organized music library and won't overload you with tons of functionality.</p>
+    <p>Audio Player still offers advanced features such as:</p>
+    <ul>
+      <li>An elegant waveform of the track</li>
+      <li>Adjustable playback speed</li>
+      <li>Easy seek controls</li>
+      <li>Playing multiple files at the same time</li>
+    </ul>
+  </description>
+  <developer id="org.gnome">
+    <name>The GNOME Project</name>
+    <name xml:lang="de">Das GNOME-Projekt</name>
+  </developer>
+  <developer_name>The GNOME Project</developer_name>
+  <requires>
+    <display_length>360</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <pkgname>decibels</pkgname>
+  <launchable type="desktop-id">org.gnome.Decibels.desktop</launchable>
+  <icon type="cached" width="48" height="48">decibels_org.gnome.Decibels.png</icon>
+  <icon type="cached" width="64" height="64">decibels_org.gnome.Decibels.png</icon>
+  <icon type="cached" width="128" height="128">decibels_org.gnome.Decibels.png</icon>
+  <icon type="stock">org.gnome.Decibels</icon>
+  <url type="homepage">https://apps.gnome.org/Decibels/</url>
+  <url type="bugtracker">https://gitlab.gnome.org/GNOME/decibels/-/issues</url>
+  <url type="donation">https://www.gnome.org/donate/</url>
+  <url type="translate">https://l10n.gnome.org/module/Decibels/</url>
+  <categories>
+    <category>Music</category>
+    <category>Audio</category>
+    <category>AudioVideo</category>
+  </categories>
+  <screenshots>
+    <screenshot type="default" environment="gnome">
+      <image type="thumbnail" width="772" height="572">https://static.gnome.org/appdata/gnome-48/decibels/playing-light-x1.png</image>
+      <image type="source" scale="2">https://static.gnome.org/appdata/gnome-48/decibels/playing-light-x2.png</image>
+    </screenshot>
+    <screenshot environment="gnome:dark">
+      <image type="thumbnail" width="772" height="572">https://static.gnome.org/appdata/gnome-48/decibels/playing-dark-x1.png</image>
+      <image type="source" scale="2">https://static.gnome.org/appdata/gnome-48/decibels/playing-dark-x2.png</image>
+    </screenshot>
+  </screenshots>
+  <keywords>
+    <keyword>music</keyword>
+    <keyword>player</keyword>
+    <keyword>media</keyword>
+    <keyword>audio</keyword>
+    <keyword>decibels</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#fcbbb5</color>
+    <color type="primary" scheme_preference="dark">#615dcf</color>
+  </branding>
+  <releases>
+    <release type="stable" version="49.6" timestamp="1775865600">
+      <description>
+        <ul>
+          <li>Fixed the volume slider showing a 50% value initially regardless of the actual volume</li>
+        </ul>
+      </description>
+    </release>
+    <release type="stable" version="49.0" timestamp="1757721600"/>
+    <release type="stable" version="48.0" timestamp="1741996800"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>
+<component type="web-application">
+  <id>org.cockpit_project.cockpit</id>
+  <name>Cockpit</name>
+  <summary>Web Console for Linux servers</summary>
+  <project_license>LGPL-2.0+</project_license>
+  <description>
+    <p>
+      Cockpit is a server manager that makes it easy to administer your Linux
+      servers via a web browser.
+      Jumping between the terminal and the web tool is no problem.
+    </p>
+    <p>
+      Once Cockpit is installed, enable it with "systemctl enable --now cockpit.socket".
+    </p>
+  </description>
+  <developer id="org.cockpit_project">
+    <name>Cockpit Project</name>
+  </developer>
+  <developer_name>Cockpit Project</developer_name>
+  <pkgname>cockpit</pkgname>
+  <launchable type="url">https://localhost:9090</launchable>
+  <icon type="cached" width="48" height="48">cockpit_cockpit.png</icon>
+  <icon type="cached" width="64" height="64">cockpit_cockpit.png</icon>
+  <icon type="cached" width="128" height="128">cockpit_cockpit.png</icon>
+  <icon type="stock">cockpit</icon>
+  <url type="homepage">https://cockpit-project.org/</url>
+  <url type="help">https://cockpit-project.org/running.html</url>
+  <categories>
+    <category>System</category>
+  </categories>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://cockpit-project.org/images/screenshot/overview-f33.webp</image>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://cockpit-project.org/images/screenshot/network-overview.webp</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.0"/>
+</component>
+<component type="console-application">
+  <id>org.freedesktop.appstream.cli</id>
+  <name xml:lang="ar">شاشة توجيه الأوامر إلى آب-ستريم</name>
+  <name xml:lang="bg">Команден ред на AppStream</name>
+  <name xml:lang="de">AppStream-Befehlszeile</name>
+  <name>AppStream CLI</name>
+  <summary xml:lang="de">Ein Werkzeug zum Arbeiten mit AppStream-Metadaten</summary>
+  <summary>An utility to work with AppStream metadata</summary>
+  <project_license>LGPL-2.1+</project_license>
+  <description>
+    <p>
+      AppStream is a metadata specification which permits software components to provide information about themselves
+      to automated systems and end-users before the software is actually installed.
+    </p>
+    <p>
+      The <em>appstreamcli</em> command-line tool allows to read, write, and transform AppStream XML or YAML metadata
+      as well as to validate it for compliance with the specification.
+    </p>
+  </description>
+  <project_group>Freedesktop</project_group>
+  <developer id="org.freedesktop">
+    <name>Matthias Klumpp</name>
+  </developer>
+  <developer_name>Matthias Klumpp</developer_name>
+  <pkgname>appstream</pkgname>
+  <url type="homepage">https://www.freedesktop.org/wiki/Distributions/AppStream/</url>
+  <url type="bugtracker">https://github.com/ximion/appstream/issues</url>
+  <provides>
+    <binary>appstreamcli</binary>
+  </provides>
+  <languages>
+    <lang percentage="100">de</lang>
+  </languages>
+  <releases>
+    <release type="stable" version="1.1.6" timestamp="1786492800">
+      <description>
+        <p>This release adds the following features:</p>
+        <ul>
+          <li>validator: Ensure description markup has no invalid attributes set</li>
+        </ul>
+      </description>
+    </release>
+    <release type="stable" version="1.1.5" timestamp="1784851200"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>
+<component type="console-application">
+  <id>com.github.whipper_team.Whipper</id>
+  <name>whipper</name>
+  <summary>A CD-DA ripper prioritising accuracy over speed</summary>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      whipper is a command-line CD-DA ripper that focuses on making accurate
+      rips over fast ones.
+    </p>
+  </description>
+  <developer>
+    <name>The Whipper Team</name>
+  </developer>
+  <developer_name>The Whipper Team</developer_name>
+  <pkgname>whipper</pkgname>
+  <url type="homepage">https://github.com/whipper-team/whipper</url>
+  <url type="bugtracker">https://github.com/whipper-team/whipper/issues</url>
+  <url type="help">https://github.com/whipper-team/whipper/blob/master/README.md</url>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Music</category>
+    <category>ConsoleOnly</category>
+  </categories>
+  <provides>
+    <binary>whipper</binary>
+  </provides>
+</component>
+<component type="addon">
+  <id>org.pwmt.zathura-djvu</id>
+  <name>Zathura-DjVU</name>
+  <summary>DjVU plugin for zathura</summary>
+  <project_license>Zlib</project_license>
+  <developer id="org.pwmt">
+    <name>pwmt</name>
+  </developer>
+  <developer_name>pwmt</developer_name>
+  <extends>org.pwmt.zathura</extends>
+  <pkgname>zathura-djvu</pkgname>
+  <url type="homepage">https://pwmt.org/projects/zathura-djvu/</url>
+  <url type="bugtracker">https://github.com/pwmt/zathura-djvu/issues</url>
+  <url type="donation">https://pwmt.org/help/donate</url>
+  <releases>
+    <release type="stable" version="2026.07.18" timestamp="1784332800"/>
+    <release type="stable" version="2026.05.10" timestamp="1778371200"/>
+    <release type="stable" version="2026.02.03" timestamp="1770076800"/>
+  </releases>
+</component>
+<component type="font">
+  <id>de.urwpp.StandardSymbolsPS</id>
+  <name>Standard Symbols PS</name>
+  <summary>An alternative font for Symbol typeface</summary>
+  <project_license>AGPL-3.0</project_license>
+  <description>
+    <p>
+      This serif font is an alternative for the Symbol
+      typeface, and is part of Level 2 Core Font Set - PostScript specification
+      of 35 base fonts that can be used with any PostScript file.
+    </p>
+  </description>
+  <developer>
+    <name>URW++ Design and Development GmbH</name>
+  </developer>
+  <developer_name>URW++ Design and Development GmbH</developer_name>
+  <suggests type="upstream">
+    <id>de.urwpp.URWCoreFontSetLevel2</id>
+    <id>de.urwpp.C059</id>
+  </suggests>
+  <pkgname>gsfonts</pkgname>
+  <icon type="cached" width="48" height="48">gsfonts_standardsymbolsps-regular.png</icon>
+  <icon type="cached" width="48" height="48" scale="2">gsfonts_standardsymbolsps-regular.png</icon>
+  <icon type="cached" width="64" height="64">gsfonts_standardsymbolsps-regular.png</icon>
+  <icon type="cached" width="128" height="128">gsfonts_standardsymbolsps-regular.png</icon>
+  <icon type="remote" width="128" height="128">de/urwpp/StandardSymbolsPS/eadd6b6a083fd768decfb30048d50dfc/icons/128x128/gsfonts_standardsymbolsps-regular.png</icon>
+  <icon type="remote" width="128" height="128" scale="2">de/urwpp/StandardSymbolsPS/eadd6b6a083fd768decfb30048d50dfc/icons/128x128@2/gsfonts_standardsymbolsps-regular.png</icon>
+  <url type="homepage">https://www.urwpp.de/en/</url>
+  <url type="bugtracker">https://bugs.ghostscript.com/</url>
+  <provides>
+    <font>Standard Symbols PS</font>
+  </provides>
+  <releases>
+    <release type="stable" version="20170801" timestamp="1501545600"/>
+    <release type="stable" version="20160926" timestamp="1474848000"/>
+  </releases>
+</component>
+<component type="desktop-application">
+  <id>gmic_qt.desktop</id>
+  <name>G'MIC-Qt</name>
+  <summary>Apply G'MIC filters to images</summary>
+  <description>
+    <p>GREYC's Magic Image Converter: image processing framework</p>
+  </description>
+  <pkgname>gmic</pkgname>
+  <launchable type="desktop-id">gmic_qt.desktop</launchable>
+  <icon type="cached" width="48" height="48">gmic_gmic_qt.png</icon>
+  <icon type="cached" width="64" height="64">gmic_gmic_qt.png</icon>
+  <icon type="cached" width="128" height="128">gmic_gmic_qt.png</icon>
+  <icon type="stock">gmic_qt</icon>
+  <categories>
+    <category>Graphics</category>
+  </categories>
+  <provides>
+    <mediatype>image/jpeg</mediatype>
+    <mediatype>image/png</mediatype>
+  </provides>
+</component>
+</components>

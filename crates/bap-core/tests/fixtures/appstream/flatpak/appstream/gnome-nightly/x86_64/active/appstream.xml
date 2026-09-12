@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A second remote, kept as plain XML: the parser reads both forms. -->
+<components version="0.8" origin="gnome-nightly">
+  <component type="desktop-application">
+    <id>org.gnome.Decibels.Devel</id>
+    <name>Audio Player (Development)</name>
+    <summary>Play audio files</summary>
+    <bundle type="flatpak">app/org.gnome.Decibels.Devel/x86_64/master</bundle>
+    <icon type="cached" height="128" width="128">org.gnome.Decibels.Devel.png</icon>
+    <keywords>
+      <keyword>audio</keyword>
+    </keywords>
+  </component>
+</components>
