@@ -69,6 +69,10 @@ pub const NOT_AUTHORISED: &str = "You are not authorised to install packages on 
 pub const CANCELLED: &str = "Cancelled.";
 pub const CANCELLING_ROOT: &str =
     "Cancelling. The step running under the helper cannot be stopped; nothing after it will start.";
+/// Shown when a session step is being killed. paru, yay and makepkg start a
+/// root pacman through pkexec, which the user's signal does not reach; that
+/// pacman finishes on its own and the runner waits for it.
+pub const CANCELLING_SESSION: &str = "Cancelling. A package manager this step started under pkexec finishes first; nothing after it will start.";
 
 /// The word written to the helper's stdin to stop it between steps.
 pub const CANCEL_LINE: &str = "cancel";
@@ -278,6 +282,13 @@ impl Runner {
             }
             if !cancelled && self.cancel.is_cancelled() {
                 cancelled = true;
+                emit_progress(
+                    sink,
+                    &id,
+                    index,
+                    state,
+                    Some(CANCELLING_SESSION.to_string()),
+                );
                 kill_group(&mut child);
             }
         }
@@ -489,7 +500,12 @@ impl Runner {
                 Ok(())
             }
             (Some(126), _) => Err(AUTH_CANCELLED.to_string()),
-            (Some(127), _) => Err(NOT_AUTHORISED.to_string()),
+            // 127 is also pkexec's answer when no authentication agent is
+            // registered or the helper could not be executed; its own line
+            // says which.
+            (Some(127), _) => Err(format!("{NOT_AUTHORISED} {}", first_line(&stderr_text))
+                .trim_end()
+                .to_string()),
             (_, Some((false, message))) => Err(message),
             (Some(4), _) => Err(format!(
                 "The helper refused to run because it was not started as root. {}",
@@ -908,6 +924,7 @@ mod tests {
             NOT_AUTHORISED,
             CANCELLED,
             CANCELLING_ROOT,
+            CANCELLING_SESSION,
         ] {
             assert!(s.ends_with('.'), "{s}");
             assert!(!s.contains('\u{2014}'), "{s}");

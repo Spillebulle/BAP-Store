@@ -1,0 +1,48 @@
+{
+  "id": "fixture-refused-flatpak-path",
+  "ops": [],
+  "steps": [
+    {
+      "source": "flatpak",
+      "title": "Installing a bundle",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "/tmp/evil.flatpak"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "flatpak",
+      "title": "Installing a bundle from home",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "/home/me/evil.flatpak"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "flatpak",
+      "title": "Enrolling a remote",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "/tmp/evil.flatpakref"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "flatpak",
+      "title": "Installing a relative bundle",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "./evil.flatpak"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "flatpak",
+      "title": "Installing a bare bundle name",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "evil.flatpak"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "flatpak",
+      "title": "Installing with a trailing slash",
+      "command": {"program": "flatpak", "args": ["install", "--system", "-y", "/tmp/evil.flatpak/"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    }
+  ]
+}

@@ -61,8 +61,23 @@ impl Allowed {
 
 /// Every environment variable a step may hand to a root child. Everything
 /// else is dropped by the helper before the child starts, and refused here so
-/// a source learns about it in a test rather than in a confusing log.
+/// a source learns about it in a test rather than in a confusing log. The
+/// value is checked too, by [`env_value_ok`]: debconf evaluates
+/// `DEBIAN_FRONTEND` as Perl code as root, so only a frontend name passes.
 pub const ALLOWED_ENV: [&str; 3] = ["DEBIAN_FRONTEND", "LC_ALL", "LANG"];
+
+/// Whether `value` is a shape the variable `key` may carry to a root child.
+/// `DEBIAN_FRONTEND` is one lowercase word (`noninteractive`, `text`,
+/// `dialog`); `LC_ALL` and `LANG` are a locale name (`C.UTF-8`,
+/// `en_GB.UTF-8`, `de_DE@euro`). Nothing else is a variable the list names.
+pub fn env_value_ok(key: &str, value: &str) -> bool {
+    let shape: fn(char) -> bool = match key {
+        "DEBIAN_FRONTEND" => |c| c.is_ascii_lowercase(),
+        "LC_ALL" | "LANG" => |c| c.is_ascii_alphanumeric() || "_.@-".contains(c),
+        _ => return false,
+    };
+    !value.is_empty() && value.chars().all(shape)
+}
 
 /// Every program the helper will start. A step naming anything else is
 /// refused, whatever its arguments.
@@ -122,6 +137,15 @@ pub fn check_step(step: &Step, allowed: &Allowed) -> Result<(), String> {
         if value.contains(['\0', '\n']) {
             return Err(format!("The value of {key} contains a control character."));
         }
+        if !env_value_ok(key, value) {
+            return Err(format!(
+                "The value of {key} is not a shape the helper passes on. {}",
+                match key.as_str() {
+                    "DEBIAN_FRONTEND" => "A debconf frontend is one lowercase word.",
+                    _ => "A locale has letters, digits and _ . @ - only.",
+                }
+            ));
+        }
     }
     check_command(&step.command, allowed)
 }
@@ -134,7 +158,7 @@ fn check_command(command: &Command, allowed: &Allowed) -> Result<(), String> {
     match command.program.as_str() {
         "pacman" => pacman(&args, allowed),
         "apt-get" => apt_get(&args, allowed),
-        "dnf" => dnf(&args),
+        "dnf" => dnf(&args, allowed),
         "snap" => snap(&args),
         "flatpak" => flatpak(&args),
         "chwd" => chwd(&args),
@@ -150,8 +174,13 @@ fn check_command(command: &Command, allowed: &Allowed) -> Result<(), String> {
 /// `pacman` takes its operation as the first argument and nothing else looks
 /// like one, so the check is positional rather than the verb-anywhere shape
 /// the other tools get.
+///
+/// `-Sy` on its own is not here: refreshing the databases and then installing
+/// against them is the partial upgrade Arch does not support, so a pacman
+/// install or update is `-Syu` with names, and the store refreshes its own
+/// copy of the databases without root.
 fn pacman(args: &[&str], allowed: &Allowed) -> Result<(), String> {
-    const VERBS: [&str; 5] = ["-S", "-Sy", "-Syu", "-Rs", "-U"];
+    const VERBS: [&str; 4] = ["-S", "-Syu", "-Rs", "-U"];
     // `--asdeps` is here for the AUR path, which installs a build's
     // repository dependencies through the helper before makepkg runs; without
     // it they would be left looking explicitly installed.
@@ -213,13 +242,26 @@ fn apt_get(args: &[&str], allowed: &Allowed) -> Result<(), String> {
     }
 }
 
-fn dnf(args: &[&str]) -> Result<(), String> {
+/// `dnf install` takes an `.rpm` file as well as a name, the way `apt-get
+/// install` takes a `.deb`; that is how the self-updater installs a
+/// downloaded release on Fedora.
+fn dnf(args: &[&str], allowed: &Allowed) -> Result<(), String> {
     const VERBS: [&str; 4] = ["install", "remove", "upgrade", "makecache"];
     const OPTIONS: [&str; 1] = ["-y"];
     let (verb, _, positionals) = verb_options_positionals("dnf", args, &VERBS, &OPTIONS)?;
     match verb {
-        "install" | "remove" if positionals.is_empty() => {
-            Err(format!("dnf {verb} needs at least one package name."))
+        "install" if positionals.is_empty() => {
+            Err("dnf install needs at least one package name or .rpm file.".to_string())
+        }
+        "install" => positionals.iter().try_for_each(|p| {
+            if p.starts_with('/') {
+                package_file(p, ".rpm", allowed)
+            } else {
+                name(p, DNF_NAME_MARKS)
+            }
+        }),
+        "remove" if positionals.is_empty() => {
+            Err("dnf remove needs at least one package name.".to_string())
         }
         "makecache" => no_positionals("dnf", verb, &positionals),
         _ => positionals.iter().try_for_each(|n| name(n, DNF_NAME_MARKS)),
@@ -246,9 +288,27 @@ fn flatpak(args: &[&str]) -> Result<(), String> {
     if positionals.is_empty() && verb != "update" {
         return Err(format!("flatpak {verb} needs at least one ref."));
     }
-    positionals
-        .iter()
-        .try_for_each(|r| name(r, FLATPAK_REF_MARKS))
+    positionals.iter().try_for_each(|r| {
+        // flatpak reads a sole positional ending in `.flatpak` as a local
+        // bundle and one ending in `.flatpakref` as a file that enrols a
+        // remote, so a path here would install anything as root. A ref, an
+        // id and a remote name never start with `/` or `.`.
+        if flatpak_positional_is_a_path(r) {
+            return Err(FLATPAK_NOT_A_FILE.to_string());
+        }
+        name(r, FLATPAK_REF_MARKS)
+    })
+}
+
+/// The sentence for a flatpak positional that names a file rather than a
+/// remote or a ref.
+pub const FLATPAK_NOT_A_FILE: &str = "A Flatpak positional must be a remote name or a ref, not a file path. The helper installs from remotes only.";
+
+fn flatpak_positional_is_a_path(value: &str) -> bool {
+    value.starts_with(['/', '.'])
+        || value
+            .split('/')
+            .any(|part| part.ends_with(".flatpak") || part.ends_with(".flatpakref"))
 }
 
 fn chwd(args: &[&str]) -> Result<(), String> {
@@ -439,8 +499,11 @@ mod tests {
             "pacman",
             &["-S", "--noconfirm", "--needed", "steam", "lib32-mesa"],
         );
-        ok("pacman", &["-Sy"]);
         ok("pacman", &["-Syu", "--noconfirm"]);
+        ok(
+            "pacman",
+            &["-Syu", "--noconfirm", "--needed", "steam", "lib32-mesa"],
+        );
         ok(
             "pacman",
             &["-S", "--needed", "--asdeps", "--noconfirm", "cmake"],
@@ -478,6 +541,14 @@ mod tests {
         ok("apt-get", &["update"]);
         ok("apt-get", &["upgrade", "-y"]);
         ok("dnf", &["install", "-y", "steam", "nodejs:20"]);
+        ok(
+            "dnf",
+            &[
+                "install",
+                "-y",
+                "/home/me/.cache/bap-store/http/downloads/bap-store-0.2.0-1.x86_64.rpm",
+            ],
+        );
         ok("dnf", &["remove", "-y", "steam"]);
         ok("dnf", &["upgrade", "-y"]);
         ok("dnf", &["upgrade", "-y", "firefox"]);
@@ -530,6 +601,8 @@ mod tests {
         refused("sh", &["-c", "pacman -S foo"]);
         refused("/usr/bin/pacman", &["-S", "foo"]);
         refused("pacman", &["-Ss", "foo"]);
+        refused("pacman", &["-Sy"]);
+        refused("pacman", &["-Sy", "--noconfirm", "foo"]);
         refused("pacman", &["-S"]);
         refused("pacman", &["-Rs"]);
         refused("pacman", &["-S", "--config", "/tmp/evil.conf", "foo"]);
@@ -554,6 +627,10 @@ mod tests {
         refused("dnf", &["install", "-y", "--nogpgcheck", "foo"]);
         refused("dnf", &["makecache", "foo"]);
         refused("dnf", &["install", "-y"]);
+        refused("dnf", &["install", "-y", "/tmp/x.rpm"]);
+        refused("dnf", &["install", "-y", "/home/me/.cache/bap-store/x.deb"]);
+        refused("dnf", &["remove", "-y", "/home/me/.cache/bap-store/x.rpm"]);
+        refused("dnf", &["upgrade", "-y", "/home/me/.cache/bap-store/x.rpm"]);
         refused("snap", &["install", "--dangerous", "foo"]);
         refused("snap", &["install"]);
         refused(
@@ -574,6 +651,49 @@ mod tests {
             &["-i", "/home/me/.cache/bap-store/x.deb", "--force-all"],
         );
         refused("dpkg", &["--configure", "-a"]);
+    }
+
+    #[test]
+    fn a_flatpak_positional_is_never_a_file() {
+        for path in [
+            "/tmp/evil.flatpak",
+            "/home/me/evil.flatpakref",
+            "/tmp/evil.flatpak/",
+            "./evil.flatpak",
+            "../evil.flatpak",
+            "evil.flatpak",
+            "evil.flatpakref",
+            "dir/evil.flatpak",
+            "org.gimp.GIMP.flatpakref/x",
+        ] {
+            for args in [
+                vec!["install", "--system", "-y", path],
+                vec!["install", "--system", "-y", "flathub", path],
+                vec!["install", "--system", "-y", path, "org.gimp.GIMP"],
+                vec!["update", "--system", "-y", path],
+                vec!["uninstall", "--system", "-y", path],
+            ] {
+                let err = refused("flatpak", &args);
+                assert!(err.ends_with(FLATPAK_NOT_A_FILE), "{err}");
+            }
+        }
+        ok(
+            "flatpak",
+            &["install", "--system", "-y", "flathub", "org.gimp.GIMP"],
+        );
+        ok(
+            "flatpak",
+            &[
+                "install",
+                "--system",
+                "-y",
+                "flathub",
+                "app/org.gimp.GIMP/x86_64/stable",
+            ],
+        );
+        ok("flatpak", &["update", "--system", "-y", "org.gimp.GIMP"]);
+        assert!(FLATPAK_NOT_A_FILE.ends_with('.'));
+        assert!(!FLATPAK_NOT_A_FILE.contains('\u{2014}'));
     }
 
     #[test]
@@ -640,6 +760,52 @@ mod tests {
             check_step(&newline, &allowed())
                 .unwrap_err()
                 .contains("control character")
+        );
+    }
+
+    #[test]
+    fn an_environment_value_must_look_like_what_the_variable_holds() {
+        // debconf's make_frontend evaluates the frontend name as Perl, as root.
+        let injection = "Noninteractive; system(\"touch /tmp/pwned\"); 1; #";
+        let mut sneaky = step("apt-get", &["install", "-y", "foo"]);
+        sneaky.command.env = vec![("DEBIAN_FRONTEND".to_string(), injection.to_string())];
+        let err = check_step(&sneaky, &allowed()).unwrap_err();
+        assert!(err.contains("DEBIAN_FRONTEND"), "{err}");
+        assert!(
+            err.ends_with("A debconf frontend is one lowercase word."),
+            "{err}"
+        );
+
+        for (key, value) in [
+            ("DEBIAN_FRONTEND", "Noninteractive"),
+            ("DEBIAN_FRONTEND", "non interactive"),
+            ("DEBIAN_FRONTEND", ""),
+            ("LC_ALL", "C.UTF-8; rm -rf /"),
+            ("LANG", "en_GB.UTF-8 x"),
+            ("LANG", "$(id)"),
+            ("LANG", ""),
+        ] {
+            let mut bad = step("apt-get", &["install", "-y", "foo"]);
+            bad.command.env = vec![(key.to_string(), value.to_string())];
+            let err = check_step(&bad, &allowed())
+                .expect_err(&format!("{key}={value:?} should be refused"));
+            assert!(err.contains(key), "{err}");
+        }
+        for (key, value) in [
+            ("DEBIAN_FRONTEND", "noninteractive"),
+            ("DEBIAN_FRONTEND", "text"),
+            ("LC_ALL", "C.UTF-8"),
+            ("LANG", "en_GB.UTF-8"),
+            ("LANG", "de_DE@euro"),
+            ("LANG", "C"),
+        ] {
+            let mut fine = step("apt-get", &["install", "-y", "foo"]);
+            fine.command.env = vec![(key.to_string(), value.to_string())];
+            assert_eq!(check_step(&fine, &allowed()), Ok(()), "{key}={value}");
+        }
+        assert!(
+            !env_value_ok("PATH", "/usr/bin"),
+            "a key outside the list has no shape"
         );
     }
 

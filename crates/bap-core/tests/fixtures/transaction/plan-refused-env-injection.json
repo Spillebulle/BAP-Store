@@ -1,0 +1,13 @@
+{
+  "id": "fixture-refused-env-injection",
+  "ops": [],
+  "steps": [
+    {
+      "source": "apt",
+      "title": "Installing foo",
+      "command": {"program": "apt-get", "args": ["install", "-y", "foo"], "env": [["DEBIAN_FRONTEND", "Noninteractive; system(\"touch /tmp/pwned\"); 1; #"]], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    }
+  ]
+}
