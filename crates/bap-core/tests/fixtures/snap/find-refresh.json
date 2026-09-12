@@ -1,0 +1,73 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": [
+    {
+      "id": "3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk",
+      "title": "Firefox",
+      "summary": "Mozilla Firefox web browser",
+      "description": "Firefox is a free and open source web browser from Mozilla.\n\nThis snap is built by the Mozilla release team and tracks the current release.",
+      "download-size": 262156288,
+      "icon": "https://dashboard.snapcraft.io/site_media/appmedia/2021/12/firefox_logo.png",
+      "name": "firefox",
+      "publisher": {
+        "id": "OgeoZuqQpVvSr9eSkmQ2ZLhYmhYbg1oG",
+        "username": "mozilla",
+        "display-name": "Mozilla",
+        "validation": "verified"
+      },
+      "store-url": "https://snapcraft.io/firefox",
+      "developer": "mozilla",
+      "status": "available",
+      "type": "app",
+      "base": "core22",
+      "version": "141.0-1",
+      "channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "6412",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://support.mozilla.org/kb/file-bug-report-or-feature-request-mozilla",
+      "license": "MPL-2.0",
+      "common-ids": ["org.mozilla.firefox"],
+      "website": "https://www.mozilla.org/firefox/",
+      "media": [
+        {
+          "type": "icon",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2021/12/firefox_logo.png"
+        }
+      ]
+    },
+    {
+      "id": "amcUKQILKXHHTlmSa7NMdnXSx02dNeeT",
+      "summary": "Runtime environment based on Ubuntu 22.04",
+      "description": "The base snap based on the Ubuntu 22.04 release.",
+      "download-size": 79691776,
+      "name": "core22",
+      "publisher": {
+        "id": "canonical",
+        "username": "canonical",
+        "display-name": "Canonical",
+        "validation": "verified"
+      },
+      "store-url": "https://snapcraft.io/core22",
+      "developer": "canonical",
+      "status": "available",
+      "type": "base",
+      "version": "20260903",
+      "channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "2010",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://github.com/snapcore/core-base/issues"
+    }
+  ],
+  "sources": ["store"],
+  "suggested-currency": "EUR"
+}

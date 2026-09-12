@@ -1,0 +1,2 @@
+# HTTP captures are byte-exact: the CRLF line endings are what the parser is tested against.
+*.http -text
