@@ -6,7 +6,10 @@ use crate::{Op, Query, Result, Source};
 pub struct Pacman;
 
 impl Pacman {
-    pub fn new(_system: &SystemInfo, _catalogue: std::sync::Arc<crate::appstream::Catalogue>) -> Pacman {
+    pub fn new(
+        _system: &SystemInfo,
+        _catalogue: std::sync::Arc<crate::appstream::Catalogue>,
+    ) -> Pacman {
         Pacman
     }
 }
@@ -28,7 +31,10 @@ impl Source for Pacman {
         Ok(Vec::new())
     }
     fn details(&self, id: &str) -> Result<Package> {
-        Err(crate::Error::from_source(self.kind(), format!("{id} is not known to this source.")))
+        Err(crate::Error::from_source(
+            self.kind(),
+            format!("{id} is not known to this source."),
+        ))
     }
     fn plan(&self, _op: &Op) -> Result<Vec<Step>> {
         Ok(Vec::new())

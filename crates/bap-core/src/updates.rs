@@ -1,7 +1,7 @@
 //! Every source's updates, merged. TODO: the real thing.
 
-use crate::model::*;
 use crate::Store;
+use crate::model::*;
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UpdateList {

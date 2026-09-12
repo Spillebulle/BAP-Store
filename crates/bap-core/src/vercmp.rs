@@ -86,15 +86,14 @@ pub fn rpmvercmp(a: &str, b: &str) -> Ordering {
             };
         }
         let (si, sj) = (i, j);
-        let isnum;
-        if one[i].is_ascii_digit() {
+        let isnum = if one[i].is_ascii_digit() {
             while i < one.len() && one[i].is_ascii_digit() {
                 i += 1;
             }
             while j < two.len() && two[j].is_ascii_digit() {
                 j += 1;
             }
-            isnum = true;
+            true
         } else {
             while i < one.len() && one[i].is_ascii_alphabetic() {
                 i += 1;
@@ -102,8 +101,8 @@ pub fn rpmvercmp(a: &str, b: &str) -> Ordering {
             while j < two.len() && two[j].is_ascii_alphabetic() {
                 j += 1;
             }
-            isnum = false;
-        }
+            false
+        };
         // Two segments of different kinds: the numeric one is newer.
         if sj == j {
             return if isnum {

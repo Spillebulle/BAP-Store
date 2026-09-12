@@ -13,13 +13,17 @@ pub mod github;
 pub mod pacman;
 pub mod snap;
 
+use crate::Source;
 use crate::appstream::Catalogue;
 use crate::http::Client;
 use crate::model::SystemInfo;
-use crate::Source;
 use std::sync::Arc;
 
-pub fn all(system: &SystemInfo, client: Arc<Client>, catalogue: Arc<Catalogue>) -> Vec<Box<dyn Source>> {
+pub fn all(
+    system: &SystemInfo,
+    client: Arc<Client>,
+    catalogue: Arc<Catalogue>,
+) -> Vec<Box<dyn Source>> {
     vec![
         Box::new(pacman::Pacman::new(system, catalogue.clone())),
         Box::new(aur::Aur::new(system, client.clone(), catalogue.clone())),
@@ -27,7 +31,11 @@ pub fn all(system: &SystemInfo, client: Arc<Client>, catalogue: Arc<Catalogue>) 
         Box::new(snap::Snap::new(system, client.clone())),
         Box::new(apt::Apt::new(system, catalogue.clone())),
         Box::new(dnf::Dnf::new(system, catalogue.clone())),
-        Box::new(github::Github::new(system, client.clone(), catalogue.clone())),
+        Box::new(github::Github::new(
+            system,
+            client.clone(),
+            catalogue.clone(),
+        )),
         Box::new(fwupd::Fwupd::new(system)),
         Box::new(chwd::Chwd::new(system)),
     ]

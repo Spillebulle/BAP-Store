@@ -37,7 +37,10 @@ impl Desc {
     }
 
     pub fn first(&self, key: &str) -> Option<&str> {
-        self.fields.get(key).and_then(|v| v.first()).map(String::as_str)
+        self.fields
+            .get(key)
+            .and_then(|v| v.first())
+            .map(String::as_str)
     }
 
     pub fn all(&self, key: &str) -> &[String] {
@@ -76,7 +79,9 @@ impl LocalDb {
             .map_err(|e| Error::new(format!("could not read {}: {e}", dir.display())))?;
         for entry in entries.flatten() {
             let path = entry.path().join("desc");
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
             let desc = Desc::parse(&text);
             if !desc.name().is_empty() {
                 packages.insert(desc.name().to_string(), desc);

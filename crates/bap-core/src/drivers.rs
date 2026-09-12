@@ -2,8 +2,8 @@
 //! manager, and firmware from fwupd. TODO: built by the chwd and fwupd
 //! source modules' helpers.
 
-use crate::model::DriversReport;
 use crate::Store;
+use crate::model::DriversReport;
 
 pub fn report(_store: &Store) -> DriversReport {
     DriversReport {

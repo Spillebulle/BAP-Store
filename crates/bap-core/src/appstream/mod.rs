@@ -73,12 +73,20 @@ impl Catalogue {
     /// Read one directory of `*.xml` / `*.xml.gz` files, resolving cached
     /// icons against `icons_dir`, tagging every component with `origin` when
     /// the file does not state one.
-    pub fn load_dir(_xml_dir: &Path, _icons_dir: Option<&Path>, _origin: Option<&str>) -> Catalogue {
+    pub fn load_dir(
+        _xml_dir: &Path,
+        _icons_dir: Option<&Path>,
+        _origin: Option<&str>,
+    ) -> Catalogue {
         Catalogue::default()
     }
 
     /// Parse one catalogue file's bytes (gzip or plain XML).
-    pub fn parse(_bytes: &[u8], _icons_dir: Option<&Path>, _origin: Option<&str>) -> crate::Result<Vec<Component>> {
+    pub fn parse(
+        _bytes: &[u8],
+        _icons_dir: Option<&Path>,
+        _origin: Option<&str>,
+    ) -> crate::Result<Vec<Component>> {
         Ok(Vec::new())
     }
 
@@ -116,9 +124,14 @@ impl Catalogue {
 
     /// The standard XML directories, in the order they are read.
     pub fn system_xml_dirs() -> Vec<PathBuf> {
-        ["/usr/share/swcatalog/xml", "/var/lib/swcatalog/xml", "/usr/share/app-info/xmls", "/var/lib/app-info/xmls"]
-            .iter()
-            .map(PathBuf::from)
-            .collect()
+        [
+            "/usr/share/swcatalog/xml",
+            "/var/lib/swcatalog/xml",
+            "/usr/share/app-info/xmls",
+            "/var/lib/app-info/xmls",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect()
     }
 }

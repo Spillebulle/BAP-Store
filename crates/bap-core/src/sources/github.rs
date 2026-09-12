@@ -6,7 +6,11 @@ use crate::{Op, Query, Result, Source};
 pub struct Github;
 
 impl Github {
-    pub fn new(_system: &SystemInfo, _client: std::sync::Arc<crate::http::Client>, _catalogue: std::sync::Arc<crate::appstream::Catalogue>) -> Github {
+    pub fn new(
+        _system: &SystemInfo,
+        _client: std::sync::Arc<crate::http::Client>,
+        _catalogue: std::sync::Arc<crate::appstream::Catalogue>,
+    ) -> Github {
         Github
     }
 }
@@ -28,7 +32,10 @@ impl Source for Github {
         Ok(Vec::new())
     }
     fn details(&self, id: &str) -> Result<Package> {
-        Err(crate::Error::from_source(self.kind(), format!("{id} is not known to this source.")))
+        Err(crate::Error::from_source(
+            self.kind(),
+            format!("{id} is not known to this source."),
+        ))
     }
     fn plan(&self, _op: &Op) -> Result<Vec<Step>> {
         Ok(Vec::new())

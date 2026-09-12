@@ -16,7 +16,9 @@ pub fn from_os_release(text: &str) -> SystemInfo {
     let mut like = Vec::new();
     let mut pretty = String::new();
     for line in text.lines() {
-        let Some((k, v)) = line.split_once('=') else { continue };
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
         let v = v.trim().trim_matches('"');
         match k.trim() {
             "ID" => id = v.to_string(),
@@ -36,8 +38,12 @@ pub fn from_os_release(text: &str) -> SystemInfo {
         distro_like: like,
         pretty_name: pretty,
         arch: std::env::consts::ARCH.to_string(),
-        desktop: std::env::var("XDG_CURRENT_DESKTOP").ok().filter(|s| !s.is_empty()),
-        session: std::env::var("XDG_SESSION_TYPE").ok().filter(|s| !s.is_empty()),
+        desktop: std::env::var("XDG_CURRENT_DESKTOP")
+            .ok()
+            .filter(|s| !s.is_empty()),
+        session: std::env::var("XDG_SESSION_TYPE")
+            .ok()
+            .filter(|s| !s.is_empty()),
     }
 }
 
@@ -71,7 +77,11 @@ pub fn run(program: &str, args: &[&str]) -> crate::Result<String> {
         return Err(crate::Error::new(format!(
             "{program} {} failed{}",
             args.first().copied().unwrap_or(""),
-            if first.is_empty() { String::new() } else { format!(": {first}") }
+            if first.is_empty() {
+                String::new()
+            } else {
+                format!(": {first}")
+            }
         )));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
@@ -131,7 +141,9 @@ mod tests {
 
     #[test]
     fn cachyos_is_arch_like() {
-        let s = from_os_release("NAME=\"CachyOS Linux\"\nPRETTY_NAME=\"CachyOS\"\nID=cachyos\nID_LIKE=arch\n");
+        let s = from_os_release(
+            "NAME=\"CachyOS Linux\"\nPRETTY_NAME=\"CachyOS\"\nID=cachyos\nID_LIKE=arch\n",
+        );
         assert_eq!(s.distro_id, "cachyos");
         assert!(s.is_arch_like());
         assert!(!s.is_debian_like());

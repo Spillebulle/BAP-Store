@@ -279,13 +279,23 @@ pub struct SourceStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Op {
-    Install { package: PackageRef },
-    Remove { package: PackageRef },
-    Update { package: PackageRef },
+    Install {
+        package: PackageRef,
+    },
+    Remove {
+        package: PackageRef,
+    },
+    Update {
+        package: PackageRef,
+    },
     /// Everything this source can update, in one transaction.
-    UpdateAll { source: SourceKind },
+    UpdateAll {
+        source: SourceKind,
+    },
     /// Refresh the source's index (pacman -Sy, apt update, flatpak appstream).
-    Refresh { source: SourceKind },
+    Refresh {
+        source: SourceKind,
+    },
 }
 
 /// A process to run. The helper validates `program` and `args` against its
@@ -378,10 +388,18 @@ impl SystemInfo {
         self.distro_id == "arch" || self.distro_like.iter().any(|d| d == "arch")
     }
     pub fn is_debian_like(&self) -> bool {
-        self.distro_id == "debian" || self.distro_like.iter().any(|d| d == "debian" || d == "ubuntu")
+        self.distro_id == "debian"
+            || self
+                .distro_like
+                .iter()
+                .any(|d| d == "debian" || d == "ubuntu")
     }
     pub fn is_fedora_like(&self) -> bool {
-        self.distro_id == "fedora" || self.distro_like.iter().any(|d| d == "fedora" || d == "rhel")
+        self.distro_id == "fedora"
+            || self
+                .distro_like
+                .iter()
+                .any(|d| d == "fedora" || d == "rhel")
     }
 }
 

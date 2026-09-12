@@ -8,11 +8,16 @@ pub fn build(store: &Store, ops: &[Op]) -> Result<Plan> {
     let mut steps = Vec::new();
     for op in ops {
         let kind = match op {
-            Op::Install { package } | Op::Remove { package } | Op::Update { package } => package.source,
+            Op::Install { package } | Op::Remove { package } | Op::Update { package } => {
+                package.source
+            }
             Op::UpdateAll { source } | Op::Refresh { source } => *source,
         };
         let Some(source) = store.source(kind) else {
-            return Err(crate::Error::new(format!("{} is not a source on this machine.", kind.label())));
+            return Err(crate::Error::new(format!(
+                "{} is not a source on this machine.",
+                kind.label()
+            )));
         };
         steps.extend(source.plan(op)?);
     }

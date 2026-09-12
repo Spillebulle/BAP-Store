@@ -10,7 +10,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-pub const USER_AGENT: &str = concat!("bap-store/", env!("CARGO_PKG_VERSION"), " (+https://github.com/Spillebulle/BAP-Store)");
+pub const USER_AGENT: &str = concat!(
+    "bap-store/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/Spillebulle/BAP-Store)"
+);
 
 #[derive(Clone)]
 pub struct Client {
@@ -50,7 +54,11 @@ impl Client {
             .send()
             .map_err(|e| Error::new(describe(url, &e)))?;
         if !resp.status().is_success() {
-            return Err(Error::new(format!("{} answered {}", host(url), resp.status())));
+            return Err(Error::new(format!(
+                "{} answered {}",
+                host(url),
+                resp.status()
+            )));
         }
         resp.text().map_err(|e| Error::new(describe(url, &e)))
     }
@@ -63,7 +71,11 @@ impl Client {
             .send()
             .map_err(|e| Error::new(describe(url, &e)))?;
         if !resp.status().is_success() {
-            return Err(Error::new(format!("{} answered {}", host(url), resp.status())));
+            return Err(Error::new(format!(
+                "{} answered {}",
+                host(url),
+                resp.status()
+            )));
         }
         resp.bytes()
             .map(|b| b.to_vec())
@@ -71,21 +83,37 @@ impl Client {
     }
 
     /// GET JSON, with extra headers where an API wants them.
-    pub fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str, headers: &[(&str, &str)]) -> Result<T> {
+    pub fn get_json<T: serde::de::DeserializeOwned>(
+        &self,
+        url: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<T> {
         let mut req = self.inner.get(url);
         for (k, v) in headers {
             req = req.header(*k, *v);
         }
         let resp = req.send().map_err(|e| Error::new(describe(url, &e)))?;
         if !resp.status().is_success() {
-            return Err(Error::new(format!("{} answered {}", host(url), resp.status())));
+            return Err(Error::new(format!(
+                "{} answered {}",
+                host(url),
+                resp.status()
+            )));
         }
-        resp.json::<T>()
-            .map_err(|e| Error::new(format!("{} sent something that was not the expected JSON: {e}", host(url))))
+        resp.json::<T>().map_err(|e| {
+            Error::new(format!(
+                "{} sent something that was not the expected JSON: {e}",
+                host(url)
+            ))
+        })
     }
 
     /// POST a JSON body and read a JSON answer.
-    pub fn post_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(&self, url: &str, body: &B) -> Result<T> {
+    pub fn post_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> Result<T> {
         let resp = self
             .inner
             .post(url)
@@ -93,10 +121,18 @@ impl Client {
             .send()
             .map_err(|e| Error::new(describe(url, &e)))?;
         if !resp.status().is_success() {
-            return Err(Error::new(format!("{} answered {}", host(url), resp.status())));
+            return Err(Error::new(format!(
+                "{} answered {}",
+                host(url),
+                resp.status()
+            )));
         }
-        resp.json::<T>()
-            .map_err(|e| Error::new(format!("{} sent something that was not the expected JSON: {e}", host(url))))
+        resp.json::<T>().map_err(|e| {
+            Error::new(format!(
+                "{} sent something that was not the expected JSON: {e}",
+                host(url)
+            ))
+        })
     }
 
     /// GET text through the disk cache: the cached copy is used when it is
@@ -106,7 +142,11 @@ impl Client {
     pub fn get_text_cached(&self, url: &str, max_age: Duration) -> Result<String> {
         let path = self.cache_path(url);
         if let Ok(meta) = std::fs::metadata(&path)
-            && meta.modified().ok().and_then(|m| m.elapsed().ok()).is_some_and(|age| age < max_age)
+            && meta
+                .modified()
+                .ok()
+                .and_then(|m| m.elapsed().ok())
+                .is_some_and(|age| age < max_age)
             && let Ok(text) = std::fs::read_to_string(&path)
         {
             return Ok(text);
@@ -146,7 +186,10 @@ impl Client {
             h ^= b as u64;
             h = h.wrapping_mul(0x0100_0000_01b3);
         }
-        self.cache_dir.join(format!("{}-{h:016x}.json", host(url).replace(['/', ':'], "_")))
+        self.cache_dir.join(format!(
+            "{}-{h:016x}.json",
+            host(url).replace(['/', ':'], "_")
+        ))
     }
 }
 

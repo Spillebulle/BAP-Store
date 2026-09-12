@@ -153,7 +153,10 @@ impl Store {
     }
 
     pub fn source(&self, kind: SourceKind) -> Option<&dyn Source> {
-        self.sources.iter().find(|s| s.kind() == kind).map(|s| s.as_ref())
+        self.sources
+            .iter()
+            .find(|s| s.kind() == kind)
+            .map(|s| s.as_ref())
     }
 
     fn selected(&self, wanted: &Option<Vec<SourceKind>>) -> Vec<&dyn Source> {
@@ -177,7 +180,10 @@ impl Store {
                     scope.spawn(move || (kind, s.search(query)))
                 })
                 .collect();
-            handles.into_iter().map(|h| h.join().expect("a source panicked")).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("a source panicked"))
+                .collect()
         });
         let mut packages = Vec::new();
         let mut failed = Vec::new();
@@ -207,7 +213,10 @@ impl Store {
                     scope.spawn(move || (kind, s.installed()))
                 })
                 .collect();
-            handles.into_iter().map(|h| h.join().expect("a source panicked")).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("a source panicked"))
+                .collect()
         });
         let mut packages = Vec::new();
         let mut failed = Vec::new();

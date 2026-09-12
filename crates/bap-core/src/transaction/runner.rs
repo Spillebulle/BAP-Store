@@ -17,6 +17,8 @@ pub struct Runner;
 
 impl Runner {
     pub fn run(_plan: &Plan, _sink: &mut dyn Sink) -> crate::Result<()> {
-        Err(crate::Error::new("The transaction runner is not built yet."))
+        Err(crate::Error::new(
+            "The transaction runner is not built yet.",
+        ))
     }
 }
