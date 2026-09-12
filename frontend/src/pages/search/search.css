@@ -1,0 +1,74 @@
+/*
+ * The search page: a pinned toolbar over a scrolling list of application
+ * rows. Tokens only; the components are painted in app.css.
+ */
+
+.bs-search {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The toolbar never scrolls away; the results do. */
+.bs-search-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.bs-search-body > .bs-page {
+  flex: 1;
+}
+
+.bs-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+
+/* "12 results from pacman, AUR and Flatpak": one line in dim above the list. */
+.bs-search-line {
+  color: var(--text-dim);
+  font-size: var(--text-small);
+}
+
+.bs-search-line .bs-figure {
+  color: var(--text-muted);
+}
+
+.bs-search-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* The trailing figure: the version in mono, then the popularity label in the interface face. */
+.bs-search-fig {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.bs-search-fig-label {
+  font-family: var(--font-ui);
+}
+
+/* The edition picker in a row: wide enough that its list, which matches its
+   width exactly, has room for "pacman · 1.0.0.85-1 · multilib". */
+.bs-search-pick {
+  width: calc(var(--s6) * 6);
+}
+
+/* A second sentence and its button under the empty state's first sentence. */
+.bs-search-empty-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+}
