@@ -1,0 +1,163 @@
+/*
+ * The Drivers and Settings pages: what the components do not already draw.
+ * Tokens only, sizes on the 4 px grid; class names are prefixed sy- so they
+ * cannot be confused with the component sheet's bs- names.
+ */
+
+/* ═══ drivers: a device panel's figure and its profile rows ═══════════════ */
+
+/* Class and PCI id at the right of a device panel's header, in the count's voice. */
+.sy-panel-fig {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+  padding-right: var(--s1);
+  color: var(--text-dim);
+  font-size: var(--text-tiny);
+  white-space: nowrap;
+}
+
+.sy-panel-fig > .bs-figure {
+  color: var(--text-dim);
+}
+
+/* A profile is three lines and an action, so it cannot be the 26 px row; it
+   keeps the row's vocabulary (name, sub, badges, action) at its own height. */
+.sy-profiles {
+  display: flex;
+  flex-direction: column;
+}
+
+.sy-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+}
+
+.sy-profile + .sy-profile {
+  border-top: var(--hairline) solid var(--line-soft);
+}
+
+.sy-profile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sy-profile-name {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-control);
+}
+
+.sy-profile-name.on {
+  color: var(--text-strong);
+}
+
+/* The name takes its own width so the badges sit beside it, not at the far edge. */
+.sy-profile-name > .bs-row-label {
+  flex: 0 1 auto;
+}
+
+/* The slot the installed profile's dot sits in, kept for every row so names line up. */
+.sy-dot-slot {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+}
+
+.sy-profile-desc {
+  color: var(--text-muted);
+  font-size: var(--text-small);
+}
+
+.sy-profile-pkgs {
+  color: var(--text-dim);
+  font-size: var(--text-small);
+}
+
+.sy-profile-action {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+/* ═══ drivers: the firmware table ═════════════════════════════════════════ */
+
+.sy-fw-sub {
+  color: var(--text-dim);
+  font-size: var(--text-small);
+}
+
+.sy-fw-update {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.sy-fw-action {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sy-fw-action > .bs-btn {
+  display: inline-flex;
+}
+
+/* ═══ skeletons with the geometry of what is coming ═══════════════════════ */
+
+/* Two device panels' worth of rows, stacked at the page's own gap. */
+.sy-skel-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.sy-skel-head {
+  display: flex;
+  align-items: center;
+  height: var(--h-panelhead);
+  padding: 0 var(--s3);
+}
+
+.sy-skel-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sy-skel-control {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+}
+
+/* ═══ settings: the about block and the danger row ════════════════════════ */
+
+.sy-links {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.sy-licence {
+  padding-top: var(--s1);
+  color: var(--text-dim);
+  font-size: var(--text-tiny);
+}
+
+/* The settings block sits at the page's reading width; the footer is its last row. */
+.sy-settings {
+  width: 100%;
+}
