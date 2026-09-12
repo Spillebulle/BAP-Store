@@ -445,7 +445,7 @@ export function Gallery() {
             </Panel>
             <div className="bs-stack bs-grow" style={{ gap: "16px" }}>
               <Notice actions={<Button kind="ghost">Update all</Button>}>
-                CachyOS is an Arch system and does not support partial upgrades. Update all is the safe choice.
+                Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.
               </Notice>
               <Progress fraction={0.64} message="Downloading firefox-155.0.1-1-x86_64.pkg.tar.zst" />
               <Progress fraction={null} message="makepkg is building. No progress is reported for this step." />

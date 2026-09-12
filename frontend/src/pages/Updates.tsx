@@ -200,7 +200,7 @@ function SkeletonRows({ count }: { count: number }) {
 function UpdateRow({ update, ticked, onToggle }: { update: Update; ticked: boolean; onToggle: () => void }) {
   const u = update;
   const single = () => void startOps([{ op: "update", package: u.package }], `Update ${u.name}`);
-  const alone = u.package.source === "pacman" ? `Update ${u.name} alone. On Arch that is a partial upgrade; Update all is the safe choice.` : `Update ${u.name} alone.`;
+  const alone = u.package.source === "pacman" ? `Update ${u.name}. On Arch this runs the full system upgrade with ${u.name} included.` : `Update ${u.name} alone.`;
   return (
     <tr onClick={onToggle}>
       <td className="bl-c-narrow">

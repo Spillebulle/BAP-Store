@@ -939,7 +939,7 @@ export async function plan(ops: Op[]): Promise<PlanPreview> {
   const partial = ops.some((o) => o.op === "update" && o.package.source === "pacman");
   const whole = ops.some((o) => o.op === "updateall" && o.source === "pacman");
   if (partial && !whole) {
-    notices.push("CachyOS is an Arch system and does not support partial upgrades. Updating only some pacman packages can leave the system broken. Update all is the safe choice.");
+    notices.push("Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.");
   }
   if (built.steps.some((s) => s.source === "aur" && s.title.startsWith("Building"))) {
     notices.push("AUR packages are built on this machine as your user. A large build can take several minutes.");
