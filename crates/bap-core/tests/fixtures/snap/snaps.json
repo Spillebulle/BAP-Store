@@ -1,0 +1,229 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": [
+    {
+      "id": "3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk",
+      "title": "Firefox",
+      "summary": "Mozilla Firefox web browser",
+      "description": "Firefox is a free and open source web browser from Mozilla.\n\nThis snap is built by the Mozilla release team and tracks the current release.",
+      "icon": "/v2/icons/firefox/icon",
+      "installed-size": 274702336,
+      "install-date": "2026-08-30T14:22:07.517389211+02:00",
+      "name": "firefox",
+      "publisher": {
+        "id": "OgeoZuqQpVvSr9eSkmQ2ZLhYmhYbg1oG",
+        "username": "mozilla",
+        "display-name": "Mozilla",
+        "validation": "verified"
+      },
+      "developer": "mozilla",
+      "status": "active",
+      "type": "app",
+      "base": "core22",
+      "version": "140.0.4-1",
+      "channel": "latest/stable",
+      "tracking-channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "6338",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "apps": [
+        {
+          "snap": "firefox",
+          "name": "firefox",
+          "desktop-file": "/var/lib/snapd/desktop/applications/firefox_firefox.desktop",
+          "common-id": "org.mozilla.firefox"
+        },
+        {
+          "snap": "firefox",
+          "name": "geckodriver"
+        }
+      ],
+      "contact": "https://support.mozilla.org/kb/file-bug-report-or-feature-request-mozilla",
+      "license": "MPL-2.0",
+      "common-ids": ["org.mozilla.firefox"],
+      "mounted-from": "/var/lib/snapd/snaps/firefox_6338.snap",
+      "links": {
+        "contact": ["https://support.mozilla.org/kb/file-bug-report-or-feature-request-mozilla"],
+        "website": ["https://www.mozilla.org/firefox/"]
+      },
+      "website": "https://www.mozilla.org/firefox/",
+      "store-url": "https://snapcraft.io/firefox",
+      "media": [
+        {
+          "type": "icon",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2021/12/firefox_logo.png"
+        },
+        {
+          "type": "screenshot",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2021/09/firefox-screenshot.png",
+          "width": 1920,
+          "height": 1080
+        }
+      ]
+    },
+    {
+      "id": "amcUKQILKXHHTlmSa7NMdnXSx02dNeeT",
+      "summary": "Runtime environment based on Ubuntu 22.04",
+      "description": "The base snap based on the Ubuntu 22.04 release.",
+      "installed-size": 77754368,
+      "install-date": "2026-08-30T14:21:50.102938471+02:00",
+      "name": "core22",
+      "publisher": {
+        "id": "canonical",
+        "username": "canonical",
+        "display-name": "Canonical",
+        "validation": "verified"
+      },
+      "developer": "canonical",
+      "status": "active",
+      "type": "base",
+      "version": "20260812",
+      "channel": "latest/stable",
+      "tracking-channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "1988",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://github.com/snapcore/core-base/issues",
+      "mounted-from": "/var/lib/snapd/snaps/core22_1988.snap",
+      "links": {
+        "contact": ["https://github.com/snapcore/core-base/issues"]
+      }
+    },
+    {
+      "id": "PMrrV4ml8uWuEUDBT8dSGnKUYbevVhc4",
+      "summary": "Daemon and tooling that enable snap packages",
+      "description": "Install, configure, refresh and remove snap packages. Snaps are 'universal' packages that work across many different Linux systems, enabling secure distribution of the latest apps and utilities for cloud, servers, desktops and the internet of things.\n\nStart with 'snap list' to see installed snaps.",
+      "installed-size": 45268992,
+      "install-date": "2026-08-30T14:21:41.881204553+02:00",
+      "name": "snapd",
+      "publisher": {
+        "id": "canonical",
+        "username": "canonical",
+        "display-name": "Canonical",
+        "validation": "verified"
+      },
+      "developer": "canonical",
+      "status": "active",
+      "type": "snapd",
+      "version": "2.63.1",
+      "channel": "latest/stable",
+      "tracking-channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "24505",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://github.com/snapcore/snapd/issues",
+      "mounted-from": "/var/lib/snapd/snaps/snapd_24505.snap",
+      "links": {
+        "contact": ["https://github.com/snapcore/snapd/issues"]
+      }
+    },
+    {
+      "id": "vEyVSPaFkFaxhLU8bNCJ7uNoYENQU6WJ",
+      "title": "Visual Studio Code",
+      "summary": "Code editing. Redefined.",
+      "description": "Visual Studio Code is a new choice of tool that combines the simplicity of a code editor with what developers need for the core edit-build-debug cycle.\n\nThis snap uses classic confinement and has full access to your files.",
+      "icon": "/v2/icons/code/icon",
+      "installed-size": 396722176,
+      "install-date": "2026-09-02T10:05:19.446712895+02:00",
+      "name": "code",
+      "publisher": {
+        "id": "0CqVDhmhW93oPI5tB2vhcbVhEwwGvOZo",
+        "username": "vscode",
+        "display-name": "Visual Studio Code",
+        "validation": "verified"
+      },
+      "developer": "vscode",
+      "status": "active",
+      "type": "app",
+      "base": "core22",
+      "version": "1.104.0",
+      "channel": "latest/stable",
+      "tracking-channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "210",
+      "confinement": "classic",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "apps": [
+        {
+          "snap": "code",
+          "name": "code",
+          "desktop-file": "/var/lib/snapd/desktop/applications/code_code.desktop",
+          "common-id": "com.visualstudio.code"
+        },
+        {
+          "snap": "code",
+          "name": "url-handler",
+          "desktop-file": "/var/lib/snapd/desktop/applications/code_url-handler.desktop"
+        }
+      ],
+      "contact": "https://github.com/Microsoft/vscode/issues",
+      "license": "Proprietary",
+      "common-ids": ["com.visualstudio.code"],
+      "mounted-from": "/var/lib/snapd/snaps/code_210.snap",
+      "links": {
+        "contact": ["https://github.com/Microsoft/vscode/issues"],
+        "website": ["https://code.visualstudio.com/"]
+      },
+      "website": "https://code.visualstudio.com/",
+      "store-url": "https://snapcraft.io/code",
+      "media": [
+        {
+          "type": "icon",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2019/08/code_icon.png"
+        }
+      ]
+    },
+    {
+      "id": "mVyGrEwiqSi5PugCwyH7WgpoQLemtTd6",
+      "summary": "GNU Hello, the \"hello world\" snap",
+      "description": "GNU hello prints a friendly greeting. This is part of the snapcraft tour at https://snapcraft.io/",
+      "installed-size": 20480,
+      "install-date": "2026-09-05T18:40:02.008861302+02:00",
+      "name": "hello",
+      "publisher": {
+        "id": "canonical",
+        "username": "canonical",
+        "display-name": "Canonical",
+        "validation": "verified"
+      },
+      "developer": "canonical",
+      "status": "active",
+      "type": "app",
+      "base": "core22",
+      "version": "2.10",
+      "channel": "latest/stable",
+      "tracking-channel": "latest/stable",
+      "ignore-validation": false,
+      "revision": "42",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "apps": [
+        {
+          "snap": "hello",
+          "name": "hello"
+        }
+      ],
+      "contact": "mailto:snaps@canonical.com",
+      "license": "GPL-3.0",
+      "mounted-from": "/var/lib/snapd/snaps/hello_42.snap",
+      "links": {
+        "contact": ["mailto:snaps@canonical.com"]
+      }
+    }
+  ]
+}

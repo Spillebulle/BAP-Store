@@ -1,0 +1,9 @@
+{
+  "type": "error",
+  "status-code": 400,
+  "status": "Bad Request",
+  "result": {
+    "message": "cannot query the store for updates: Get \"https://api.snapcraft.io/v2/snaps/refresh\": dial tcp: i/o timeout",
+    "kind": "network-timeout"
+  }
+}

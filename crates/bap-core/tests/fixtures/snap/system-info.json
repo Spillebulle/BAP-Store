@@ -1,0 +1,43 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": {
+    "architecture": "amd64",
+    "build-id": "4a7c1f9e2b6d8e0f3a5c7b9d1e2f4a6c8b0d2e4f",
+    "confinement": "strict",
+    "features": {
+      "apparmor-prompting": {"supported": false, "unsupported-reason": "requires newer kernel", "enabled": false},
+      "hidden-snap-folder": {"supported": true, "enabled": false},
+      "refresh-app-awareness": {"supported": true, "enabled": true}
+    },
+    "kernel-version": "7.1.3-2-cachyos",
+    "locations": {
+      "snap-bin-dir": "/var/lib/snapd/snap/bin",
+      "snap-mount-dir": "/var/lib/snapd/snap"
+    },
+    "managed": false,
+    "on-classic": true,
+    "os-release": {
+      "id": "cachyos",
+      "version-id": ""
+    },
+    "refresh": {
+      "timer": "00:00~24:00/4",
+      "last": "2026-09-09T22:14:03+02:00",
+      "next": "2026-09-10T04:51:00+02:00"
+    },
+    "sandbox-features": {
+      "apparmor": ["kernel:caps", "kernel:dbus", "kernel:domain", "kernel:file", "kernel:mount", "kernel:namespaces", "kernel:network", "kernel:ptrace", "kernel:signal", "parser:unsafe", "policy:default", "support-level:full"],
+      "confinement-options": ["classic", "devmode", "strict"],
+      "dbus": ["mediated-bus-access"],
+      "kmod": ["mediated-modprobe"],
+      "mount": ["freezer-cgroup-v1", "layouts", "mount-namespace", "per-snap-persistency", "per-snap-profiles", "per-snap-updates", "per-snap-user-profiles", "stale-base-invalidation"],
+      "seccomp": ["bpf-actlog", "bpf-argument-filtering", "kernel:allow", "kernel:errno", "kernel:kill_process", "kernel:kill_thread", "kernel:log", "kernel:trace", "kernel:trap", "kernel:user_notif"],
+      "udev": ["device-cgroup-v2", "device-filtering", "tagging"]
+    },
+    "series": "16",
+    "system-mode": "run",
+    "version": "2.63.1"
+  }
+}

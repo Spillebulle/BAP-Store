@@ -1,0 +1,72 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": [
+    {
+      "id": "XKEcBqPM0WZuSU0rSEo3VMksLbnvUlSw",
+      "title": "Chromium",
+      "summary": "Chromium web browser, open-source version of Chrome",
+      "description": "An open-source browser project that aims to build a safer, faster, and more stable way for all Internet users to experience the web.",
+      "download-size": 175243264,
+      "icon": "https://dashboard.snapcraft.io/site_media/appmedia/2018/04/chromium.png",
+      "name": "chromium",
+      "publisher": {
+        "id": "canonical",
+        "username": "canonical",
+        "display-name": "Canonical",
+        "validation": "verified"
+      },
+      "store-url": "https://snapcraft.io/chromium",
+      "developer": "canonical",
+      "status": "available",
+      "type": "app",
+      "base": "core22",
+      "version": "140.0.7339.80",
+      "channel": "stable",
+      "ignore-validation": false,
+      "revision": "3208",
+      "confinement": "strict",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://bugs.launchpad.net/chromium-browser",
+      "license": "BSD-3-Clause",
+      "common-ids": ["org.chromium.Chromium"],
+      "website": "https://www.chromium.org/",
+      "links": {
+        "contact": ["https://bugs.launchpad.net/chromium-browser"],
+        "website": ["https://www.chromium.org/"]
+      },
+      "media": [
+        {
+          "type": "icon",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2018/04/chromium.png"
+        },
+        {
+          "type": "screenshot",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2018/04/chromium-screenshot.png",
+          "width": 1600,
+          "height": 900
+        }
+      ],
+      "categories": [
+        {"name": "productivity", "featured": false}
+      ],
+      "channels": {
+        "latest/stable": {
+          "revision": "3208",
+          "confinement": "strict",
+          "version": "140.0.7339.80",
+          "channel": "latest/stable",
+          "epoch": {"read": [0], "write": [0]},
+          "size": 175243264,
+          "released-at": "2026-09-04T09:15:22.551908Z"
+        }
+      },
+      "tracks": ["latest"]
+    }
+  ],
+  "sources": ["store"],
+  "suggested-currency": "EUR"
+}

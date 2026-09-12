@@ -1,0 +1,81 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": [
+    {
+      "id": "vEyVSPaFkFaxhLU8bNCJ7uNoYENQU6WJ",
+      "title": "Visual Studio Code",
+      "summary": "Code editing. Redefined.",
+      "description": "Visual Studio Code is a new choice of tool that combines the simplicity of a code editor with what developers need for the core edit-build-debug cycle.\n\nThis snap uses classic confinement and has full access to your files.",
+      "download-size": 104857600,
+      "icon": "https://dashboard.snapcraft.io/site_media/appmedia/2019/08/code_icon.png",
+      "name": "code",
+      "publisher": {
+        "id": "0CqVDhmhW93oPI5tB2vhcbVhEwwGvOZo",
+        "username": "vscode",
+        "display-name": "Visual Studio Code",
+        "validation": "verified"
+      },
+      "store-url": "https://snapcraft.io/code",
+      "developer": "vscode",
+      "status": "available",
+      "type": "app",
+      "base": "core22",
+      "version": "1.104.1",
+      "channel": "stable",
+      "ignore-validation": false,
+      "revision": "213",
+      "confinement": "classic",
+      "private": false,
+      "devmode": false,
+      "jailmode": false,
+      "contact": "https://github.com/Microsoft/vscode/issues",
+      "license": "Proprietary",
+      "common-ids": ["com.visualstudio.code"],
+      "website": "https://code.visualstudio.com/",
+      "links": {
+        "contact": ["https://github.com/Microsoft/vscode/issues"],
+        "website": ["https://code.visualstudio.com/"]
+      },
+      "media": [
+        {
+          "type": "icon",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2019/08/code_icon.png"
+        },
+        {
+          "type": "screenshot",
+          "url": "https://dashboard.snapcraft.io/site_media/appmedia/2019/08/code-screenshot.png",
+          "width": 2560,
+          "height": 1600
+        }
+      ],
+      "categories": [
+        {"name": "development", "featured": true}
+      ],
+      "channels": {
+        "latest/stable": {
+          "revision": "213",
+          "confinement": "classic",
+          "version": "1.104.1",
+          "channel": "latest/stable",
+          "epoch": {"read": [0], "write": [0]},
+          "size": 104857600,
+          "released-at": "2026-09-09T02:18:44.201377Z"
+        },
+        "latest/insider": {
+          "revision": "214",
+          "confinement": "classic",
+          "version": "1.105.0-insider",
+          "channel": "latest/insider",
+          "epoch": {"read": [0], "write": [0]},
+          "size": 105381888,
+          "released-at": "2026-09-10T02:20:09.870143Z"
+        }
+      },
+      "tracks": ["latest"]
+    }
+  ],
+  "sources": ["store"],
+  "suggested-currency": "EUR"
+}

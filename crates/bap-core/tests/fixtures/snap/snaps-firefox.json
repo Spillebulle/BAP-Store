@@ -1,0 +1,68 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": {
+    "id": "3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk",
+    "title": "Firefox",
+    "summary": "Mozilla Firefox web browser",
+    "description": "Firefox is a free and open source web browser from Mozilla.\n\nThis snap is built by the Mozilla release team and tracks the current release.",
+    "icon": "/v2/icons/firefox/icon",
+    "installed-size": 274702336,
+    "install-date": "2026-08-30T14:22:07.517389211+02:00",
+    "name": "firefox",
+    "publisher": {
+      "id": "OgeoZuqQpVvSr9eSkmQ2ZLhYmhYbg1oG",
+      "username": "mozilla",
+      "display-name": "Mozilla",
+      "validation": "verified"
+    },
+    "developer": "mozilla",
+    "status": "active",
+    "type": "app",
+    "base": "core22",
+    "version": "140.0.4-1",
+    "channel": "latest/stable",
+    "tracking-channel": "latest/stable",
+    "ignore-validation": false,
+    "revision": "6338",
+    "confinement": "strict",
+    "private": false,
+    "devmode": false,
+    "jailmode": false,
+    "apps": [
+      {
+        "snap": "firefox",
+        "name": "firefox",
+        "desktop-file": "/var/lib/snapd/desktop/applications/firefox_firefox.desktop",
+        "common-id": "org.mozilla.firefox"
+      },
+      {
+        "snap": "firefox",
+        "name": "geckodriver"
+      }
+    ],
+    "contact": "https://support.mozilla.org/kb/file-bug-report-or-feature-request-mozilla",
+    "license": "MPL-2.0",
+    "common-ids": ["org.mozilla.firefox"],
+    "mounted-from": "/var/lib/snapd/snaps/firefox_6338.snap",
+    "links": {
+      "contact": ["https://support.mozilla.org/kb/file-bug-report-or-feature-request-mozilla"],
+      "website": ["https://www.mozilla.org/firefox/"]
+    },
+    "website": "https://www.mozilla.org/firefox/",
+    "store-url": "https://snapcraft.io/firefox",
+    "media": [
+      {
+        "type": "icon",
+        "url": "https://dashboard.snapcraft.io/site_media/appmedia/2021/12/firefox_logo.png"
+      },
+      {
+        "type": "screenshot",
+        "url": "https://dashboard.snapcraft.io/site_media/appmedia/2021/09/firefox-screenshot.png",
+        "width": 1920,
+        "height": 1080
+      }
+    ]
+  }
+}

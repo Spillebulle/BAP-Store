@@ -1,0 +1,34 @@
+{
+  "type": "sync",
+  "status-code": 200,
+  "status": "OK",
+  "result": {
+    "architecture": "amd64",
+    "build-id": "9c2e4a6b8d0f1e3a5c7b9d2e4f6a8c0b2d4e6f8a",
+    "confinement": "strict",
+    "features": {
+      "apparmor-prompting": {"supported": true, "enabled": false},
+      "hidden-snap-folder": {"supported": true, "enabled": false},
+      "refresh-app-awareness": {"supported": true, "enabled": true}
+    },
+    "kernel-version": "6.14.0-29-generic",
+    "locations": {
+      "snap-bin-dir": "/snap/bin",
+      "snap-mount-dir": "/snap"
+    },
+    "managed": false,
+    "on-classic": true,
+    "os-release": {
+      "id": "ubuntu",
+      "version-id": "26.04"
+    },
+    "refresh": {
+      "timer": "00:00~24:00/4",
+      "last": "2026-09-09T20:03:41Z",
+      "next": "2026-09-10T03:12:00Z"
+    },
+    "series": "16",
+    "system-mode": "run",
+    "version": "2.71+26.04"
+  }
+}
