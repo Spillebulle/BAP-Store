@@ -45,10 +45,14 @@ const VIEWPORT = { width: 1500, height: 900 };
  */
 export const SHOTS = [
   { name: "window", query: "?view=search&q=steam&fast&selfupdate=none" },
-  { name: "search", query: "?view=search&q=gimp&fast&selfupdate=none", clip: { selector: [".bs-page", ".bs-content"], width: 760, height: 480 } },
-  { name: "detail", query: "?view=app&app=com.valvesoftware.Steam&fast&selfupdate=none", clip: { selector: [".bs-detail-head", ".bs-page", ".bs-content"], width: 760, height: 480 } },
+  // The list pages are the width of the window, so a module crop at 760 cut
+  // their rows in half; they are taken whole, like the window itself.
+  { name: "search", query: "?view=search&q=gimp&fast&selfupdate=none" },
+  // The detail page finds its application in the search store, which the
+  // seeded query fills; without q= it reports the application as gone.
+  { name: "detail", query: "?view=app&app=com.valvesoftware.Steam&q=steam&fast&selfupdate=none" },
   { name: "installed", query: "?view=installed&fast&selfupdate=none" },
-  { name: "updates", query: "?view=updates&fast", clip: { selector: [".bs-page", ".bs-content"], width: 760, height: 480 } },
+  { name: "updates", query: "?view=updates&fast" },
   { name: "drivers", query: "?view=drivers&fast&selfupdate=none" },
   { name: "settings", query: "?view=settings&fast&selfupdate=none" },
   {

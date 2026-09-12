@@ -14,7 +14,7 @@
   updates everything from one page · drivers and firmware · keeps itself current
 </p>
 
-![The BAP Store window: a search for "steam" with the pacman, Flatpak and Snap editions grouped as one row, the sidebar and the status bar](docs/images/window.png)
+![The BAP Store window: a search for "steam" with the pacman, AUR and Flatpak editions grouped as one row, the sidebar and the status bar](docs/images/window.png)
 
 > **Early days.** Searching, installing, removing and updating work on Arch and its derivatives, with Flatpak and Snap wherever they are installed. apt and dnf are written but have not yet run on a real Debian or Fedora. [What is not there yet](#what-is-not-there-yet) is honest about the rest.
 
@@ -45,7 +45,7 @@ the release notes. You can turn that off in **Settings**.
 
 ## Search
 
-<img src="docs/images/search.png" alt="Search results for gimp: one row for GIMP with pacman, Flatpak and AUR editions, filters for source and kind in the toolbar" align="right" width="300">
+![Search results for gimp: one row for GIMP with its pacman, AUR and Flatpak editions, and the source, kind and sort controls in the toolbar](docs/images/search.png)
 
 One box searches every source the machine has at once. The same application
 from several sources is **one row with several editions**, joined by its
@@ -56,11 +56,10 @@ Filter by source, by applications or every package, by installed; sort by
 relevance, name, last updated, popularity or size. A source that cannot be
 used on this machine is listed disabled with the reason in its tooltip.
 
-<br clear="right">
 
 ## Details and install
 
-<img src="docs/images/detail.png" alt="The Steam detail page: a screenshot as backdrop, the icon and facts, the editions dropdown, the install button" align="right" width="300">
+![The Steam detail page: a screenshot as backdrop, the icon and name, the edition picker, the facts column and the description](docs/images/detail.png)
 
 Icons, descriptions and screenshots come from AppStream and Flathub. The
 facts column shows the version, size, licence and last update of the edition
@@ -71,11 +70,10 @@ rail when the total is known and a sentence when it is not, and the full log
 a click away. Everything that needs root goes through one small helper with a
 closed list of commands, so the window itself never runs as root.
 
-<br clear="right">
 
 ## Updates
 
-<img src="docs/images/updates.png" alt="The Updates page: BAP Store's own update first, then applications and packages with tick boxes, sizes and an Update all button" align="right" width="300">
+![The Updates page: BAP Store's own update first, then applications and packages with tick boxes, versions, sizes and the Update all button](docs/images/updates.png)
 
 Every source is checked, without root, and the list can be updated whole or
 by selection. On Arch a selection draws a notice: partial upgrades are not
@@ -84,7 +82,6 @@ supported there, and Update all is the safe choice.
 BAP Store's own update appears at the top and installs the way this copy was
 installed.
 
-<br clear="right">
 
 ## Drivers and firmware
 

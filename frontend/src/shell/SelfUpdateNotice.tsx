@@ -35,7 +35,11 @@ export function SelfUpdateNotice() {
   const hidden = useShell((s) => s.selfUpdateHidden);
   const hide = useShell((s) => s.hideSelfUpdate);
   const go = useShell((s) => s.go);
+  const view = useShell((s) => s.view);
   const [applying, setApplying] = useState(false);
+  // The Updates page draws its own, more specific notice (it can name the
+  // row); two sentences about the same release on one screen is one too many.
+  if (view === "updates") return null;
   if (hidden || !update || !update.latest || !isNewer(update.latest.version, update.current)) return null;
   const { latest, remedy } = update;
 
