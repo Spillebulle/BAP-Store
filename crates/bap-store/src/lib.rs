@@ -1,4 +1,7 @@
 //! The Tauri application. `run` builds the window; `cli` is the text mode.
+//!
+//! `commands` holds every `#[tauri::command]`, `state` what they share,
+//! `settings` the `key = value` file. The core does everything else.
 
 pub mod cli;
 pub mod commands;
@@ -19,6 +22,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
+        // The page opens homepages and release pages in the browser through
+        // this; `capabilities/default.json` limits it to http and https.
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -27,6 +32,9 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // Settings are read here, before the window; the store waits for
+        // the first command that needs it so the window opens before the
+        // package databases are read.
         .manage(state::AppState::new())
         .invoke_handler(commands::handler())
         .run(tauri::generate_context!())
