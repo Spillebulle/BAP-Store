@@ -44,13 +44,23 @@ pub fn parser_for(program: &str) -> Box<dyn ProgressParser> {
         "pacman" => Box::new(Pacman),
         "apt-get" | "apt" | "dpkg" => Box::new(Apt),
         "dnf" => Box::new(Dnf),
-        // INTEGRATION HOOK: the Flatpak source owns its output format and is
-        // written in parallel. When `crate::sources::flatpak::parse_progress`
-        // exists, wrap it here:
-        //     "flatpak" => Box::new(FnParser(crate::sources::flatpak::parse_progress)),
-        // Until then flatpak lines get the generic treatment.
+        // The Flatpak source owns its output format: a percentage line when
+        // flatpak draws progress, or one "Installing <ref>" line per
+        // operation under --noninteractive, which gives a sentence and no
+        // fraction.
+        "flatpak" => Box::new(FnParser(flatpak_line)),
         _ => Box::new(Generic),
     }
+}
+
+fn flatpak_line(line: &str) -> Option<Reading> {
+    if let Some((fraction, message)) = crate::sources::flatpak::parse_progress(line) {
+        return Some(Reading {
+            fraction: Some(fraction),
+            message: Some(message),
+        });
+    }
+    crate::sources::flatpak::parse_operation(line).map(Reading::message)
 }
 
 /// Adapts a plain `fn(&str) -> Option<Reading>` so a source can ship its

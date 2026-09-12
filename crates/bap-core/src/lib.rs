@@ -79,6 +79,10 @@ pub struct Query {
     pub sources: Option<Vec<SourceKind>>,
     /// Per source. Sources return their best matches first.
     pub limit: usize,
+    /// Editions the user has split out of their group, as `source:id`
+    /// (the `split` setting). Each becomes a row of its own.
+    #[serde(default)]
+    pub split: Vec<String>,
 }
 
 impl Query {
@@ -87,6 +91,7 @@ impl Query {
             text: text.into(),
             sources: None,
             limit: 200,
+            split: Vec::new(),
         }
     }
 }
@@ -128,6 +133,19 @@ pub trait Source: Send + Sync {
     /// How the operation would be carried out. An empty list means the
     /// source has nothing to do for it (already installed, nothing to update).
     fn plan(&self, op: &Op) -> Result<Vec<Step>>;
+
+    /// Bring the source's own index up to date without root, where it can
+    /// (pacman downloads fresh sync databases into the cache the way
+    /// `checkupdates` does). The default does nothing; a failure is logged
+    /// by the caller and the on-disk index answers as before.
+    fn refresh_index(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Told after a plan carrying `op` has finished, so a source that keeps
+    /// its own record of what it installed (GitHub) can update it. Never
+    /// runs anything.
+    fn finished(&self, _op: &Op, _ok: bool) {}
 }
 
 /// The sources this machine has, and the operations across them.
@@ -193,7 +211,7 @@ impl Store {
                 Err(e) => failed.push((kind, e.message)),
             }
         }
-        let apps = group::group(packages, &query.text);
+        let apps = group::group_with(packages, &query.text, &query.split);
         SearchResult {
             apps,
             failed,
@@ -237,6 +255,27 @@ impl Store {
     /// Every update, across every available source.
     pub fn updates(&self) -> updates::UpdateList {
         updates::collect(self)
+    }
+
+    /// The same, after every source has been asked to refresh its index
+    /// without root first.
+    pub fn updates_refreshed(&self) -> updates::UpdateList {
+        updates::collect_with(self, true)
+    }
+
+    /// Tell each operation's source how its plan ended.
+    pub fn finished(&self, ops: &[Op], ok: bool) {
+        for op in ops {
+            let kind = match op {
+                Op::Install { package } | Op::Remove { package } | Op::Update { package } => {
+                    package.source
+                }
+                Op::UpdateAll { source } | Op::Refresh { source } => *source,
+            };
+            if let Some(source) = self.source(kind) {
+                source.finished(op, ok);
+            }
+        }
     }
 
     /// Build a plan for a list of operations, grouped so every root step of

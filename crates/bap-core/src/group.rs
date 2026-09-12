@@ -31,6 +31,37 @@ use std::collections::HashMap;
 /// The output order is the page's default: relevance first, applications
 /// before plain packages, then name. An empty query sorts by name alone and
 /// leaves every relevance at 0.
+/// [`group`], with the editions the user has split out kept apart. `split`
+/// holds `source:id` words (the `split` setting); each such package becomes
+/// a row of its own instead of joining whatever it would have matched, and
+/// the rows are sorted together with the rest.
+pub fn group_with(packages: Vec<Package>, query: &str, split: &[String]) -> Vec<App> {
+    if split.is_empty() {
+        return group(packages, query);
+    }
+    let (apart, together): (Vec<Package>, Vec<Package>) = packages.into_iter().partition(|p| {
+        split
+            .iter()
+            .any(|s| s == &format!("{}:{}", p.source.id(), p.id))
+    });
+    let mut apps = group(together, query);
+    for package in apart {
+        apps.extend(group(vec![package], query));
+    }
+    if query.trim().is_empty() {
+        apps.sort_by_key(|a| a.name.to_lowercase());
+    } else {
+        apps.sort_by(|a, b| {
+            b.relevance
+                .total_cmp(&a.relevance)
+                .then_with(|| kind_rank(a.kind).cmp(&kind_rank(b.kind)))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+    }
+    make_keys_unique(&mut apps);
+    apps
+}
+
 pub fn group(packages: Vec<Package>, query: &str) -> Vec<App> {
     if packages.is_empty() {
         return Vec::new();

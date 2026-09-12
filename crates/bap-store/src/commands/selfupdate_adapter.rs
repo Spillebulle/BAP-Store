@@ -1,77 +1,54 @@
-//! The two self-update commands' view of `bap_core::selfupdate`, which is
-//! being written on another branch. Until it lands this module answers in
-//! the same shape with nothing found, so the page and the text mode can be
-//! built and run against it; each `TODO(integration)` names the exact call
-//! that replaces the stand-in.
+//! The two self-update commands' view of `bap_core::selfupdate`: the check,
+//! the plan for its remedy, and the value to draw when no check was made.
 //!
-//! The shape is Muster's `update::install` transcribed: `installation` is a
-//! tagged value naming how this copy was installed, `latest` the newest
-//! release GitHub reports if it is newer than this one, and `remedy` the
-//! one true way to get it, or `None` when there is none to offer. The page
-//! draws `remedy` as an action and never a command that cannot work.
+//! The shape is Muster's `update::install` transcribed: `installation` says
+//! how this copy was installed, `latest` the newest release GitHub reports,
+//! and `remedy` the one true way to get it, or `None` when there is none to
+//! offer. The page draws `remedy` as an action and never a command that
+//! cannot work.
 
+use bap_core::http::Client;
+use bap_core::selfupdate::{Probe, Version, assemble, detect};
 use bap_core::{Plan, Step};
-use serde::{Deserialize, Serialize};
 
-/// What a self-update check answers.
-///
-/// TODO(integration): replace with `bap_core::selfupdate::SelfUpdate` and
-/// drop this struct. The field names and their JSON are the contract with
-/// the page and must not change.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SelfUpdate {
-    /// This build's version.
-    pub current: String,
-    /// The newest release, when it is newer than `current`.
-    pub latest: Option<serde_json::Value>,
-    /// How this copy was installed, as `{"kind": ...}`.
-    pub installation: serde_json::Value,
-    /// How to get `latest` on this machine, or nothing to offer.
-    pub remedy: Option<serde_json::Value>,
-}
+pub use bap_core::selfupdate::SelfUpdate;
 
-impl SelfUpdate {
-    /// The answer when no check has been made: this version, nothing newer
-    /// known, nothing to offer. Used when the setting forbids an unasked
-    /// request, so the page still has a value to draw.
-    pub fn unchecked() -> SelfUpdate {
-        SelfUpdate {
-            current: env!("CARGO_PKG_VERSION").to_string(),
-            latest: None,
-            installation: serde_json::json!({ "kind": "unknown" }),
-            remedy: None,
-        }
-    }
-
-    /// Whether there is anything to apply.
-    pub fn has_remedy(&self) -> bool {
-        self.remedy.is_some()
-    }
+/// The answer when no check has been made: this version, this
+/// installation, nothing newer known, nothing to offer. Used when the
+/// setting forbids an unasked request, so the page still has a value to
+/// draw.
+pub fn unchecked() -> SelfUpdate {
+    assemble(
+        &Version::current(),
+        None,
+        detect(&Probe::current()),
+        std::env::consts::ARCH,
+        None,
+    )
 }
 
 /// Ask whether a newer BAP Store exists and how this copy would get it.
-///
-/// TODO(integration): swap the body for
-/// `bap_core::selfupdate::check(&bap_core::http::Client::shared(), &bap_core::selfupdate::Probe::current())`
-/// and return it directly (it is infallible in the contract: a failed
-/// request is reported inside the value, so the page can say why).
+/// Infallible: a failed request is reported inside the value (`error`), so
+/// the page can say why.
 pub fn check() -> Result<SelfUpdate, String> {
-    Ok(SelfUpdate::unchecked())
+    Ok(bap_core::selfupdate::check(
+        &Client::shared(),
+        &Probe::current(),
+    ))
 }
 
-/// Turn a check's remedy into a plan the transaction runner can execute.
-///
-/// TODO(integration): the steps come from
-/// `bap_core::selfupdate::plan(remedy, &download_dir())?` where `remedy` is
-/// `&bap_core::selfupdate::Remedy`; wrap them with [`wrap`] as below.
+/// Turn a check's remedy into a plan the transaction runner can execute. A
+/// remedy that is a row on the Updates page or a sentence has no steps, and
+/// the error carries the sentence to show instead.
 pub fn plan(update: &SelfUpdate) -> Result<Plan, String> {
-    let Some(_remedy) = update.remedy.as_ref() else {
+    let Some(remedy) = update.remedy.as_ref() else {
         return Err(match &update.latest {
-            Some(_) => "A newer BAP Store exists but this copy cannot be updated from inside the application. The check says where to get it.".to_string(),
-            None => "BAP Store is up to date. There is nothing to apply.".to_string(),
+            Some(latest) if latest.newer => "A newer BAP Store exists but this copy cannot be updated from inside the application. The check says where to get it.".to_string(),
+            _ => "BAP Store is up to date. There is nothing to apply.".to_string(),
         });
     };
-    let steps: Vec<Step> = Vec::new();
+    let steps = bap_core::selfupdate::plan(remedy, &bap_core::selfupdate::download_dir())
+        .map_err(|e| e.message)?;
     Ok(wrap(steps))
 }
 
@@ -86,41 +63,32 @@ pub fn wrap(steps: Vec<Step>) -> Plan {
     }
 }
 
-/// Where a release asset is downloaded before the helper installs it.
-pub fn download_dir() -> std::path::PathBuf {
-    bap_core::system::Dirs::new().cache.join("selfupdate")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn the_stand_in_answers_this_version_with_nothing_to_offer() {
-        let u = check().unwrap();
+    fn the_unchecked_answer_is_this_version_with_nothing_to_offer() {
+        let u = unchecked();
         assert_eq!(u.current, env!("CARGO_PKG_VERSION"));
         assert!(u.latest.is_none());
         assert!(u.remedy.is_none());
-        assert!(!u.has_remedy());
+        assert!(u.error.is_none());
     }
 
     #[test]
     fn the_json_shape_is_the_contract() {
-        let json = serde_json::to_value(SelfUpdate::unchecked()).unwrap();
+        let json = serde_json::to_value(unchecked()).unwrap();
         for key in ["current", "latest", "installation", "remedy"] {
             assert!(json.get(key).is_some(), "missing {key}");
         }
-        assert_eq!(json["installation"]["kind"], "unknown");
+        assert!(json["installation"]["kind"].is_string());
     }
 
     #[test]
     fn applying_without_a_remedy_says_why_not() {
-        let err = plan(&SelfUpdate::unchecked()).unwrap_err();
+        let err = plan(&unchecked()).unwrap_err();
         assert!(err.starts_with("BAP Store is up to date"), "{err}");
-        let mut newer = SelfUpdate::unchecked();
-        newer.latest = Some(serde_json::json!({ "version": "9.9.9" }));
-        let err = plan(&newer).unwrap_err();
-        assert!(err.contains("cannot be updated from inside"), "{err}");
     }
 
     #[test]

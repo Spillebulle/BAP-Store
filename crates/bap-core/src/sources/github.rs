@@ -1014,6 +1014,42 @@ impl Source for Github {
             Op::Refresh { .. } => Ok(Vec::new()),
         }
     }
+
+    /// The record this source keeps of what it installed is written here,
+    /// after the runner says the plan worked, from the same release the plan
+    /// was built from. A failed plan leaves the record as it was.
+    fn finished(&self, op: &Op, ok: bool) {
+        if !ok {
+            return;
+        }
+        let outcome = match op {
+            Op::Install { package } | Op::Update { package } => {
+                let Ok(release) = self.known_release(&package.id) else {
+                    return;
+                };
+                let Some(chosen) = self.choose(&release) else {
+                    return;
+                };
+                self.record_install(InstallRecord {
+                    repo: package.id.clone(),
+                    name: package
+                        .id
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&package.id)
+                        .to_string(),
+                    asset: chosen.asset.name.clone(),
+                    version: strip_v(&release.tag_name),
+                    kind: chosen.kind,
+                })
+            }
+            Op::Remove { package } => self.forget_install(&package.id),
+            Op::UpdateAll { .. } | Op::Refresh { .. } => Ok(()),
+        };
+        if let Err(e) = outcome {
+            log::warn!("GitHub could not update its install record: {}", e.message);
+        }
+    }
 }
 
 #[cfg(test)]

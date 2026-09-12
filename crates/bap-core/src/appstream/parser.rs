@@ -523,9 +523,7 @@ impl<'a> Parser<'a> {
                 }
             }
             _ if value.is_empty() => {}
-            Tag::Id => {
-                draft.component.id = value.strip_suffix(".desktop").unwrap_or(value).to_string()
-            }
+            Tag::Id => draft.component.id = strip_desktop(value).to_string(),
             Tag::Pkgname => draft.component.pkgname = Some(value.to_string()),
             Tag::Bundle => draft.component.bundle = Some(value.to_string()),
             Tag::Name => {
@@ -1111,5 +1109,49 @@ mod tests {
         assert_eq!(collapse_whitespace("  a \n\t b  "), " a b ");
         assert_eq!(collapse_whitespace("ab"), "ab");
         assert_eq!(collapse_whitespace(""), "");
+    }
+}
+
+/// The id without a legacy `.desktop` suffix (`steam.desktop`,
+/// `com.valvesoftware.Steam.desktop`), so the Arch catalogue's ids equal
+/// Flathub's. A three-segment reverse-DNS id whose last segment is
+/// `desktop` is a real id and stays whole: `org.telegram.desktop` and
+/// `org.kiwix.desktop` are what those applications are called everywhere.
+/// The grouper applies the same rule (`group::normalise_key`); the two must
+/// agree or a rule-one join never happens for them.
+pub fn strip_desktop(id: &str) -> &str {
+    let Some(rest) = id.strip_suffix(".desktop") else {
+        return id;
+    };
+    let segments: Vec<&str> = id.split('.').collect();
+    let three_segment_reverse_dns = segments.len() == 3
+        && segments.iter().all(|s| !s.is_empty())
+        && segments[0].len() <= 6
+        && segments[0].chars().all(|c| c.is_ascii_alphabetic())
+        && segments[1]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if three_segment_reverse_dns { id } else { rest }
+}
+
+#[cfg(test)]
+mod strip_tests {
+    use super::strip_desktop;
+
+    #[test]
+    fn legacy_suffixes_go_and_real_ids_stay() {
+        assert_eq!(strip_desktop("steam.desktop"), "steam");
+        assert_eq!(
+            strip_desktop("com.valvesoftware.Steam.desktop"),
+            "com.valvesoftware.Steam"
+        );
+        assert_eq!(strip_desktop("gobby-0.5.desktop"), "gobby-0.5");
+        assert_eq!(strip_desktop("fluid1.3.desktop"), "fluid1.3");
+        assert_eq!(
+            strip_desktop("org.telegram.desktop"),
+            "org.telegram.desktop"
+        );
+        assert_eq!(strip_desktop("org.kiwix.desktop"), "org.kiwix.desktop");
+        assert_eq!(strip_desktop("org.gimp.GIMP"), "org.gimp.GIMP");
     }
 }

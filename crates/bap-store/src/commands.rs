@@ -240,6 +240,9 @@ pub mod logic {
         if query.sources.is_none() {
             query.sources = Some(settings.enabled_sources.clone());
         }
+        if query.split.is_empty() {
+            query.split = settings.split.clone();
+        }
         query.limit = match query.limit {
             0 => DEFAULT_LIMIT,
             n => n.min(MAX_LIMIT),
@@ -316,12 +319,20 @@ pub mod logic {
     }
 
     /// The merged update list, from the cache when it is under ten minutes
-    /// old and the page did not insist.
+    /// old and the page did not insist. A forced check, and the first check
+    /// of a session, ask the sources to refresh their indexes first (root
+    /// free), so what the page shows is what the machine would get.
     pub fn updates(state: &AppState, force: bool) -> UpdateList {
         if !force && let Some(list) = state.cached_updates(UPDATES_MAX_AGE) {
             return list;
         }
-        let list = state.store().updates();
+        let first = state.cached_updates(std::time::Duration::MAX).is_none();
+        let store = state.store();
+        let list = if force || first {
+            store.updates_refreshed()
+        } else {
+            store.updates()
+        };
         state.store_updates(list.clone());
         list
     }
@@ -338,13 +349,10 @@ pub mod logic {
         Ok(PlanPreview { plan, notices })
     }
 
-    /// What the user should read before confirming.
-    ///
-    /// TODO(integration): the transaction branch provides
-    /// `bap_core::transaction::plan::notices(store, ops) -> Vec<String>`;
-    /// replace the body with that call.
-    pub fn notices(_store: &Store, _ops: &[Op]) -> Vec<String> {
-        Vec::new()
+    /// What the user should read before confirming: the partial-upgrade
+    /// notice on Arch, and whatever else the plan builder knows.
+    pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
+        bap_core::transaction::notices(store, ops)
     }
 
     /// Build the plan and start it. The id comes back at once; everything
@@ -375,12 +383,16 @@ pub mod logic {
     ) -> String {
         let id = plan.id.clone();
         state.add_plan(plan.clone());
+        // The runner is made here, before the thread, so its cancel token
+        // is on record by the time the id reaches the page.
+        let runner = Runner::new();
+        state.set_cancel_token(&id, runner.cancel_token());
         let emit: Arc<dyn Fn(&Event) + Send + Sync> = Arc::new(emit);
         let worker_state = state.clone();
         let worker_emit = emit.clone();
         let spawned = std::thread::Builder::new()
             .name(format!("plan {id}"))
-            .spawn(move || run_to_completion(&worker_state, &plan, worker_emit.as_ref()));
+            .spawn(move || run_to_completion(&worker_state, &runner, &plan, worker_emit.as_ref()));
         if let Err(e) = spawned {
             // No thread means no runner, so settle the plan here rather than
             // leave the panel waiting on something nobody is running.
@@ -403,9 +415,20 @@ pub mod logic {
         event: Event,
         emit: &(dyn Fn(&Event) + Send + Sync),
     ) {
-        let finished_ok = matches!(&event, Event::PlanFinished { ok: true, .. });
+        let finished = match &event {
+            Event::PlanFinished { ok, .. } => Some(*ok),
+            _ => None,
+        };
         state.push_event(id, event.clone());
-        if finished_ok {
+        if let Some(ok) = finished
+            && let Some(ops) = state.plan_ops(id)
+            && state.has_store()
+        {
+            // The sources that keep their own records (GitHub) learn how it
+            // went before the store is dropped below.
+            state.store().finished(&ops, ok);
+        }
+        if finished == Some(true) {
             // The machine changed under the sources. The store is detected
             // again on the next command; the sources reload by mtime
             // anyway, but `Store::detect` also re-runs availability, which
@@ -416,24 +439,22 @@ pub mod logic {
         emit(&event);
     }
 
-    fn run_to_completion(state: &AppState, plan: &Plan, emit: &(dyn Fn(&Event) + Send + Sync)) {
+    fn run_to_completion(
+        state: &AppState,
+        runner: &Runner,
+        plan: &Plan,
+        emit: &(dyn Fn(&Event) + Send + Sync),
+    ) {
         let id = plan.id.clone();
         let mut sink = |event: Event| deliver(state, &id, event, emit);
-        // TODO(integration): hand `state.cancel_token(&id)` to the runner
-        // once it takes one; `cancel_plan` sets the flag today and the
-        // runner has nothing to read it with.
-        let result = Runner::run(plan, &mut sink);
-        // A runner that returned without saying it finished has still
-        // finished: say so, or the panel waits for ever.
+        let outcome = runner.execute(plan, &mut sink);
+        // The runner ends every run with PlanFinished; this only guards
+        // the invariant the panel relies on, so it never waits for ever.
         if state.plan_state(&id) == Some(PlanState::Running) {
-            let (ok, message) = match result {
-                Ok(()) => (true, "Finished.".to_string()),
-                Err(e) => (false, sentence(&e.message)),
-            };
             sink(Event::PlanFinished {
                 plan: id.clone(),
-                ok,
-                message,
+                ok: outcome.ok,
+                message: sentence(&outcome.message),
             });
         }
     }
@@ -446,7 +467,7 @@ pub mod logic {
             return Ok(cached);
         }
         if !force && !state.settings().self_update_check {
-            return Ok(SelfUpdate::unchecked());
+            return Ok(selfupdate_adapter::unchecked());
         }
         let result = selfupdate_adapter::check()?;
         state.store_self_update(result.clone());
@@ -543,6 +564,7 @@ mod tests {
             text: "steam".into(),
             sources: Some(vec![SourceKind::Flatpak]),
             limit: 5000,
+            split: Vec::new(),
         };
         let q = shape_query(explicit, &settings);
         assert_eq!(
@@ -556,6 +578,7 @@ mod tests {
             text: "x".into(),
             sources: None,
             limit: 0,
+            split: Vec::new(),
         };
         assert_eq!(shape_query(zero, &settings).limit, DEFAULT_LIMIT);
     }
@@ -563,15 +586,18 @@ mod tests {
     #[test]
     fn details_leaves_out_what_failed_and_never_fails_itself() {
         let state = scratch_state("details");
-        // Every source on this branch refuses `details`; the answer is an
-        // empty list, not an error.
+        // A name no source has, and a Flatpak ref on a machine that may
+        // have no Flatpak: each costs its own reference and nothing else.
         let got = app_details(
             &state,
             vec![
-                steam(),
+                PackageRef {
+                    source: SourceKind::Pacman,
+                    id: "no-such-package-bap-store-test".into(),
+                },
                 PackageRef {
                     source: SourceKind::Flatpak,
-                    id: "flathub/app/com.valvesoftware.Steam/x86_64/stable".into(),
+                    id: "nowhere/app/io.example.NoSuchApp/x86_64/stable".into(),
                 },
             ],
         );
@@ -612,7 +638,16 @@ mod tests {
     #[test]
     fn a_plan_with_nothing_to_do_is_refused_before_it_starts() {
         let state = scratch_state("empty");
-        let err = run_plan(&state, vec![Op::Install { package: steam() }], |_| {}).unwrap_err();
+        // Refreshing the AUR is a no-op by design (its index is the RPC), so
+        // the plan is empty on every machine.
+        let err = run_plan(
+            &state,
+            vec![Op::Refresh {
+                source: SourceKind::Aur,
+            }],
+            |_| {},
+        )
+        .unwrap_err();
         assert!(err.starts_with("There is nothing to do."), "{err}");
         assert!(state.plans().is_empty());
     }
@@ -623,16 +658,18 @@ mod tests {
         let plan = Plan {
             id: "plan-test".into(),
             ops: vec![Op::Install { package: steam() }],
+            // A session step that fails at once: no helper, no prompt, and
+            // the runner still has to end the plan with a sentence.
             steps: vec![bap_core::Step {
                 source: SourceKind::Pacman,
-                title: "Installing steam".into(),
+                title: "Failing on purpose".into(),
                 command: bap_core::Command {
-                    program: "pacman".into(),
-                    args: vec!["-S".into(), "steam".into()],
+                    program: "sh".into(),
+                    args: vec!["-c".into(), "exit 3".into()],
                     env: Vec::new(),
                     cwd: None,
                 },
-                needs_root: true,
+                needs_root: false,
                 weight: 1,
             }],
         };
@@ -642,11 +679,16 @@ mod tests {
         });
         assert_eq!(id, "plan-test");
 
-        // The runner on this branch returns an error at once; the plan must
-        // still end with a PlanFinished the page can act on.
-        let finished = rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("the page is told");
+        // The step fails; the plan must still end with a PlanFinished the
+        // page can act on, after whatever came before it.
+        let finished = loop {
+            let event = rx
+                .recv_timeout(Duration::from_secs(10))
+                .expect("the page is told");
+            if matches!(event, Event::PlanFinished { .. }) {
+                break event;
+            }
+        };
         match &finished {
             Event::PlanFinished { plan, ok, message } => {
                 assert_eq!(plan, "plan-test");

@@ -175,6 +175,7 @@ fn search(args: &[String]) -> i32 {
         text: parsed.term.clone(),
         sources: parsed.sources,
         limit: SEARCH_LIMIT,
+        split: Vec::new(),
     };
     let result = store.search(&query);
     let rows: Vec<&App> = result
@@ -558,24 +559,21 @@ fn self_update(args: &[String]) -> i32 {
     };
     println!("BAP Store {}.", update.current);
     match &update.latest {
-        Some(latest) => {
-            let version = latest
-                .get("version")
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-                .unwrap_or_else(|| latest.to_string());
-            println!("Newest release: {version}.");
+        Some(latest) if latest.newer => {
+            println!("Newest release: {}, newer than this copy.", latest.version)
         }
-        None => println!("No newer release is known."),
+        Some(latest) => println!(
+            "Newest release: {}. This copy is up to date.",
+            latest.version
+        ),
+        None => match &update.error {
+            Some(e) => println!("The newest release could not be checked: {}", sentence(e)),
+            None => println!("No release has been published yet."),
+        },
     }
-    let kind = update
-        .installation
-        .get("kind")
-        .and_then(|k| k.as_str())
-        .unwrap_or("unknown");
-    println!("Installation: {kind}.");
+    println!("Installation: {}.", update.installation_label);
     match &update.remedy {
-        Some(remedy) => println!("Remedy: {remedy}"),
+        Some(remedy) => println!("{}", remedy.sentence()),
         None => println!("Nothing to apply from inside the application."),
     }
     0

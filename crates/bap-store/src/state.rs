@@ -8,12 +8,12 @@
 
 use crate::commands::SelfUpdate;
 use crate::settings::Settings;
+use bap_core::transaction::CancelToken;
 use bap_core::updates::UpdateList;
 use bap_core::{Event, Plan, Store};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -64,7 +64,7 @@ struct Inner {
     settings_path: PathBuf,
     plans: Mutex<Vec<PlanStatus>>,
     /// One flag per plan id, set by `cancel_plan`, read by the runner.
-    cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    cancels: Mutex<HashMap<String, CancelToken>>,
     updates: Mutex<Option<(Instant, UpdateList)>>,
     self_update: Mutex<Option<(Instant, SelfUpdate)>>,
 }
@@ -209,8 +209,8 @@ impl AppState {
     /// Record a plan as running and hand back its cancel flag. Finished
     /// plans beyond the last twenty are forgotten, oldest first; a running
     /// plan is never dropped from the list, however old.
-    pub fn add_plan(&self, plan: Plan) -> Arc<AtomicBool> {
-        let token = Arc::new(AtomicBool::new(false));
+    pub fn add_plan(&self, plan: Plan) -> CancelToken {
+        let token = CancelToken::new();
         self.inner
             .cancels
             .lock()
@@ -278,8 +278,29 @@ impl AppState {
             .clone()
     }
 
-    /// The flag the runner watches for this plan, if the plan is known.
-    pub fn cancel_token(&self, id: &str) -> Option<Arc<AtomicBool>> {
+    /// Use the runner's own token for a plan, so `cancel` reaches the run.
+    pub fn set_cancel_token(&self, id: &str, token: CancelToken) {
+        self.inner
+            .cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.to_string(), token);
+    }
+
+    /// The operations a known plan carries, for telling the sources how it
+    /// ended.
+    pub fn plan_ops(&self, id: &str) -> Option<Vec<bap_core::Op>> {
+        self.inner
+            .plans
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|p| p.plan.id == id)
+            .map(|p| p.plan.ops.clone())
+    }
+
+    /// The token the runner watches for this plan, if the plan is known.
+    pub fn cancel_token(&self, id: &str) -> Option<CancelToken> {
         self.inner
             .cancels
             .lock()
@@ -289,8 +310,7 @@ impl AppState {
     }
 
     pub fn cancel_requested(&self, id: &str) -> bool {
-        self.cancel_token(id)
-            .is_some_and(|t| t.load(Ordering::SeqCst))
+        self.cancel_token(id).is_some_and(|t| t.is_cancelled())
     }
 
     /// Ask a running plan to stop. Asking twice, or asking a plan that has
@@ -298,7 +318,7 @@ impl AppState {
     pub fn cancel(&self, id: &str) -> Result<(), String> {
         match self.cancel_token(id) {
             Some(token) => {
-                token.store(true, Ordering::SeqCst);
+                token.cancel();
                 Ok(())
             }
             None => Err(format!(
@@ -386,11 +406,11 @@ mod tests {
     fn a_cancelled_plan_that_stops_is_cancelled_not_failed() {
         let state = scratch_state("cancel");
         let token = state.add_plan(a_plan("p1"));
-        assert!(!token.load(Ordering::SeqCst));
+        assert!(!token.is_cancelled());
         state.cancel("p1").expect("known plan");
         assert!(
-            token.load(Ordering::SeqCst),
-            "the runner's flag is the one that was set"
+            token.is_cancelled(),
+            "the runner's token is the one that was set"
         );
         state.push_event("p1", finished("p1", false));
         assert_eq!(state.plan_state("p1"), Some(PlanState::Cancelled));

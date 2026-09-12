@@ -128,16 +128,10 @@ pub fn assemble(
 }
 
 /// Where [`plan`] puts a downloaded asset: the shared HTTP client's
-/// `downloads` directory, the one `Client::download` writes to. Spelt here
-/// because `http::Client` keeps its cache directory private; a
-/// `Client::download_dir()` accessor would make this one spelling instead
-/// of two (TODO, noted for `http.rs`). Until then this mirrors
-/// `Client::shared()`.
+/// `downloads` directory, the one `Client::download` writes to, and one of
+/// the places the helper accepts a package file from.
 pub fn download_dir() -> PathBuf {
-    crate::system::Dirs::new()
-        .cache
-        .join("http")
-        .join("downloads")
+    Client::shared().download_dir()
 }
 
 /// The steps that carry out an actionable remedy: a download into

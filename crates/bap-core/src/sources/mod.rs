@@ -40,13 +40,3 @@ pub fn all(
         Box::new(chwd::Chwd::new(system)),
     ]
 }
-
-/// The status a stub reports until its module is written.
-pub(crate) fn not_built(kind: crate::SourceKind) -> crate::SourceStatus {
-    crate::SourceStatus {
-        kind,
-        available: false,
-        reason: Some(format!("The {} source is not built yet.", kind.label())),
-        detail: None,
-    }
-}

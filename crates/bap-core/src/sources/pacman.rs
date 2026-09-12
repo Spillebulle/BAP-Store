@@ -918,6 +918,13 @@ impl Source for Pacman {
             .ok_or_else(|| self.error(format!("{id} is not in any enabled repository.")))
     }
 
+    /// Fresh sync databases into the cache, the way `checkupdates` does,
+    /// so a check for updates needs no root.
+    fn refresh_index(&self) -> Result<()> {
+        self.refresh_into_cache(&crate::http::Client::shared())
+            .map(|_| ())
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         let step = match op {
             Op::Install { package } => {
@@ -976,6 +983,10 @@ impl Source for Arc<Pacman> {
     fn details(&self, id: &str) -> Result<Package> {
         Pacman::details(self, id)
     }
+    fn refresh_index(&self) -> Result<()> {
+        Source::refresh_index(self.as_ref())
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         Pacman::plan(self, op)
     }

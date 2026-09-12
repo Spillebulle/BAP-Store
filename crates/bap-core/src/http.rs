@@ -179,6 +179,11 @@ impl Client {
         Ok(path)
     }
 
+    /// Where [`Client::download`] puts files: `<cache>/downloads`.
+    pub fn download_dir(&self) -> PathBuf {
+        self.cache_dir.join("downloads")
+    }
+
     fn cache_path(&self, url: &str) -> PathBuf {
         // A stable file name from the URL: its host plus a hash of the whole.
         let mut h: u64 = 0xcbf2_9ce4_8422_2325;

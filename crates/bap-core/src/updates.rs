@@ -69,6 +69,13 @@ impl UpdateList {
 
 /// Ask every available source at once and merge what comes back.
 pub fn collect(store: &Store) -> UpdateList {
+    collect_with(store, false)
+}
+
+/// [`collect`], optionally asking each source to refresh its index first
+/// (`Source::refresh_index`, root-free). A refresh that fails is logged and
+/// the source answers from what it has: an older answer beats none.
+pub fn collect_with(store: &Store, refresh: bool) -> UpdateList {
     let sources: Vec<&dyn Source> = store
         .sources
         .iter()
@@ -80,7 +87,16 @@ pub fn collect(store: &Store) -> UpdateList {
             .iter()
             .map(|s| {
                 let kind = s.kind();
-                scope.spawn(move || (kind, s.updates()))
+                scope.spawn(move || {
+                    if refresh && let Err(e) = s.refresh_index() {
+                        log::warn!(
+                            "{} could not refresh its index: {}",
+                            kind.label(),
+                            e.message
+                        );
+                    }
+                    (kind, s.updates())
+                })
             })
             .collect();
         handles
