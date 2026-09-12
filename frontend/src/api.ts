@@ -88,8 +88,24 @@ export function plan(ops: Op[]): Promise<PlanPreview> {
   return inTauri ? call("plan", { ops }) : mock().then((m) => m.plan(ops));
 }
 
+/**
+ * Start a plan. The application answers with the plan's id and streams its
+ * events; the status is read back so every caller gets the plan's steps at
+ * once, as the mock already gives them.
+ */
 export function run_plan(ops: Op[]): Promise<PlanStatus> {
-  return inTauri ? call("run_plan", { ops }) : mock().then((m) => m.run_plan(ops));
+  if (!inTauri) return mock().then((m) => m.run_plan(ops));
+  return call<string>("run_plan", { ops }).then(async (id) => {
+    const known = (await active_plans()).find((s) => s.plan.id === id);
+    return (
+      known ?? {
+        plan: { id, ops, steps: [] },
+        state: "running",
+        events: [],
+        started: Math.floor(Date.now() / 1000),
+      }
+    );
+  });
 }
 
 export function cancel_plan(id: string): Promise<void> {

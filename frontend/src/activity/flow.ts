@@ -14,11 +14,9 @@ import { useActivity } from "./store";
 /** Start a plan for these operations; the returned id is the plan's, or null when it did not start. */
 export async function startOps(ops: Op[], _title: string): Promise<string | null> {
   try {
-    const id = await api.run_plan(ops);
-    const statuses = await api.active_plans();
-    const status = statuses.find((s) => s.plan.id === id);
-    if (status) useActivity.getState().track(status);
-    return id;
+    const status = await api.run_plan(ops);
+    useActivity.getState().track(status);
+    return status.plan.id;
   } catch (e) {
     toast(e instanceof Error ? e.message : String(e), "error");
     return null;
