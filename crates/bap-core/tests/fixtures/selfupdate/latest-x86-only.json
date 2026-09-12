@@ -1,0 +1,36 @@
+{
+  "html_url": "https://github.com/Spillebulle/BAP-Store/releases/tag/v0.3.0",
+  "tag_name": "v0.3.0",
+  "name": "BAP Store 0.3.0",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-15T08:00:00Z",
+  "assets": [
+    {
+      "name": "bap-store_0.3.0_amd64.deb",
+      "size": 5242880,
+      "browser_download_url": "https://github.com/Spillebulle/BAP-Store/releases/download/v0.3.0/bap-store_0.3.0_amd64.deb"
+    },
+    {
+      "name": "bap-store-0.3.0-1.x86_64.rpm",
+      "size": 5300000,
+      "browser_download_url": "https://github.com/Spillebulle/BAP-Store/releases/download/v0.3.0/bap-store-0.3.0-1.x86_64.rpm"
+    },
+    {
+      "name": "bap-store-bin-0.3.0-1-x86_64.pkg.tar.zst",
+      "size": 4900000,
+      "browser_download_url": "https://github.com/Spillebulle/BAP-Store/releases/download/v0.3.0/bap-store-bin-0.3.0-1-x86_64.pkg.tar.zst"
+    },
+    {
+      "name": "BAP-Store-0.3.0-x86_64.AppImage",
+      "size": 98000000,
+      "browser_download_url": "https://github.com/Spillebulle/BAP-Store/releases/download/v0.3.0/BAP-Store-0.3.0-x86_64.AppImage"
+    },
+    {
+      "name": "bap-store-0.3.0-x86_64.flatpak",
+      "size": 60000000,
+      "browser_download_url": "http://github.com/Spillebulle/BAP-Store/releases/download/v0.3.0/bap-store-0.3.0-x86_64.flatpak"
+    }
+  ],
+  "body": "## 0.3.0\n\nA release that built x86-64 only, and whose Flatpak was uploaded on plain http.\n"
+}
