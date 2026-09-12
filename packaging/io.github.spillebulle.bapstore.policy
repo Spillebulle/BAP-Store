@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<!--
+  The polkit action for bap-helper, the one part of BAP Store that runs as
+  root. pkexec matches this action by the exec.path annotation, so it applies
+  only to the packaged helper at /usr/lib/bap-store/bap-helper. auth_admin_keep
+  for the active session is what makes a batch of installs one password:
+  polkit keeps the authorisation for a few minutes.
+
+  A development build (cargo run, target/debug/bap-helper) has no policy of
+  its own. pkexec then falls back to org.freedesktop.policykit.exec and its
+  generic "run a program as another user" dialog, and asks again for every
+  helper run. Nothing is installed to make development work; that is by
+  design.
+
+  Installed to /usr/share/polkit-1/actions/ by every package shape.
+-->
+<policyconfig>
+  <vendor>BAP Store</vendor>
+  <vendor_url>https://github.com/Spillebulle/BAP-Store</vendor_url>
+
+  <action id="io.github.spillebulle.bapstore.helper">
+    <description>Install, remove or update software through BAP Store</description>
+    <message>Authentication is required to install, remove or update software.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/bap-store/bap-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>
