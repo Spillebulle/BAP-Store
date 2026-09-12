@@ -1,0 +1,12 @@
+Package: wine32
+Version: 8.0~repack-4
+Installed-Size: 24148
+Maintainer: Debian Wine Party <debian-wine@lists.debian.org>
+Architecture: i386
+Description: Windows API implementation - 32-bit binary loader
+ Wine is a free MS-Windows API implementation.
+Homepage: https://www.winehq.org/
+Section: otherosfs
+Priority: optional
+Filename: pool/main/w/wine/wine32_8.0~repack-4_i386.deb
+Size: 4500000

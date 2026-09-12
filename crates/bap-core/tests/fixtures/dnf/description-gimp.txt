@@ -1,0 +1,6 @@
+GIMP is a free and open source image editor. It can be used
+to retouch photos, compose images and create original artwork.
+
+It has a large collection of professional-level editing tools
+and filters.
+

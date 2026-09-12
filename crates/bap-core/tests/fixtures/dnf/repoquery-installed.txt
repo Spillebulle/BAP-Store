@@ -1,0 +1,8 @@
+a-very-long-package-name-that-overflows-the-column	1.2.2-1.fc40	@System	A package with a long name	https://example.org/long	MIT	0	1000	1700000000
+bap-store	0.1.0-1.fc40	@System	An application store for Linux	https://github.com/spillebulle/bap-store	GPL-3.0-or-later	0	9000000	1720000000
+bash	5.2.26-3.fc40	@System	The GNU Bourne Again shell	https://www.gnu.org/software/bash	GPL-3.0-or-later	0	8200000	1710000000
+gimp	2.10.36-4.fc40	@System	GNU Image Manipulation Program	https://www.gimp.org/	GPL-3.0-or-later AND LGPL-3.0-or-later	0	123456789	1712000000
+gimp-libs	2.10.36-4.fc40	@System	GIMP libraries	https://www.gimp.org/	LGPL-3.0-or-later	0	3300000	1712000000
+kernel	6.9.5-200.fc40	@System	The Linux kernel	https://www.kernel.org/	GPL-2.0-only	0	0	1718500000
+kernel	6.9.6-200.fc40	@System	The Linux kernel	https://www.kernel.org/	GPL-2.0-only	0	0	1718800000
+vim-enhanced	9.1.452-1.fc40	@System	A version of the VIM editor which includes recent enhancements	https://www.vim.org/	Vim AND MIT	0	4000000	1717000000

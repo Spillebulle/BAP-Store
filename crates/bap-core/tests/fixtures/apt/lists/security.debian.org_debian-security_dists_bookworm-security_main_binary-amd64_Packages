@@ -1,0 +1,14 @@
+Package: firefox-esr
+Version: 115.8.0esr-1~deb12u1
+Installed-Size: 236120
+Maintainer: Maintainers of Mozilla-related packages <team+pkg-mozilla@tracker.debian.org>
+Architecture: amd64
+Depends: libc6 (>= 2.34), libgtk-3-0 (>= 3.14), libnspr4 (>= 2:4.35), libnss3 (>= 2:3.87)
+Description: Mozilla Firefox web browser - Extended Support Release (ESR)
+ Firefox ESR is a powerful, extensible web browser with support for modern
+ web application technologies.
+Homepage: https://www.mozilla.org/firefox/
+Section: web
+Priority: optional
+Filename: pool/updates/main/f/firefox-esr/firefox-esr_115.8.0esr-1~deb12u1_amd64.deb
+Size: 68301122

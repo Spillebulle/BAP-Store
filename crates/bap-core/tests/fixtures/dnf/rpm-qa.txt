@@ -1,0 +1,4 @@
+bash	5.2.26-3.fc40		The GNU Bourne Again shell	https://www.gnu.org/software/bash	GPL-3.0-or-later		8200000	1710000000
+gimp	2.10.36-4.fc40		GNU Image Manipulation Program	https://www.gimp.org/	GPL-3.0-or-later AND LGPL-3.0-or-later		123456789	1712000000
+gpg-pubkey	a15b79cc-63d04c2c		gpg(Fedora (40) <fedora-40-primary@fedoraproject.org>)	(none)	pubkey		0	1674591276
+kernel	6.9.6-200.fc40		The Linux kernel	https://www.kernel.org/	GPL-2.0-only		0	1718800000
