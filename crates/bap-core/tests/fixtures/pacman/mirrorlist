@@ -1,0 +1,5 @@
+##
+## Arch Linux repository mirrorlist
+##
+Server = https://mirror.example.org/archlinux/$repo/os/$arch
+Server = https://second.example.org/$repo/os/$arch
