@@ -1,0 +1,2 @@
+org.gimp.GIMP	GNU Image Manipulation Program	3.2.6	stable	flathub	99.7 MB
+org.mozilla.firefox	Firefox	143.0.2	stable	flathub	107.3 MB
