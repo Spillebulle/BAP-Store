@@ -915,7 +915,10 @@ function stepsFor(op: Op): Step[] {
           return [{ source: op.source, title: `Updating ${sourceLabel(op.source)}`, command: cmd(op.source, "update"), needs_root: true, weight: 4 }];
       }
     case "refresh":
-      return [{ source: op.source, title: `Refreshing ${sourceLabel(op.source)}`, command: cmd(op.source === "pacman" ? "pacman" : op.source, op.source === "pacman" ? "-Sy" : "update"), needs_root: op.source === "pacman", weight: 1 }];
+      // pacman refreshes without root into the store's cache, so it plans
+      // nothing here, as the real source does.
+      if (op.source === "pacman") return [];
+      return [{ source: op.source, title: `Refreshing ${sourceLabel(op.source)}`, command: cmd(op.source, "update"), needs_root: false, weight: 1 }];
   }
 }
 
