@@ -542,13 +542,27 @@ fn cancelling_a_session_step_kills_its_whole_process_group() {
         .trim()
         .parse()
         .unwrap();
-    let proc_dir = PathBuf::from(format!("/proc/{pid}"));
+    // Killed means gone, or a zombie nobody has reaped yet: inside a
+    // container PID 1 is often not an init and never collects orphans, so
+    // /proc/<pid> stays with state Z. Either way the sleep is no longer
+    // running, which is what the kill was for.
+    let gone = || {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat"));
+        match stat {
+            Err(_) => true,
+            Ok(text) => text
+                .rsplit(')')
+                .next()
+                .and_then(|rest| rest.split_whitespace().next())
+                .is_some_and(|state| state == "Z" || state == "X"),
+        }
+    };
     let deadline = Instant::now() + Duration::from_secs(3);
-    while proc_dir.exists() && Instant::now() < deadline {
+    while !gone() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(
-        !proc_dir.exists(),
+        gone(),
         "the sleep inside the shell was killed with the group"
     );
 }

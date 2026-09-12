@@ -57,7 +57,9 @@ DEB_DEPENDS="libc6, libgcc-s1, libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appin
 RPM_SONAMES="libwebkit2gtk-4.1.so.0 libjavascriptcoregtk-4.1.so.0 libgtk-3.so.0 libgdk-3.so.0 libsoup-3.0.so.0"
 
 APP_ID=io.github.spillebulle.bapstore
-HELPER_DIR=/usr/lib/bap-store
+# Spelt in full so packaging/check.sh can see that the packages, the polkit
+# policy and the runner all name the same file.
+HELPER=/usr/lib/bap-store/bap-helper
 
 # --- the house archive -------------------------------------------------------
 ARCHIVE_KEYRING=spillebulle-archive
@@ -79,7 +81,7 @@ fi
 stage_tree() {
     local prefix=$1
     install -Dm755 "$binary" "$prefix/bin/bap-store"
-    install -Dm755 "$helper" "$prefix${HELPER_DIR#/usr}/bap-helper"
+    install -Dm755 "$helper" "$prefix${HELPER#/usr}"
     install -Dm644 "$root/packaging/$APP_ID.policy" \
         "$prefix/share/polkit-1/actions/$APP_ID.policy"
     install -Dm644 "$root/packaging/$APP_ID.desktop" \
@@ -211,7 +213,7 @@ fi
     echo "%files"
     [ -n "$archive_key" ] && echo "$rpm_key"
     echo "/usr/bin/bap-store"
-    echo "$HELPER_DIR/bap-helper"
+    echo "$HELPER"
     echo "/usr/share/polkit-1/actions/$APP_ID.policy"
     echo "/usr/share/applications/$APP_ID.desktop"
     echo "/usr/share/metainfo/$APP_ID.metainfo.xml"
