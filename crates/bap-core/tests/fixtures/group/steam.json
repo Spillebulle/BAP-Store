@@ -1,0 +1,170 @@
+[
+  {
+    "source": "pacman",
+    "id": "steam",
+    "name": "Steam",
+    "kind": "app",
+    "summary": "Valve's digital software delivery system",
+    "description": null,
+    "version": "1.0.0.87-3",
+    "installed_version": "1.0.0.87-3",
+    "installed": true,
+    "repo": "multilib",
+    "licence": "LicenseRef-steam-subscriber-agreement",
+    "homepage": "https://steampowered.com/",
+    "developer": "Valve Corporation",
+    "updated": 1785004799,
+    "download_size": 20373831,
+    "installed_size": 20478689,
+    "popularity": null,
+    "popularity_label": null,
+    "icon": {
+      "kind": "file",
+      "value": "/usr/share/swcatalog/icons/archlinux-arch-multilib/128x128/steam_steam.png"
+    },
+    "screenshots": [],
+    "categories": [
+      "Game",
+      "PackageManager"
+    ],
+    "appstream_id": "com.valvesoftware.Steam.desktop",
+    "out_of_date": false,
+    "sandboxed": false,
+    "facts": []
+  },
+  {
+    "source": "flatpak",
+    "id": "flathub/app/com.valvesoftware.Steam/x86_64/stable",
+    "name": "Steam",
+    "kind": "app",
+    "summary": "Launcher for the Steam software distribution service",
+    "description": null,
+    "version": "1.0.0.85",
+    "installed_version": null,
+    "installed": false,
+    "repo": "flathub",
+    "licence": "LicenseRef-proprietary",
+    "homepage": "https://store.steampowered.com/",
+    "developer": "Valve Corporation",
+    "updated": 1774586327,
+    "download_size": 35541775,
+    "installed_size": 52494848,
+    "popularity": 0.92,
+    "popularity_label": "5 503 189 installs",
+    "icon": {
+      "kind": "url",
+      "value": "https://dl.flathub.org/media/com/valvesoftware/Steam/f0343a4b277e822cce53b904454d3a7d/icons/128x128/com.valvesoftware.Steam.png"
+    },
+    "screenshots": [],
+    "categories": [
+      "Game",
+      "PackageManager"
+    ],
+    "appstream_id": "com.valvesoftware.Steam",
+    "out_of_date": false,
+    "sandboxed": true,
+    "facts": []
+  },
+  {
+    "source": "snap",
+    "id": "steam",
+    "name": "Steam",
+    "kind": "app",
+    "summary": "Launcher for the Steam software distribution service",
+    "description": null,
+    "version": "1.0.0.87",
+    "installed_version": null,
+    "installed": false,
+    "repo": "stable",
+    "licence": "Proprietary",
+    "homepage": null,
+    "developer": "Canonical",
+    "updated": null,
+    "download_size": null,
+    "installed_size": null,
+    "popularity": null,
+    "popularity_label": null,
+    "icon": {
+      "kind": "url",
+      "value": "https://dashboard.snapcraft.io/site_media/appmedia/2022/04/icon_TdeSI6F.png"
+    },
+    "screenshots": [],
+    "categories": [],
+    "appstream_id": null,
+    "out_of_date": false,
+    "sandboxed": true,
+    "facts": []
+  },
+  {
+    "source": "aur",
+    "id": "steamcmd",
+    "name": "steamcmd",
+    "kind": "package",
+    "summary": "Steam Command Line Tools",
+    "description": null,
+    "version": "latest-7",
+    "installed_version": null,
+    "installed": false,
+    "repo": "aur",
+    "licence": "LicenseRef-Steam-Subscriber-Agreement",
+    "homepage": "http://developer.valvesoftware.com/wiki/SteamCMD",
+    "developer": null,
+    "updated": 1780743497,
+    "download_size": null,
+    "installed_size": null,
+    "popularity": 0.05,
+    "popularity_label": "156 votes",
+    "icon": null,
+    "screenshots": [],
+    "categories": [],
+    "appstream_id": null,
+    "out_of_date": false,
+    "sandboxed": false,
+    "facts": [
+      [
+        "Maintainer",
+        "HurricanePootis"
+      ],
+      [
+        "Votes",
+        "156"
+      ]
+    ]
+  },
+  {
+    "source": "aur",
+    "id": "steam-native-runtime",
+    "name": "steam-native-runtime",
+    "kind": "package",
+    "summary": "Native replacement for the Steam runtime using system libraries",
+    "description": null,
+    "version": "1.0.0.75-9",
+    "installed_version": null,
+    "installed": false,
+    "repo": "aur",
+    "licence": null,
+    "homepage": "https://wiki.archlinux.org/index.php/Steam/Troubleshooting#Native_runtime",
+    "developer": null,
+    "updated": 1780467204,
+    "download_size": null,
+    "installed_size": null,
+    "popularity": 0.01,
+    "popularity_label": "24 votes",
+    "icon": null,
+    "screenshots": [],
+    "categories": [],
+    "appstream_id": null,
+    "out_of_date": false,
+    "sandboxed": false,
+    "facts": [
+      [
+        "Maintainer",
+        "Damgaldor"
+      ],
+      [
+        "Votes",
+        "24"
+      ]
+    ]
+  }
+]
