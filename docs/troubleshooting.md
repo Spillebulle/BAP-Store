@@ -1,0 +1,24 @@
+# Troubleshooting
+
+Symptom, cause, what to do. Every sentence BAP Store shows on screen is
+meant to say the last part itself; this page is for what happens around it.
+
+| Symptom | Cause | What to do |
+|---|---|---|
+| The window opens black or blank | WebKitGTK rendering through DMA-BUF on an NVIDIA driver. BAP Store sets `WEBKIT_DISABLE_DMABUF_RENDERING=1` itself when it sees an NVIDIA device, but a driver it does not recognise can still do this. | Run `WEBKIT_DISABLE_DMABUF_RENDERING=1 bap-store` once; if that fixes it, put the variable in your session environment. |
+| "The helper that installs packages was not found. Reinstall BAP Store." | `/usr/lib/bap-store/bap-helper` is missing: a package built without it, or a development build run from a directory without `target/debug/bap-helper`. | Reinstall the package, or in a checkout `cargo build -p bap-helper`. `BAP_HELPER=/path/to/bap-helper` overrides the lookup. |
+| No password prompt appears and the install fails with "Authentication was cancelled." | No polkit authentication agent is running in the session, so `pkexec` has nowhere to ask. Every desktop ships one; a bare window manager may not start it. | Start your desktop's polkit agent (for example `/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1`, `lxpolkit`, or the one your desktop provides). |
+| Every install asks for the password again | The polkit policy is not installed, so `pkexec` falls back to its generic rule with no `auth_admin_keep`. | The packages install `/usr/share/polkit-1/actions/io.github.spillebulle.bapstore.policy`; a development build does not, and asks each time by design. |
+| Flatpak or Snap is listed but disabled | The tool is not installed, or Flatpak has no remotes. The reason is in the source's tooltip and in `bap-store sources`. | Install `flatpak` and add Flathub (`flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo`), or install `snapd` and enable its socket. |
+| AUR packages are listed but "The AUR needs an Arch-based system." | The machine is not Arch-like according to `/etc/os-release`. | Nothing to do: the AUR is Arch's. On an Arch derivative with an unusual `ID`, check that `ID_LIKE=arch` is set. |
+| An AUR build fails part-way | `paru`, `yay` or `makepkg` failed; the log in the activity panel has the build output. Builds run as your user, never as root. | Read the last lines of the log. A missing key is fixed with `gpg --recv-keys`; a missing dependency with the package it names. |
+| "Arch does not support partial upgrades." on the Updates page | A subset of pacman updates was ticked. | Use Update all, or accept the notice knowing why it is there. |
+| Search finds no applications, only packages | The distribution's AppStream catalogue is not installed, so no package is known to be an application. | On Arch install `archlinux-appstream-data`; on Debian and Fedora the catalogue comes with `appstream`. `BAP_APPSTREAM_DIR` can point at a catalogue elsewhere. |
+| Icons are missing for repository packages | Same cause as above: cached icons live in the catalogue package. | As above. Flathub icons come from the network and are unaffected. |
+| "GitHub is rate-limiting searches; try again in a minute." | The public search API allows ten searches a minute without a token. | Wait a minute. Searching other sources is unaffected. |
+| The Updates page says a check failed for one source | That source could not answer (network, a tool that exited with an error); the rest of the list is complete. | The sentence beside the source says what happened; `bap-store updates` in a terminal prints the same. |
+| `bap-store` in a terminal opens the window instead of searching | The first argument is not a subcommand. | `bap-store search <term>`, `sources`, `installed`, `updates`, `drivers`, `plan install <source>:<id>`, `self-update`. |
+
+Logs: the window logs through the platform's log plugin to
+`~/.local/share/io.github.spillebulle.bapstore/logs/`; the text mode logs to
+stderr at the level `RUST_LOG` sets (`RUST_LOG=debug bap-store search x`).
