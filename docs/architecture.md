@@ -90,7 +90,7 @@ style guide).
 ### bap-helper
 
 A separate executable, deliberately tiny. Reads one JSON `Plan` on stdin,
-validates it against a closed list (`pacman -S/-R/-Syu`, `apt-get`, `dnf`,
+validates it against a closed list (`pacman -S/-Syu/-Rs/-U`, `apt-get`, `dnf`,
 `snap`, `flatpak --system`, `chwd`, `dpkg -i`, `rpm`, `pacman -U` of a file
 the store downloaded), refuses anything else, runs the steps, streams one
 JSON event per line on stdout. It has no network code, no search, no
@@ -143,10 +143,11 @@ colour in this family means state.
 
 ## Rules this settles
 
-- **Never a partial upgrade on Arch presented as safe.** The Updates page lets
-  a subset be ticked on every distribution, and on pacman it draws a notice
-  saying that Arch does not support partial upgrades and offers "Update all"
-  as the primary action. The notice is not a dialog and does not block.
+- **Never a partial upgrade on Arch.** Every pacman install or update runs as
+  `pacman -Syu` with the names appended, which is the operation Arch supports;
+  the Updates page lets a subset be ticked, and on pacman it draws a notice
+  saying that updating any pacman package updates every pacman package. The
+  notice is not a dialog and does not block.
 - **The window has no root.** Every privileged step goes through the helper
   and its closed list. A new privileged operation is a new entry in that list
   with a test, not a new `pkexec` call site.

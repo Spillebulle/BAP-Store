@@ -22,7 +22,7 @@ const SORTS: DropdownOption<UpdatesSort>[] = [
   { value: "source", label: "Source" },
 ];
 
-const PARTIAL_UPGRADE = "Arch does not support partial upgrades. Updating only some packages can break others; Update all is the safe choice.";
+const PARTIAL_UPGRADE = "Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.";
 
 /** An unknown figure is an en dash in dim, never a zero (§7.14). */
 function Unknown({ title }: { title: string }) {
