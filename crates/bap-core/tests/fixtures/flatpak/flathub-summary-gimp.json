@@ -1,0 +1,87 @@
+{
+ "branches": {
+  "stable": {
+   "installed_size": 268452352,
+   "download_size": 99676175
+  }
+ },
+ "branch": "stable",
+ "installed_size": 268452352,
+ "download_size": 99676175,
+ "timestamp": 1788654532,
+ "arches": [
+  "aarch64",
+  "x86_64"
+ ],
+ "metadata": {
+  "runtimeIsEol": false,
+  "runtime": "org.gnome.Platform/x86_64/50",
+  "built-extensions": [
+   "org.gimp.GIMP.Debug",
+   "org.gimp.GIMP.Sources"
+  ],
+  "command": "gimp",
+  "runtimeInstalledSize": 1073192960,
+  "sdk": "org.gnome.Sdk/x86_64/50",
+  "tags": [
+   "GTK+3",
+   "stable"
+  ],
+  "name": "org.gimp.GIMP",
+  "permissions": {
+   "unset-environment": [
+    "GTK_MODULES"
+   ],
+   "shared": [
+    "ipc",
+    "network"
+   ],
+   "sockets": [
+    "fallback-x11",
+    "wayland"
+   ],
+   "devices": [
+    "all"
+   ],
+   "session-bus": {
+    "talk": [
+     "com.canonical.AppMenu.Registrar",
+     "org.kde.kwin.Screenshot",
+     "org.gtk.vfs.*",
+     "org.gnome.Shell.Screenshot",
+     "org.freedesktop.FileManager1"
+    ]
+   },
+   "filesystems": [
+    "xdg-config/GIMP:create",
+    "xdg-config/gtk-3.0:ro",
+    "/tmp",
+    "xdg-run/gvfsd",
+    "host",
+    "xdg-run/gvfs"
+   ]
+  },
+  "extensions": {
+   "org.gimp.GIMP.Plugin": {
+    "version": "3",
+    "no-autodownload": "true",
+    "merge-dirs": "plug-ins;scripts",
+    "add-ld-path": "lib",
+    "subdirectories": "true",
+    "directory": "extensions"
+   },
+   "org.gimp.GIMP.Debug": {
+    "autodelete": "true",
+    "no-autodownload": "true",
+    "directory": "lib/debug"
+   },
+   "org.gimp.GIMP.Manual": {
+    "locale-subset": "true",
+    "version": "3.2",
+    "no-autodownload": "true",
+    "directory": "share/gimp/3.0/help"
+   }
+  },
+  "runtimeName": "GNOME Application Platform version 50"
+ }
+}

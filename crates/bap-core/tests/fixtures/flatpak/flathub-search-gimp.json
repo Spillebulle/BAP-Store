@@ -1,0 +1,117 @@
+{
+ "hits": [
+  {
+   "name": "GNU Image Manipulation Program",
+   "keywords": [
+    "GIMP",
+    "Photoshop"
+   ],
+   "summary": "High-end image creation and manipulation",
+   "id": "org_gimp_GIMP",
+   "type": "desktop-application",
+   "project_license": "GPL-3.0+ AND LGPL-3.0+",
+   "is_free_license": true,
+   "app_id": "org.gimp.GIMP",
+   "icon": "https://dl.flathub.org/media/org/gimp/GIMP/ab48223ba11e3bad9493fcda45e9ac04/icons/128x128/org.gimp.GIMP.png",
+   "main_categories": "graphics",
+   "sub_categories": [
+    "2DGraphics",
+    "RasterGraphics"
+   ],
+   "developer_name": "The GIMP team",
+   "verification_verified": true,
+   "verification_method": "website",
+   "verification_login_name": null,
+   "verification_login_provider": null,
+   "verification_login_is_organization": false,
+   "verification_website": "gimp.org",
+   "verification_timestamp": "1682352604",
+   "runtime": "org.gnome.Platform/x86_64/50",
+   "updated_at": 1788654532,
+   "arches": [
+    "aarch64",
+    "x86_64"
+   ],
+   "added_at": 1507913183,
+   "trending": -1.1204686330488212,
+   "installs_last_month": 64374,
+   "favorites_count": 514,
+   "isMobileFriendly": false
+  },
+  {
+   "name": "Photocrea",
+   "keywords": null,
+   "summary": "Advanced image editor",
+   "id": "com_github_vikdevelop_photopea_app",
+   "type": "desktop-application",
+   "translations": {},
+   "project_license": "MIT",
+   "is_free_license": true,
+   "app_id": "com.github.vikdevelop.photopea_app",
+   "icon": "https://dl.flathub.org/media/com/github/vikdevelop.photopea_app/987de6a5f73336ed047517af7c27675c/icons/128x128/com.github.vikdevelop.photopea_app.png",
+   "main_categories": "graphics",
+   "sub_categories": [
+    "Photography"
+   ],
+   "developer_name": "vikdevelop",
+   "verification_verified": true,
+   "verification_method": "manual",
+   "verification_login_name": null,
+   "verification_login_provider": null,
+   "verification_login_is_organization": false,
+   "verification_website": null,
+   "verification_timestamp": "1676885250",
+   "runtime": "org.freedesktop.Platform/x86_64/25.08",
+   "updated_at": 1771017753,
+   "arches": [
+    "x86_64"
+   ],
+   "added_at": 1632394398,
+   "trending": -0.7388302235935609,
+   "installs_last_month": 2465,
+   "favorites_count": 45,
+   "isMobileFriendly": false
+  },
+  {
+   "name": "Scans to PDF",
+   "keywords": [
+    "djpdf",
+    "OCR",
+    "convert"
+   ],
+   "summary": "Create small, searchable PDFs from scanned documents",
+   "id": "com_github_unrud_djpdf",
+   "type": "desktop-application",
+   "project_license": "GPL-3.0-or-later",
+   "is_free_license": true,
+   "app_id": "com.github.unrud.djpdf",
+   "icon": "https://dl.flathub.org/media/com/github/unrud.djpdf/82a3b45cd4682b5c74a6ff16156a1d7f/icons/128x128/com.github.unrud.djpdf.png",
+   "main_categories": "graphics",
+   "sub_categories": [
+    "Scanning",
+    "OCR"
+   ],
+   "developer_name": "Unrud",
+   "verification_verified": true,
+   "verification_method": "login_provider",
+   "verification_login_name": "unrud",
+   "verification_login_provider": "github",
+   "verification_login_is_organization": true,
+   "verification_website": null,
+   "verification_timestamp": "1677454308",
+   "runtime": "org.kde.Platform/x86_64/6.11",
+   "updated_at": 1785038826,
+   "arches": [
+    "aarch64",
+    "x86_64"
+   ],
+   "added_at": 1529320559,
+   "trending": -2.9668403763713185,
+   "installs_last_month": 953,
+   "favorites_count": 5,
+   "isMobileFriendly": false
+  }
+ ],
+ "query": "gimp",
+ "totalHits": 3290
+}

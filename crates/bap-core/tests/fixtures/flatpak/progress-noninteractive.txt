@@ -1,0 +1,4 @@
+Installing runtime/org.gnome.Platform/x86_64/50
+Installing runtime/org.gtk.Gtk3theme.adw-gtk3/x86_64/3.22
+Installing app/org.gimp.GIMP/x86_64/stable
+Info: org.gimp.GIMP.Locale was skipped

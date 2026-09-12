@@ -1,0 +1,4 @@
+flathub	https://dl.flathub.org/repo/	system
+fedora	oci+https://registry.fedoraproject.org	system,oci
+flathub	https://dl.flathub.org/repo/	user
+flathub-beta	https://dl.flathub.org/beta-repo/	user,no-enumerate

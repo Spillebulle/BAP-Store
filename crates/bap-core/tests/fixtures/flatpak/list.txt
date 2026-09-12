@@ -1,0 +1,3 @@
+org.gimp.GIMP	GNU Image Manipulation Program	3.2.4	stable	flathub	system	268.5 MB
+com.valvesoftware.Steam	Steam	1.0.0.87	stable	flathub	user	1.2 GB
+org.example.NoVersion	NoVersion		stable	flathub-beta	user	980 bytes
