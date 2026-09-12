@@ -12,8 +12,9 @@ use std::collections::HashMap;
 #[derive(Debug, Default)]
 pub(super) struct Index {
     by_id: HashMap<String, usize>,
-    /// The chosen component per package: the desktop application, else the
-    /// first listed.
+    /// The chosen component per package, ranked by [`pkgname_rank`]: the
+    /// desktop application named like the package, else the best of the
+    /// rest.
     by_pkgname: HashMap<String, usize>,
     /// Every component per package, in catalogue order.
     pkgname_all: HashMap<String, Vec<usize>>,
@@ -66,10 +67,13 @@ impl Index {
             });
         }
         for (pkgname, all) in &index.pkgname_all {
+            let key = fold(pkgname);
+            // min_by_key keeps the first of equals, so catalogue order is
+            // the final tie-break and the choice is stable between runs.
             let chosen = all
                 .iter()
                 .copied()
-                .find(|&i| is_desktop_application(&components[i]))
+                .min_by_key(|&i| pkgname_rank(&components[i], &key))
                 .unwrap_or(all[0]);
             index.by_pkgname.insert(pkgname.clone(), chosen);
         }
@@ -155,6 +159,43 @@ fn bundle_id(bundle: &str) -> Option<&str> {
 /// `desktop-application`; both are the same thing to the pkgname rule.
 fn is_desktop_application(c: &Component) -> bool {
     matches!(c.component_type.as_str(), "desktop-application" | "desktop")
+}
+
+/// Which of a package's components stands for the package, lowest first.
+/// A package often carries several desktop entries (calibre's viewer and
+/// editor, Emacs and its client, every LibreOffice module), and the
+/// catalogue lists them in no useful order, so the choice is ranked:
+/// desktop applications before add-ons and the rest; then a name that is
+/// the package's name (calibre, scrcpy, tilda), then an id whose last
+/// segment is (`org.gnu.emacs`); then a reverse-DNS id over a legacy
+/// `.desktop` one; then the shortest name, which is the suite ("LibreOffice"
+/// over "LibreOffice Calc", "Foot" over "Foot Server"). `key` is the
+/// package name folded by [`fold`].
+fn pkgname_rank(c: &Component, key: &str) -> (bool, bool, bool, bool, usize) {
+    (
+        !is_desktop_application(c),
+        fold(&c.name) != key,
+        c.id.rsplit('.').next().is_none_or(|last| fold(last) != key),
+        !is_reverse_dns(&c.id),
+        c.name.chars().count(),
+    )
+}
+
+/// Lower-cased with everything but letters and digits dropped, so
+/// "Cairo-Dock" and `cairo-dock` compare equal.
+fn fold(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// `org.gnu.emacs` is; `emacsclient` (a legacy desktop-file id with its
+/// `.desktop` stripped) is not. Three non-empty segments is the shape the
+/// AppStream specification asks for.
+fn is_reverse_dns(id: &str) -> bool {
+    let mut segments = id.split('.');
+    segments.by_ref().take(3).filter(|s| !s.is_empty()).count() == 3
 }
 
 #[cfg(test)]
@@ -306,6 +347,72 @@ mod tests {
         ];
         let index = Index::build(&two);
         assert_eq!(index.by_pkgname("p"), Some(0));
+    }
+
+    fn app(id: &str, name: &str, pkgname: &str) -> Component {
+        let mut c = component(id, name, "desktop-application");
+        c.pkgname = Some(pkgname.into());
+        c
+    }
+
+    #[test]
+    fn a_package_with_several_applications_is_named_by_rank_not_position() {
+        // emacs: the legacy client entry comes first in the catalogue, the
+        // reverse-DNS id whose last segment is the package name wins.
+        let emacs = vec![
+            app("emacsclient", "Emacs (Client)", "emacs"),
+            app("org.gnu.emacs", "GNU Emacs", "emacs"),
+        ];
+        let index = Index::build(&emacs);
+        assert_eq!(index.by_pkgname("emacs"), Some(1));
+        // libreoffice-still: seven modules, all legacy ids, none named like
+        // the package; the shortest name is the suite.
+        let libreoffice = vec![
+            app("libreoffice-calc", "LibreOffice Calc", "libreoffice-still"),
+            app("libreoffice-base", "LibreOffice Base", "libreoffice-still"),
+            app(
+                "libreoffice-startcenter",
+                "LibreOffice",
+                "libreoffice-still",
+            ),
+            app(
+                "libreoffice-writer",
+                "LibreOffice Writer",
+                "libreoffice-still",
+            ),
+        ];
+        let index = Index::build(&libreoffice);
+        assert_eq!(index.by_pkgname("libreoffice-still"), Some(2));
+        assert_eq!(index.by_pkgname_all("libreoffice-still").len(), 4);
+        // calibre: a name equal to the package name beats a shorter one and
+        // a reverse-DNS id.
+        let calibre = vec![
+            app("calibre-lrfviewer", "LRF viewer", "calibre"),
+            app("calibre-ebook-edit", "E-book editor", "calibre"),
+            app("com.calibre_ebook.calibre.viewer", "Viewer", "calibre"),
+            app("calibre-gui", "calibre", "calibre"),
+        ];
+        let index = Index::build(&calibre);
+        assert_eq!(index.by_pkgname("calibre"), Some(3));
+        // cairo-dock: the fold drops punctuation and case on both sides.
+        let dock = vec![
+            app("cairo-dock-cairo", "Cairo-Dock (Cairo)", "cairo-dock"),
+            app("cairo-dock", "Cairo-Dock", "cairo-dock"),
+        ];
+        assert_eq!(Index::build(&dock).by_pkgname("cairo-dock"), Some(1));
+        // A desktop application still beats an add-on named like the package.
+        let mut addon = component("org.gimp.GIMP.plugin.gimp", "gimp", "addon");
+        addon.pkgname = Some("gimp".into());
+        let gimp = vec![
+            addon,
+            app("org.gimp.GIMP", "GNU Image Manipulation Program", "gimp"),
+        ];
+        assert_eq!(Index::build(&gimp).by_pkgname("gimp"), Some(1));
+        assert!(is_reverse_dns("org.gnu.emacs"));
+        assert!(!is_reverse_dns("emacsclient"));
+        assert!(!is_reverse_dns("a.b"));
+        assert!(!is_reverse_dns("a..b.c"));
+        assert_eq!(fold("Cairo-Dock (Cairo)"), "cairodockcairo");
     }
 
     #[test]

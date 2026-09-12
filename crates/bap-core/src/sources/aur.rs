@@ -32,7 +32,7 @@
 use crate::appstream::Catalogue;
 use crate::http::Client;
 use crate::model::*;
-use crate::sources::alpmdb::{self, Desc, LocalDb, SyncDb};
+use crate::sources::alpmdb::{self, Desc, LocalDb, SyncDb, is_package_name, read_includes};
 use crate::system::{self, Dirs};
 use crate::vercmp::is_newer;
 use crate::{Error, Op, Query, Result, Source};
@@ -57,6 +57,21 @@ const EDITION_SUFFIXES: [&str; 3] = ["-bin", "-git", "-appimage"];
 /// pacman's version-control suffixes. Their `pkgver` is whatever the last
 /// local build produced, so the AUR's copy is usually older, not newer.
 const VCS_SUFFIXES: [&str; 4] = ["-git", "-svn", "-hg", "-bzr"];
+
+/// Why the source is unavailable and why a plan is refused when nothing
+/// on the machine can build a package: one sentence for both, so the
+/// tooltip and the error never drift apart.
+pub const NO_BUILDER: &str =
+    "makepkg is not installed, so AUR packages cannot be built. Install base-devel and try again.";
+
+/// What aurweb answers when a search term matches more than its limit of
+/// packages (5000): the term is too common to be searched on its own.
+const TOO_MANY_RESULTS: &str = "Too many package results";
+
+/// Answers an RPC URL with the body the AUR would send, or the error the
+/// client would report. Tests script the RPC through it; the application
+/// asks the network.
+type RpcAnswer = dyn Fn(&str) -> Result<String> + Send + Sync;
 
 /// Which program will build AUR packages on this machine.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -209,13 +224,24 @@ pub fn parse_response(json: &str) -> Result<Vec<RpcPackage>> {
         )
     })?;
     if resp.kind == "error" {
-        let why = resp.error.unwrap_or_else(|| "no reason given".to_string());
+        let why = resp
+            .error
+            .filter(|w| !w.trim().is_empty())
+            .unwrap_or_else(|| "it gave no reason".to_string());
         return Err(Error::from_source(
             SourceKind::Aur,
-            format!("The AUR refused the request: {why}"),
+            format!(
+                "The AUR refused the request: {}.",
+                why.trim().trim_end_matches('.')
+            ),
         ));
     }
     Ok(resp.results)
+}
+
+/// Whether the error is aurweb's refusal of a term with too many matches.
+fn is_too_many_results(e: &Error) -> bool {
+    e.message.contains(TOO_MANY_RESULTS)
 }
 
 /// The pacman databases, loaded once and reloaded when a file changes.
@@ -238,6 +264,8 @@ pub struct Aur {
     catalogue: Arc<Catalogue>,
     paths: Paths,
     helper: OnceLock<Helper>,
+    /// A scripted RPC for the tests; `None` asks `client`.
+    rpc_answer: Option<Box<RpcAnswer>>,
     dbs: Mutex<Option<Arc<Dbs>>>,
     /// Every package the RPC has described this session, by name. A plan
     /// for a name the page already looked up needs no second round trip,
@@ -253,9 +281,21 @@ impl Aur {
             catalogue,
             paths: Paths::system(),
             helper: OnceLock::new(),
+            rpc_answer: None,
             dbs: Mutex::new(None),
             known: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Answer every RPC URL from a function instead of the network, so a
+    /// test can script what aurweb says (a result list, a "too many
+    /// results" refusal, a failure) and see which URLs were asked.
+    pub fn with_rpc(
+        mut self,
+        answer: impl Fn(&str) -> Result<String> + Send + Sync + 'static,
+    ) -> Aur {
+        self.rpc_answer = Some(Box::new(answer));
+        self
     }
 
     /// Pretend a helper exists (or does not), instead of looking on `PATH`.
@@ -288,7 +328,11 @@ impl Aur {
     // ---- the RPC -------------------------------------------------------
 
     fn rpc(&self, url: &str) -> Result<Vec<RpcPackage>> {
-        let text = self.client.get_text(url).map_err(|e| {
+        let fetched = match &self.rpc_answer {
+            Some(answer) => answer(url),
+            None => self.client.get_text(url),
+        };
+        let text = fetched.map_err(|e| {
             Error::from_source(
                 SourceKind::Aur,
                 format!(
@@ -345,7 +389,7 @@ impl Aur {
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let mut stamp = vec![(self.paths.local_db.clone(), mtime(&self.paths.local_db))];
         let conf = std::fs::read_to_string(&self.paths.pacman_conf).unwrap_or_default();
-        for (_, path) in alpmdb::repos(&conf, &self.paths.sync_dir) {
+        for (_, path) in alpmdb::repos(&conf, &self.paths.sync_dir, &read_includes) {
             let t = mtime(&path);
             stamp.push((path, t));
         }
@@ -368,7 +412,7 @@ impl Aur {
         })?;
         let conf = std::fs::read_to_string(&self.paths.pacman_conf).unwrap_or_default();
         let mut sync_names = HashSet::new();
-        for (repo, path) in alpmdb::repos(&conf, &self.paths.sync_dir) {
+        for (repo, path) in alpmdb::repos(&conf, &self.paths.sync_dir, &read_includes) {
             if !path.exists() {
                 continue;
             }
@@ -405,8 +449,13 @@ impl Aur {
         out
     }
 
+    /// Installed, to the AUR source, means installed as a foreign package:
+    /// a name a configured repository carries (paru on CachyOS, a kernel
+    /// the distribution ships) came from that repository, and its pacman
+    /// edition is the one that reports it.
     fn mark_installed(&self, pkg: &mut Package) {
         if let Ok(dbs) = self.dbs()
+            && !dbs.sync_names.contains(&pkg.name)
             && let Some(d) = dbs.local.get(&pkg.name)
         {
             pkg.installed = true;
@@ -446,21 +495,25 @@ impl Aur {
         p
     }
 
-    /// The catalogue can lend an icon, a kind and an AppStream id to an AUR
-    /// package it knows by name, or by the name without its edition suffix
-    /// (`yay-bin` draws as `yay`). Nothing becomes an application unless
-    /// the catalogue says so: an AUR record on its own is a package.
+    /// The catalogue can lend an icon, a kind, pictures and a description
+    /// to an AUR package it knows by name, or by the name without its
+    /// edition suffix (`yay-bin` draws as `yay`). The AppStream id is lent
+    /// only on the exact name: the grouper treats a shared id as a certain
+    /// match, and `firefox-bin` being Firefox is the suffix rule's guess,
+    /// which the name pass makes with its own confidence and the page says
+    /// so. Nothing becomes an application unless the catalogue says so: an
+    /// AUR record on its own is a package.
     fn decorate(&self, pkg: &mut Package) {
-        let component = self
-            .catalogue
-            .by_pkgname(&pkg.name)
-            .or_else(|| self.catalogue.by_pkgname(base_name(&pkg.name)));
+        let exact = self.catalogue.by_pkgname(&pkg.name);
+        let component = exact.or_else(|| self.catalogue.by_pkgname(base_name(&pkg.name)));
         let Some(c) = component else { return };
         pkg.icon = c.icon.clone();
         if c.is_app {
             pkg.kind = PackageKind::App;
         }
-        pkg.appstream_id = Some(c.id.clone());
+        if exact.is_some() {
+            pkg.appstream_id = Some(c.id.clone());
+        }
         if pkg.categories.is_empty() {
             pkg.categories = c.categories.clone();
         }
@@ -587,6 +640,29 @@ impl Aur {
     }
 
     // ---- plans ---------------------------------------------------------
+
+    /// The name a plan step may carry: ours, and shaped like a package
+    /// name, so nothing that looks like an option ever reaches paru's or
+    /// pacman's argv. The same rule as the pacman source's.
+    fn own<'a>(&self, package: &'a PackageRef) -> Result<&'a str> {
+        if package.source != SourceKind::Aur {
+            return Err(Error::from_source(
+                SourceKind::Aur,
+                format!(
+                    "{} belongs to {}, not to the AUR.",
+                    package.id,
+                    package.source.label()
+                ),
+            ));
+        }
+        if !is_package_name(&package.id) {
+            return Err(Error::from_source(
+                SourceKind::Aur,
+                format!("{} is not a name the AUR accepts.", package.id),
+            ));
+        }
+        Ok(&package.id)
+    }
 
     fn step(
         title: String,
@@ -819,27 +895,52 @@ impl Source for Aur {
                 reason: None,
                 detail: Some(detail),
             },
-            None => unavailable("makepkg is not installed, so AUR packages cannot be built."),
+            None => unavailable(NO_BUILDER),
         }
     }
 
+    /// The RPC matches one substring, so it is asked for one word at a
+    /// time, longest first (the most selective), and `rank` checks the
+    /// rest here. aurweb refuses a word that matches more than 5000
+    /// packages ("python", "lib", "git"); such a word is passed over for
+    /// the next, and only when every word is that common is the query
+    /// refused, with what to do about it.
     fn search(&self, query: &Query) -> Result<Vec<Package>> {
-        let words: Vec<String> = query
+        let mut words: Vec<String> = query
             .text
             .split_whitespace()
             .map(|w| w.to_lowercase())
             .collect();
-        // The RPC matches one substring. For several words it is asked for
-        // the longest (the most selective) and the rest are checked here.
-        let Some(term) = words.iter().max_by_key(|w| w.len()) else {
-            return Ok(Vec::new());
-        };
+        words.sort_by_key(|w| std::cmp::Reverse(w.chars().count()));
+        words.dedup();
         // aurweb refuses a term under two characters; an error toast on the
         // first keystroke is worse than an empty list.
-        if term.chars().count() < 2 {
-            return Ok(Vec::new());
+        words.retain(|w| w.chars().count() >= 2);
+        let mut found = None;
+        for term in &words {
+            match self.search_rpc(term) {
+                Ok(list) => {
+                    found = Some(list);
+                    break;
+                }
+                Err(e) if is_too_many_results(&e) => {
+                    log::debug!("aur: {term} matches too many packages, trying the next word");
+                }
+                Err(e) => return Err(e),
+            }
         }
-        let found = self.search_rpc(term)?;
+        let Some(found) = found else {
+            if words.is_empty() {
+                return Ok(Vec::new());
+            }
+            return Err(Error::from_source(
+                SourceKind::Aur,
+                format!(
+                    "The AUR has too many packages matching {}. Add another word to narrow the search.",
+                    query.text.trim()
+                ),
+            ));
+        };
         let ranked = rank(&query.text, found, query.limit);
         let mut out = Vec::with_capacity(ranked.len());
         for rpc in &ranked {
@@ -889,19 +990,25 @@ impl Source for Aur {
 
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         match op {
-            Op::Install { package } | Op::Update { package } => self.build_steps(&package.id),
-            Op::Remove { package } => Ok(vec![Self::step(
-                format!("Removing {}", package.id),
-                "pacman",
-                vec![
-                    "-Rs".to_string(),
-                    "--noconfirm".to_string(),
-                    package.id.clone(),
-                ],
-                None,
-                true,
-                2,
-            )]),
+            Op::Install { package } | Op::Update { package } => {
+                let name = self.own(package)?;
+                self.build_steps(name)
+            }
+            Op::Remove { package } => {
+                let name = self.own(package)?;
+                Ok(vec![Self::step(
+                    format!("Removing {name}"),
+                    "pacman",
+                    vec![
+                        "-Rs".to_string(),
+                        "--noconfirm".to_string(),
+                        name.to_string(),
+                    ],
+                    None,
+                    true,
+                    2,
+                )])
+            }
             Op::Refresh { .. } => Ok(Vec::new()),
             Op::UpdateAll { .. } => self.update_all_steps(),
         }
@@ -935,10 +1042,7 @@ PACMAN_AUTH=(pkexec)
 ";
 
 fn no_builder() -> Error {
-    Error::from_source(
-        SourceKind::Aur,
-        "makepkg is not installed, so AUR packages cannot be built. Install base-devel and try again.",
-    )
+    Error::from_source(SourceKind::Aur, NO_BUILDER)
 }
 
 fn pkgbuild_url(base: &str) -> String {
@@ -1130,9 +1234,25 @@ mod tests {
     #[test]
     fn an_error_envelope_is_an_error() {
         let e = parse_response(r#"{"version":5,"type":"error","resultcount":0,"results":[],"error":"Query arg too small."}"#).unwrap_err();
-        assert!(e.message.contains("Query arg too small."), "{}", e.message);
+        assert_eq!(
+            e.message,
+            "The AUR refused the request: Query arg too small."
+        );
         assert_eq!(e.source_kind, Some(SourceKind::Aur));
         assert!(parse_response("not json").is_err());
+        // The sentence closes whatever aurweb sends: no reason, or one
+        // without its full stop.
+        let e = parse_response(r#"{"version":5,"type":"error"}"#).unwrap_err();
+        assert_eq!(e.message, "The AUR refused the request: it gave no reason.");
+        let e =
+            parse_response(r#"{"type":"error","error":"Too many package results"}"#).unwrap_err();
+        assert_eq!(
+            e.message,
+            "The AUR refused the request: Too many package results."
+        );
+        assert!(is_too_many_results(&e));
+        let e = parse_response(r#"{"type":"error","error":"  "}"#).unwrap_err();
+        assert!(e.message.ends_with("it gave no reason."));
     }
 
     #[test]

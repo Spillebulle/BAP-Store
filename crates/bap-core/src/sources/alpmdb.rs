@@ -164,20 +164,122 @@ fn decompress(bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// The repositories `pacman.conf` names, in order, with their database
-/// paths. Includes files pulled in with `Include =` only as far as their
-/// section names go: mirrors are not needed to read a database.
-pub fn repos(conf: &str, sync_dir: &Path) -> Vec<(String, PathBuf)> {
+/// paths. A file pulled in with `Include =` may define repositories of its
+/// own (pacman.conf(5) allows it, and a `[chaotic-aur]` kept in
+/// `/etc/pacman.d/` is a common shape), so each included file is scanned
+/// for `[name]` headers in place, one level deep: an `Include` inside an
+/// included file is not followed, as pacman does not follow it either.
+/// `include` answers an `Include =` path (which may be a glob) with the
+/// text of every file it names; [`read_includes`] is the real reader and
+/// the tests hand it strings.
+pub fn repos(
+    conf: &str,
+    sync_dir: &Path,
+    include: &dyn Fn(&str) -> Vec<String>,
+) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
+    let mut push = |name: &str| {
+        let name = name.trim();
+        if name != "options" {
+            out.push((name.to_string(), sync_dir.join(format!("{name}.db"))));
+        }
+    };
     for line in conf.lines() {
         let line = line.trim();
-        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            let name = name.trim();
-            if name != "options" {
-                out.push((name.to_string(), sync_dir.join(format!("{name}.db"))));
+        if let Some(name) = section_header(line) {
+            push(name);
+        } else if let Some(path) = include_path(line) {
+            for text in include(path) {
+                for inner in text.lines() {
+                    if let Some(name) = section_header(inner.trim()) {
+                        push(name);
+                    }
+                }
             }
         }
     }
     out
+}
+
+/// `[name]` on a line of its own, with the name.
+fn section_header(line: &str) -> Option<&str> {
+    line.strip_prefix('[').and_then(|l| l.strip_suffix(']'))
+}
+
+/// The path of an `Include = path` line.
+fn include_path(line: &str) -> Option<&str> {
+    let (key, value) = line.split_once('=')?;
+    (key.trim() == "Include").then(|| value.trim())
+}
+
+/// Read the files an `Include =` names. A glob (`/etc/pacman.d/*.conf`) is
+/// matched on the file name within its directory, in name order, as
+/// pacman's `glob()` does.
+pub fn read_includes(pattern: &str) -> Vec<String> {
+    let path = Path::new(pattern);
+    if !pattern.contains(['*', '?', '[']) {
+        return std::fs::read_to_string(path).into_iter().collect();
+    }
+    let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|f| f.to_str())) else {
+        return Vec::new();
+    };
+    let Some(re) = glob_regex(file) else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|f| f.to_str())
+                .is_some_and(|f| re.is_match(f))
+        })
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect()
+}
+
+/// A shell glob as pacman.conf uses it (`*` and `?`; anything else is
+/// itself) as an anchored regular expression, so `nvidia*` in `IgnorePkg`
+/// matches what pacman would skip. `None` only if the pattern cannot be
+/// compiled, which no pattern made of escaped text and `.*` is.
+pub fn glob_regex(pattern: &str) -> Option<regex::Regex> {
+    let mut expression = String::from("^");
+    for ch in pattern.chars() {
+        match ch {
+            '*' => expression.push_str(".*"),
+            '?' => expression.push('.'),
+            other => expression.push_str(&regex::escape(other.encode_utf8(&mut [0; 4]))),
+        }
+    }
+    expression.push('$');
+    regex::Regex::new(&expression).ok()
+}
+
+/// Whether the name matches the glob, exactly or by pattern.
+pub fn glob_matches(pattern: &str, name: &str) -> bool {
+    if !pattern.contains(['*', '?']) {
+        return pattern == name;
+    }
+    glob_regex(pattern).is_some_and(|re| re.is_match(name))
+}
+
+/// pacman's rule for a package name: lower-case letters, digits and
+/// `@ . _ + -`, not starting with a hyphen or a dot. Both the pacman and the
+/// AUR source check a plan's name against it, so nothing shaped like an
+/// option ever reaches an argv.
+pub fn is_package_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['-', '.'])
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "@._+-".contains(c))
 }
 
 #[cfg(test)]
@@ -200,10 +302,62 @@ mod tests {
     #[test]
     fn repos_come_out_in_pacman_conf_order() {
         let conf = "[options]\nHoldPkg = pacman\n\n[cachyos-v3]\nInclude = /etc/pacman.d/x\n[core]\nInclude = /etc/pacman.d/mirrorlist\n#[testing]\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n";
-        let r = repos(conf, Path::new("/var/lib/pacman/sync"));
+        let none = |_: &str| Vec::new();
+        let r = repos(conf, Path::new("/var/lib/pacman/sync"), &none);
         let names: Vec<&str> = r.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names, ["cachyos-v3", "core", "extra"]);
         assert_eq!(r[1].1, PathBuf::from("/var/lib/pacman/sync/core.db"));
+    }
+
+    #[test]
+    fn an_included_file_may_define_repositories_in_place() {
+        let conf = "[options]\nInclude = /etc/pacman.d/options.conf\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\nInclude = /etc/pacman.d/*.conf\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let include = |path: &str| {
+            match path {
+            "/etc/pacman.d/mirrorlist" => vec!["Server = https://m.example/$repo/os/$arch\n".to_string()],
+            "/etc/pacman.d/*.conf" => vec![
+                "# A local repository kept in its own file.\n[custom]\nSigLevel = Optional TrustAll\nServer = file:///home/custompkgs\n#[commented-out]\nInclude = /etc/pacman.d/nested.conf\n".to_string(),
+            ],
+            "/etc/pacman.d/options.conf" => vec!["Color\nParallelDownloads = 5\n".to_string()],
+            _ => panic!("{path} is read but the include is one level deep"),
+        }
+        };
+        let r = repos(conf, Path::new("/var/lib/pacman/sync"), &include);
+        let names: Vec<&str> = r.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["core", "custom", "extra"]);
+        assert_eq!(r[1].1, PathBuf::from("/var/lib/pacman/sync/custom.db"));
+    }
+
+    #[test]
+    fn globs_match_the_way_pacman_conf_means_them() {
+        assert!(glob_matches("nvidia*", "nvidia-utils"));
+        assert!(glob_matches("nvidia*", "nvidia"));
+        assert!(!glob_matches("nvidia*", "lib32-nvidia-utils"));
+        assert!(glob_matches("*nvidia*", "lib32-nvidia-utils"));
+        assert!(glob_matches("linux-cachyos", "linux-cachyos"));
+        assert!(!glob_matches("linux-cachyos", "linux-cachyos-headers"));
+        assert!(glob_matches("python-pyqt?", "python-pyqt6"));
+        assert!(!glob_matches("python-pyqt?", "python-pyqt66"));
+        assert!(
+            glob_matches("a.b+c", "a.b+c"),
+            "regex characters are literal"
+        );
+        assert!(!glob_matches("a.b", "axb"));
+        assert_eq!(glob_regex("nvidia*").unwrap().as_str(), "^nvidia.*$");
+    }
+
+    #[test]
+    fn package_names_that_look_like_options_are_refused() {
+        assert!(is_package_name("steam"));
+        assert!(is_package_name("lib32-gcc-libs"));
+        assert!(is_package_name("python-pyqt6.sip"));
+        assert!(is_package_name("nvidia-open-dkms+"));
+        assert!(!is_package_name("-Rs"));
+        assert!(!is_package_name("--sudo=/tmp/x"));
+        assert!(!is_package_name("Steam"));
+        assert!(!is_package_name("a b"));
+        assert!(!is_package_name(""));
+        assert!(!is_package_name("--noconfirm"));
     }
 
     #[test]
@@ -227,7 +381,7 @@ mod tests {
         let local = LocalDb::load(Path::new(LocalDb::DEFAULT_PATH)).unwrap();
         assert!(local.packages.len() > 10);
         let conf = std::fs::read_to_string("/etc/pacman.conf").unwrap();
-        for (repo, path) in repos(&conf, Path::new("/var/lib/pacman/sync")) {
+        for (repo, path) in repos(&conf, Path::new("/var/lib/pacman/sync"), &read_includes) {
             if path.exists() {
                 let db = SyncDb::load(&repo, &path).unwrap();
                 assert!(!db.packages.is_empty(), "{repo} is empty");

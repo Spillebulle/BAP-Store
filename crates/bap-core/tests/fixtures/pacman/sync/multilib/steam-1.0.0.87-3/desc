@@ -38,3 +38,6 @@ Levente Polyak <anthraxx@archlinux.org>
 bash
 coreutils
 
+%GROUPS%
+games
+

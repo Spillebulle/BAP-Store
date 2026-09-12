@@ -2,14 +2,14 @@
 //! (`tests/fixtures/aur/`), plus `live_*` tests that ask aur.archlinux.org
 //! and read this machine's pacman database.
 
-use bap_core::appstream::Catalogue;
+use bap_core::appstream::{Catalogue, Component};
 use bap_core::http::Client;
 use bap_core::sources::alpmdb::Desc;
 use bap_core::sources::aur::{self, Aur, Helper, Paths, RpcPackage};
 use bap_core::system::from_os_release;
-use bap_core::{Op, PackageKind, PackageRef, Query, Source, SourceKind, SystemInfo};
+use bap_core::{Op, PackageKind, PackageRef, Picture, Query, Source, SourceKind, SystemInfo};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/aur");
 
@@ -38,8 +38,12 @@ fn debian() -> SystemInfo {
 
 /// An AUR source with no network worth speaking of and no databases.
 fn offline(system: &SystemInfo, helper: Helper, tmp: &Path) -> Aur {
+    offline_with(system, helper, tmp, Catalogue::default())
+}
+
+fn offline_with(system: &SystemInfo, helper: Helper, tmp: &Path, catalogue: Catalogue) -> Aur {
     let client = Arc::new(Client::new(tmp.join("http")));
-    Aur::new(system, client, Arc::new(Catalogue::default()))
+    Aur::new(system, client, Arc::new(catalogue))
         .with_helper(helper)
         .with_paths(Paths {
             pacman_conf: tmp.join("pacman.conf"),
@@ -47,6 +51,34 @@ fn offline(system: &SystemInfo, helper: Helper, tmp: &Path) -> Aur {
             sync_dir: tmp.join("sync"),
             cache: tmp.join("cache/aur"),
         })
+}
+
+/// A search envelope the way aurweb writes one, for the scripted RPC.
+fn envelope(results: &[(&str, &str)]) -> String {
+    let results: Vec<serde_json::Value> = results
+        .iter()
+        .map(|(name, description)| {
+            serde_json::json!({
+                "Name": name, "Description": description, "Version": "1.0-1",
+                "PackageBase": name, "URL": null, "NumVotes": 3, "Popularity": 0.5,
+                "OutOfDate": null, "Maintainer": "someone", "FirstSubmitted": 1,
+                "LastModified": 2, "URLPath": format!("/cgit/aur.git/snapshot/{name}.tar.gz"), "ID": 7
+            })
+        })
+        .collect();
+    serde_json::json!({"version": 5, "type": "search", "resultcount": results.len(), "results": results})
+        .to_string()
+}
+
+/// aurweb's refusal of a term with more than 5000 hits, verbatim.
+fn too_many() -> String {
+    r#"{"version":5,"type":"error","resultcount":0,"results":[],"error":"Too many package results."}"#
+        .to_string()
+}
+
+/// The word an RPC search URL asks for.
+fn searched_word(url: &str) -> Option<&str> {
+    url.split("/search/").nth(1)?.split('?').next()
 }
 
 fn desc(name: &str, version: &str, extra: &str) -> Desc {
@@ -463,8 +495,11 @@ fn status_needs_arch_and_a_builder() {
     assert!(!s.available);
     assert_eq!(
         s.reason.as_deref(),
-        Some("makepkg is not installed, so AUR packages cannot be built.")
+        Some(
+            "makepkg is not installed, so AUR packages cannot be built. Install base-devel and try again."
+        )
     );
+    assert_eq!(s.reason.as_deref(), Some(aur::NO_BUILDER));
 
     let s = offline(&arch(), Helper::Paru("2.1.0".into()), tmp.path()).status();
     assert!(s.available);
@@ -675,12 +710,194 @@ fn no_builder_means_no_plan_and_a_sentence() {
             package: aur_ref("paru"),
         })
         .unwrap_err();
+    assert_eq!(
+        e.message,
+        aur::NO_BUILDER,
+        "the plan and the status say the same sentence"
+    );
+    assert!(e.message.ends_with("Install base-devel and try again."));
+}
+
+#[test]
+fn a_plan_refuses_a_name_shaped_like_an_option_and_another_source_s_package() {
+    let tmp = tempfile::tempdir().unwrap();
+    let source = offline(&arch(), Helper::Paru("2.1.0".into()), tmp.path());
+    // paru would read -Rs as a second operation and --sudo=... as its own
+    // option in the user session: neither is a name.
+    for bad in ["-Rs", "--sudo=/tmp/evil", "Paru", "a b", ""] {
+        for op in [
+            Op::Install {
+                package: aur_ref(bad),
+            },
+            Op::Update {
+                package: aur_ref(bad),
+            },
+            Op::Remove {
+                package: aur_ref(bad),
+            },
+        ] {
+            let e = source.plan(&op).unwrap_err();
+            assert_eq!(
+                e.message,
+                format!("{bad} is not a name the AUR accepts."),
+                "{op:?}"
+            );
+            assert_eq!(e.source_kind, Some(SourceKind::Aur));
+        }
+    }
+    let pacman_s = PackageRef {
+        source: SourceKind::Pacman,
+        id: "paru".to_string(),
+    };
+    let e = source
+        .plan(&Op::Install {
+            package: pacman_s.clone(),
+        })
+        .unwrap_err();
+    assert_eq!(e.message, "paru belongs to pacman, not to the AUR.");
+    assert!(source.plan(&Op::Remove { package: pacman_s }).is_err());
+    // A proper name still plans.
+    assert_eq!(
+        source
+            .plan(&Op::Install {
+                package: aur_ref("python-pyqt6.sip"),
+            })
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn a_common_word_is_passed_over_for_the_next_and_the_last_one_says_what_to_do() {
+    let tmp = tempfile::tempdir().unwrap();
+    let asked: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let log = asked.clone();
+    let source =
+        offline(&arch(), Helper::Paru("2.1.0".into()), tmp.path()).with_rpc(move |url: &str| {
+            let word = searched_word(url).unwrap_or("").to_string();
+            log.lock().unwrap().push(word.clone());
+            match word.as_str() {
+                "python" | "lib" | "git" => Ok(too_many()),
+                "dlib" => Ok(envelope(&[
+                    ("python-dlib", "Python bindings for dlib"),
+                    ("dlib-git", "A toolkit for machine learning"),
+                ])),
+                "qqqq" => Err(bap_core::Error::new("could not reach aur.archlinux.org")),
+                other => panic!("{other} was never meant to be asked"),
+            }
+        });
+    // "python" is refused, "dlib" answers, and rank keeps the record that
+    // carries both words.
+    let found = source.search(&Query::new("python dlib")).unwrap();
+    let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["python-dlib"]);
+    assert_eq!(asked.lock().unwrap().as_slice(), ["python", "dlib"]);
+    assert_eq!(
+        found[0].summary.as_deref(),
+        Some("Python bindings for dlib")
+    );
+
+    // Every word too common: the sentence names the query and what to do.
+    asked.lock().unwrap().clear();
+    let e = source.search(&Query::new("python lib")).unwrap_err();
+    assert_eq!(
+        e.message,
+        "The AUR has too many packages matching python lib. Add another word to narrow the search."
+    );
+    assert_eq!(e.source_kind, Some(SourceKind::Aur));
+    assert_eq!(asked.lock().unwrap().as_slice(), ["python", "lib"]);
+
+    // One common word alone, the case a search box sees on every keystroke.
+    let e = source.search(&Query::new("  Python ")).unwrap_err();
+    assert!(e.message.contains("matching Python."), "{}", e.message);
+
+    // A word too short for aurweb is not asked, even after an overflow.
+    asked.lock().unwrap().clear();
+    assert!(source.search(&Query::new("git a")).is_err());
+    assert_eq!(asked.lock().unwrap().as_slice(), ["git"]);
+
+    // Any other failure is reported as it is, not passed over.
+    let e = source.search(&Query::new("qqqq")).unwrap_err();
     assert!(
-        e.message.starts_with("makepkg is not installed"),
+        e.message
+            .starts_with("The AUR did not answer: could not reach"),
         "{}",
         e.message
     );
-    assert!(e.message.ends_with('.'));
+}
+
+#[test]
+fn a_search_hit_is_installed_only_when_it_is_foreign() {
+    let tmp = tempfile::tempdir().unwrap();
+    // paru is installed from a repository (CachyOS ships it); bauh is
+    // installed and no repository has it, so bauh is the AUR's.
+    fake_dbs(
+        tmp.path(),
+        &[
+            ("paru", "2.1.0-2", "%SIZE%\n7500000\n"),
+            ("bauh", "0.10.7-1", "%SIZE%\n1000\n"),
+        ],
+        &["paru", "pacman"],
+    );
+    let source =
+        offline(&arch(), Helper::Paru("2.1.0".into()), tmp.path()).with_rpc(|url: &str| {
+            match searched_word(url) {
+                Some("paru") => Ok(envelope(&[("paru", "Feature packed AUR helper")])),
+                Some("bauh") => Ok(envelope(&[("bauh", "Graphical store")])),
+                other => panic!("{other:?} was never meant to be asked"),
+            }
+        });
+    let paru = source.search(&Query::new("paru")).unwrap().remove(0);
+    assert!(
+        !paru.installed,
+        "a repository package is the pacman source's to report"
+    );
+    assert_eq!(paru.installed_version, None);
+    assert_eq!(paru.installed_size, None);
+    let bauh = source.search(&Query::new("bauh")).unwrap().remove(0);
+    assert!(bauh.installed);
+    assert_eq!(bauh.installed_version.as_deref(), Some("0.10.7-1"));
+    assert_eq!(bauh.installed_size, Some(1000));
+}
+
+#[test]
+fn the_catalogue_lends_its_id_only_on_the_exact_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let firefox = Component {
+        id: "org.mozilla.firefox".into(),
+        pkgname: Some("firefox".into()),
+        name: "Firefox".into(),
+        summary: Some("Web browser".into()),
+        description: Some("<p>Browse the web.</p>".into()),
+        categories: vec!["Network".into(), "WebBrowser".into()],
+        icon: Some(Picture::Url("https://example.org/firefox.png".into())),
+        is_app: true,
+        component_type: "desktop-application".into(),
+        ..Default::default()
+    };
+    let source = offline_with(
+        &arch(),
+        Helper::Paru("2.1.0".into()),
+        tmp.path(),
+        Catalogue::from_components(vec![firefox]),
+    );
+    // firefox-bin is Firefox by the suffix rule, which is the name pass's
+    // guess: it draws as the application but carries no AppStream id, so
+    // the grouper says "matched by name" rather than claiming certainty.
+    let bin = source.to_package(&record("firefox-bin", "143.0-1"));
+    assert_eq!(bin.kind, PackageKind::App);
+    assert!(matches!(bin.icon, Some(Picture::Url(_))));
+    assert_eq!(bin.categories, ["Network", "WebBrowser"]);
+    assert_eq!(bin.description.as_deref(), Some("<p>Browse the web.</p>"));
+    assert_eq!(bin.appstream_id, None);
+    let exact = source.to_package(&record("firefox", "143.0-1"));
+    assert_eq!(exact.appstream_id.as_deref(), Some("org.mozilla.firefox"));
+    assert_eq!(exact.kind, PackageKind::App);
+    let unknown = source.to_package(&record("something-else-bin", "1-1"));
+    assert_eq!(unknown.kind, PackageKind::Package);
+    assert_eq!(unknown.appstream_id, None);
+    assert!(unknown.icon.is_none());
 }
 
 #[test]
