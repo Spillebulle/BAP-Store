@@ -66,8 +66,14 @@ password, so the package and its six missing dependencies were extracted from
 the Arch repositories into `~/.local/opt/webkit` (no root needed) and Node into
 `~/.local/opt/node`. `. tools/dev-env.sh` points pkg-config, the loader and
 WebKit's process path at them; source it before `cargo check -p bap-store` or
-`npm run app:dev`. On a machine with the package installed the script does
-nothing. Installing it properly is `sudo pacman -S --needed webkit2gtk-4.1`.
+`cargo build`. It is enough to compile and to run every test, but not to open
+the window: WebKitGTK spawns `/usr/lib/webkit2gtk-4.1/WebKitNetworkProcess`
+from a path compiled into the library and ignores `WEBKIT_EXEC_PATH` in a
+release build, so `npm run app:dev` dies with "Unable to spawn a new child
+process". The window needs the real package: `sudo pacman -S --needed
+webkit2gtk-4.1`. Until then the page is exercised in a browser against the
+mock (`npm run dev`, then `http://localhost:1420/?view=search&q=steam&fast`)
+and the core through the text mode.
 
 ## Layout
 
