@@ -1,10 +1,11 @@
 import { Cpu, HardDrive, RefreshCw, Search, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import pkg from "../../../package.json";
-import { selectActivePlan, useActivity } from "../activity/store";
+import { isLive, selectActivePlan, useActivity } from "../activity/store";
 import { ICON } from "../components/icons";
 import { formatCount, plural } from "../format";
 import { sourceLabel, type PlanStatus } from "../types";
+import { SelfUpdateNotice } from "./SelfUpdateNotice";
 import { selectNav, useShell, type View } from "./store";
 
 interface NavItem {
@@ -31,7 +32,10 @@ export function Shell({ children }: { children: ReactNode }) {
       <MenuBar />
       <div className="bs-body">
         <Sidebar />
-        <main className="bs-content">{children}</main>
+        <main className="bs-content">
+          <SelfUpdateNotice />
+          {children}
+        </main>
       </div>
       <StatusBar />
     </div>
@@ -82,26 +86,20 @@ function Sidebar() {
   );
 }
 
-/** What the status bar says about a running plan. */
-function planLine(plan: PlanStatus | null): string | null {
-  if (!plan) return null;
-  const ops = plan.plan.ops.length;
-  const what = plural(ops, "operation");
+/** What the status bar says about a running plan: the step in hand, and nothing when idle. */
+function planLine(plan: PlanStatus | null, cancelling: boolean): string | null {
+  if (!plan || !isLive(plan.state)) return null;
+  if (cancelling) return "Cancelling…";
+  const what = plural(plan.plan.ops.length, "operation");
   switch (plan.state) {
     case "pending":
-      return `Starting ${what}`;
+      return `Starting ${what}…`;
     case "authorising":
-      return "Waiting for authorisation";
-    case "running": {
+      return "Waiting for your password…";
+    default: {
       const started = [...plan.events].reverse().find((e) => e.event === "step_started");
-      return started && started.event === "step_started" ? started.title : `Running ${what}`;
+      return `${started && started.event === "step_started" ? started.title : `Running ${what}`}…`;
     }
-    case "done":
-      return "Finished";
-    case "failed":
-      return "Failed";
-    case "cancelled":
-      return "Cancelled";
   }
 }
 
@@ -110,8 +108,9 @@ function StatusBar() {
   const sources = useShell((s) => s.sources);
   const loadError = useShell((s) => s.loadError);
   const plan = useActivity(selectActivePlan);
+  const cancelling = useActivity((s) => (plan ? s.cancelling[plan.plan.id] !== undefined : false));
   const live = sources.filter((s) => s.available).map((s) => sourceLabel(s.kind));
-  const line = planLine(plan);
+  const line = planLine(plan, cancelling);
   return (
     <footer className="bs-status">
       <div className="bs-status-side">

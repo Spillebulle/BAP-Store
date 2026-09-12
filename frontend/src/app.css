@@ -1808,6 +1808,13 @@ img {
   color: var(--text-muted);
 }
 
+/* The ellipsis lives on the text, not on the flex box around it. */
+.bs-panel-title > span:not(.bs-count) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bs-panel-cmds {
   display: inline-flex;
   align-items: center;
@@ -2325,7 +2332,7 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
-/* ═══ activity panel ══════════════════════════════════════════════════════ */
+/* ═══ activity panel and the confirm step ═════════════════════════════════ */
 
 .bs-activity {
   width: 430px;
@@ -2338,8 +2345,17 @@ img {
   gap: var(--s2);
 }
 
+/* "2 of 5": a figure in dim under the rail. */
+.bs-activity-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The last lines the runner wrote, mono, scrolling inside its own box. */
 .bs-activity-log {
-  max-height: 150px;
+  max-height: 260px;
+  margin: 0;
   padding: var(--s2) 10px;
   overflow: auto;
   background: var(--window);
@@ -2352,8 +2368,67 @@ img {
   overflow-wrap: anywhere;
 }
 
+/* What went to stderr: a step down, not a colour, because most of it is only noise. */
 .bs-activity-log .err {
-  color: var(--caution);
+  color: var(--text-dim);
+}
+
+/* A ghost "Cancel" beside the header's icon buttons. */
+.bs-panel-cmds > .bs-btn--ghost {
+  height: 22px;
+  padding: 0 var(--s2);
+}
+
+/* The steps a plan will run, in the confirm dialog: title and its badges, the command under it. */
+.bs-plan-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bs-plan-step {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--s2) 0;
+}
+
+.bs-plan-step + .bs-plan-step {
+  border-top: var(--hairline) solid var(--line-soft);
+}
+
+.bs-plan-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  font-size: var(--text-control);
+  color: var(--text);
+}
+
+.bs-plan-step-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-plan-step-cmd {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-figure);
+  font-size: var(--text-tiny);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A notice above the page, inside the content column: the self-update sentence. */
+.bs-content-notice {
+  flex: none;
+  padding: var(--s4) var(--s5) 0;
 }
 
 /* ═══ motion (§13): 80 ms hover, 160 ms open, and nothing else ════════════ */
