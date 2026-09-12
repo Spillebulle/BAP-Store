@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 import * as api from "../api";
-import type { Settings, SourceStatus, SystemInfo } from "../types";
+import type { SelfUpdate, Settings, SourceStatus, SystemInfo } from "../types";
 
 export type View = "search" | "app" | "installed" | "updates" | "drivers" | "settings";
 
@@ -45,6 +45,13 @@ interface ShellState extends Location {
   loadError: string | null;
   updateCount: number;
   setUpdateCount: (count: number) => void;
+
+  /** What self_update_check answered; null until it has, or when the check is off. */
+  selfUpdate: SelfUpdate | null;
+  /** "Later" was pressed: the notice stays away for this session. */
+  selfUpdateHidden: boolean;
+  checkSelfUpdate: (force: boolean) => Promise<void>;
+  hideSelfUpdate: () => void;
 
   load: () => Promise<void>;
   /** Settings apply live: the patch is saved and the store takes what came back. */
@@ -88,6 +95,17 @@ export const useShell = create<ShellState>((set, get) => ({
   loadError: null,
   updateCount: 0,
   setUpdateCount: (updateCount) => set({ updateCount }),
+
+  selfUpdate: null,
+  selfUpdateHidden: false,
+  checkSelfUpdate: async (force) => {
+    try {
+      set({ selfUpdate: await api.self_update_check(force) });
+    } catch {
+      // A release check that fails is not news: the notice simply does not appear.
+    }
+  },
+  hideSelfUpdate: () => set({ selfUpdateHidden: true }),
 
   load: async () => {
     try {

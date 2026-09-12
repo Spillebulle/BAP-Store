@@ -38,8 +38,32 @@ const NOW = Math.floor(Date.now() / 1000);
 const DAY = 86400;
 const MB = 1000 * 1000;
 
+// ── Browser switches ────────────────────────────────────────────────────────
+//
+// Only a browser has a query string, and only a browser loads this module.
+//   ?fast               every delay is zero (screenshots, tools/shots.mjs)
+//   ?hold               the plan runner pauses part way through its first step
+//   ?hold=auth          pauses while waiting for the password
+//   ?hold=unknown       pauses inside a step that reports no fraction (an AUR build)
+//   ?selfupdate=asset   the release check answers an install_asset remedy
+//   ?selfupdate=none    this copy is the newest, so no notice
+// A plan whose operations name a package called "fail-please" fails at that
+// step; one naming "no-such-package" cannot be planned at all, so the confirm
+// dialog shows what api.plan failing looks like.
+
+const PARAMS = new URLSearchParams(window.location.search);
+const FAST = PARAMS.has("fast");
+const HOLD: string | null = PARAMS.get("hold");
+const FAIL_ID = "fail-please";
+const UNPLANNABLE_ID = "no-such-package";
+
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return new Promise((resolve) => window.setTimeout(resolve, FAST ? 0 : ms));
+}
+
+/** Never resolves: the page is left at this point for a picture. */
+function hold(): Promise<void> {
+  return new Promise(() => undefined);
 }
 
 // ── The machine ─────────────────────────────────────────────────────────────
@@ -829,7 +853,10 @@ export async function updates(force: boolean): Promise<UpdateList> {
 let planCounter = 0;
 
 function nameOf(ref: PackageRef): string {
-  return findPackage(ref)?.name ?? ref.id;
+  const known = findPackage(ref)?.name;
+  if (known) return known;
+  // A GitHub release is owner/repo; the repository is the name it goes by.
+  return ref.source === "github" ? (ref.id.split("/").pop() ?? ref.id) : ref.id;
 }
 
 function stepsFor(op: Op): Step[] {
@@ -861,6 +888,13 @@ function stepsFor(op: Op): Step[] {
     }
     case "update": {
       const name = nameOf(op.package);
+      if (op.package.source === "github") {
+        const asset = `${op.package.id.split("/").pop() ?? "release"}-0.2.0-1-x86_64.pkg.tar.zst`;
+        return [
+          { source: "github", title: `Downloading ${name} 0.2.0`, command: cmd("bap-store", "download", op.package.id, asset), needs_root: false, weight: 2 },
+          { source: "github", title: `Installing ${name} 0.2.0`, command: cmd("pacman", "-U", "--noconfirm", `/var/cache/bap-store/${asset}`), needs_root: true, weight: 2 },
+        ];
+      }
       if (op.package.source === "aur") {
         return [{ source: "aur", title: `Updating ${name}`, command: cmd("paru", "-S", "--noconfirm", "--sudo", "pkexec", op.package.id), needs_root: false, weight: 5 }];
       }
@@ -887,13 +921,19 @@ function stepsFor(op: Op): Step[] {
 
 function buildPlan(ops: Op[]): Plan {
   planCounter += 1;
-  // Root steps of one source run together so one pkexec prompt covers them.
-  const steps = ops.flatMap(stepsFor).sort((a, b) => Number(b.needs_root) - Number(a.needs_root));
+  // Steps run in the order the operations were given: a download comes before
+  // the install that needs it. The helper is asked for the password once, so
+  // root steps need no grouping to share the prompt.
+  const steps = ops.flatMap(stepsFor);
   return { id: `plan-${planCounter}`, ops, steps };
 }
 
 export async function plan(ops: Op[]): Promise<PlanPreview> {
   await delay(80);
+  const unknown = ops.find((o) => "package" in o && o.package.id === UNPLANNABLE_ID);
+  if (unknown && "package" in unknown) {
+    throw new Error(`${sourceLabel(unknown.package.source)} has no package called ${UNPLANNABLE_ID}. It may have been renamed or dropped; search for it again.`);
+  }
   const built = buildPlan(ops);
   const notices: string[] = [];
   const partial = ops.some((o) => o.op === "update" && o.package.source === "pacman");
@@ -911,6 +951,8 @@ const target = new EventTarget();
 const EVENT_NAME = "transaction://event";
 const plans = new Map<string, PlanStatus>();
 const cancelled = new Set<string>();
+/** The step each running plan is in, so a cancel can say whether it has to wait for it. */
+const running = new Map<string, Step>();
 
 function emit(event: Event) {
   const status = plans.get(event.plan);
@@ -959,11 +1001,14 @@ function applyOp(op: Op) {
   for (const app of APPS) app.installed = app.editions.some((e) => e.package.installed);
 }
 
-function summary(ops: Op[], ok: boolean): string {
+function summary(ops: Op[], ok: boolean, failed?: Step): string {
   const count = ops.length;
   const kinds = new Set(ops.map((o) => o.op));
   const noun = count === 1 ? "package" : "packages";
-  if (!ok) return "The transaction did not finish. See the log for what pacman said.";
+  if (!ok) {
+    const what = failed ? failed.title.charAt(0).toLowerCase() + failed.title.slice(1) : "the transaction";
+    return `${what.charAt(0).toUpperCase() + what.slice(1)} did not finish. ${failed?.command.program ?? "pacman"} said what went wrong in the log. Nothing was changed.`;
+  }
   if (kinds.size === 1 && kinds.has("install")) return `Installed ${count} ${noun}.`;
   if (kinds.size === 1 && kinds.has("remove")) return `Removed ${count} ${noun}.`;
   if (kinds.has("updateall")) return "Everything is up to date.";
@@ -1015,6 +1060,11 @@ function logLines(step: Step): string[] {
   }
 }
 
+/** Whether this step is the one that fails: its command names the package called fail-please. */
+function fails(step: Step): boolean {
+  return step.command.args.includes(FAIL_ID);
+}
+
 async function run(status: PlanStatus) {
   const { plan: p } = status;
   const id = p.id;
@@ -1024,6 +1074,7 @@ async function run(status: PlanStatus) {
     await delay(300);
     if (!alive()) return;
     emit({ event: "auth_required", plan: id });
+    if (HOLD === "auth") await hold();
     await delay(1400);
   }
   const total = p.steps.reduce((sum, s) => sum + s.weight, 0);
@@ -1031,10 +1082,13 @@ async function run(status: PlanStatus) {
   for (let i = 0; i < p.steps.length; i += 1) {
     if (!alive()) return;
     const step = p.steps[i];
+    running.set(id, step);
     emit({ event: "step_started", plan: id, step: i, title: step.title });
     const lines = logLines(step);
     const known = step.source !== "aur";
-    for (let n = 0; n < lines.length; n += 1) {
+    const failing = fails(step);
+    const stopAt = failing ? Math.min(lines.length, 4) : lines.length;
+    for (let n = 0; n < stopAt; n += 1) {
       await delay(step.source === "aur" ? 260 : 140);
       if (!alive()) return;
       emit({ event: "log", plan: id, step: i, line: lines[n], stderr: false });
@@ -1046,10 +1100,26 @@ async function run(status: PlanStatus) {
         fraction: known ? (done + step.weight * within) / total : null,
         message: known ? null : "makepkg is building. No progress is reported for this step.",
       });
+      // The picture of the panel mid-plan: part way through the first step, or the first unknown one.
+      const midway = n + 1 === Math.ceil(lines.length * 0.6);
+      if (midway && ((HOLD === "" || HOLD === "step") && i === 0)) await hold();
+      if (midway && HOLD === "unknown" && !known) await hold();
+    }
+    if (failing) {
+      await delay(200);
+      if (!alive()) return;
+      const reason = `error: target not found: ${FAIL_ID}`;
+      emit({ event: "log", plan: id, step: i, line: reason, stderr: true });
+      emit({ event: "log", plan: id, step: i, line: "error: failed to prepare transaction (target not found)", stderr: true });
+      emit({ event: "step_finished", plan: id, step: i, ok: false, message: `${step.command.program} could not find a package called ${FAIL_ID}.` });
+      running.delete(id);
+      emit({ event: "plan_finished", plan: id, ok: false, message: summary(p.ops, false, step) });
+      return;
     }
     done += step.weight;
     emit({ event: "step_finished", plan: id, step: i, ok: true, message: null });
   }
+  running.delete(id);
   if (!alive()) return;
   for (const op of p.ops) applyOp(op);
   emit({ event: "plan_finished", plan: id, ok: true, message: summary(p.ops, true) });
@@ -1077,6 +1147,14 @@ export async function cancel_plan(id: string): Promise<void> {
   if (!status) throw new Error(`There is no running transaction called ${id}.`);
   if (status.state === "done" || status.state === "failed" || status.state === "cancelled") return;
   cancelled.add(id);
+  const step = running.get(id);
+  if (step?.needs_root) {
+    // A root step is not killed half way: the helper lets it finish, then stops.
+    const index = status.plan.steps.indexOf(step);
+    emit({ event: "progress", plan: id, step: index, fraction: null, message: `${step.command.program} is finishing the current step first. A root step is never stopped half way.` });
+    await delay(1200);
+  }
+  running.delete(id);
   emit({ event: "plan_finished", plan: id, ok: false, message: "Cancelled. Nothing was changed." });
 }
 
@@ -1230,15 +1308,39 @@ const SELF_UPDATE: SelfUpdate = {
   },
 };
 
+const SELF_ASSET = "bap-store-bin-0.2.0-1-x86_64.pkg.tar.zst";
+
+/** The release check as the switch asks: the AUR remedy by default, an asset install, or nothing new. */
+function selfUpdate(): SelfUpdate {
+  switch (PARAMS.get("selfupdate")) {
+    case "asset":
+      return {
+        ...SELF_UPDATE,
+        installation: { kind: "pacman_file", label: "Installed from the release package with pacman -U" },
+        remedy: {
+          kind: "install_asset",
+          sentence: `This copy was installed from the release package. BAP Store downloads ${SELF_ASSET} and installs it with pacman, asking for your password once.`,
+          asset: SELF_ASSET,
+          url: `https://github.com/spillebulle/bap-store/releases/download/v0.2.0/${SELF_ASSET}`,
+        },
+      };
+    case "none":
+      return { ...SELF_UPDATE, latest: null, remedy: null };
+    default:
+      return SELF_UPDATE;
+  }
+}
+
 export async function self_update_check(force: boolean): Promise<SelfUpdate> {
   await delay(force ? 900 : 300);
-  return SELF_UPDATE;
+  return selfUpdate();
 }
 
 export async function self_update_apply(): Promise<PlanStatus> {
   await delay(60);
-  if (SELF_UPDATE.remedy?.kind !== "install_asset") {
+  const remedy = selfUpdate().remedy;
+  if (remedy?.kind !== "install_asset" && remedy?.kind !== "replace_file") {
     throw new Error("This copy of BAP Store updates through the Updates page. Tick bap-store-bin there.");
   }
-  return run_plan([{ op: "update", package: { source: "aur", id: "bap-store-bin" } }]);
+  return run_plan([{ op: "update", package: { source: "github", id: "spillebulle/bap-store" } }]);
 }

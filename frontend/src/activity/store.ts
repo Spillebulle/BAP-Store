@@ -1,22 +1,30 @@
 // Every transaction the page has seen, by plan id, with its events appended
 // as they arrive. One subscription to `transaction://event` feeds it; the
-// panel and the status bar read from it. A plan is kept after it finishes so
-// its log can still be read, until the user dismisses it.
+// panel and the status bar read from it. A plan that finished well leaves on
+// its own after six seconds; one that failed stays until it is dismissed, so
+// the log can still be read.
 
 import { create } from "zustand";
 import { onTransactionEvent } from "../api";
 import { toast } from "../components/toastStore";
-import type { Event, PlanStatus } from "../types";
+import type { Event, PlanState, PlanStatus } from "../types";
+
+/** How long a finished plan's panel stays before it dismisses itself (the toast's own lifetime). */
+const LINGER_MS = 6000;
 
 interface ActivityState {
   plans: Record<string, PlanStatus>;
   /** Plan ids, oldest first. */
   order: string[];
+  /** Plans the user asked to cancel and that have not yet reported the end. */
+  cancelling: Record<string, true>;
   showLog: boolean;
   toggleLog: () => void;
   /** What run_plan returned: the plan's steps, before or after its first event. */
   track: (status: PlanStatus) => void;
   apply: (event: Event) => void;
+  /** The user asked for a cancel; the header says so until the runner reports the end. */
+  markCancelling: (id: string) => void;
   dismiss: (id: string) => void;
 }
 
@@ -30,9 +38,27 @@ function stub(id: string): PlanStatus {
   };
 }
 
+const LIVE: ReadonlySet<PlanState> = new Set<PlanState>(["pending", "authorising", "running"]);
+
+export function isLive(state: PlanState): boolean {
+  return LIVE.has(state);
+}
+
+/** Listeners told when a plan ends well, so the shell can refresh what it shows (the updates count). */
+const finished: Array<(status: PlanStatus) => void> = [];
+
+export function onPlanDone(listener: (status: PlanStatus) => void): () => void {
+  finished.push(listener);
+  return () => {
+    const at = finished.indexOf(listener);
+    if (at >= 0) finished.splice(at, 1);
+  };
+}
+
 export const useActivity = create<ActivityState>((set, get) => ({
   plans: {},
   order: [],
+  cancelling: {},
   showLog: false,
   toggleLog: () => set((s) => ({ showLog: !s.showLog })),
 
@@ -49,9 +75,10 @@ export const useActivity = create<ActivityState>((set, get) => ({
   },
 
   apply: (event) => {
-    const { plans, order } = get();
+    const { plans, order, cancelling } = get();
     const current = plans[event.plan] ?? stub(event.plan);
     const next: PlanStatus = { ...current, events: [...current.events, event] };
+    let ended = false;
     switch (event.event) {
       case "auth_required":
         next.state = "authorising";
@@ -63,36 +90,59 @@ export const useActivity = create<ActivityState>((set, get) => ({
       case "step_finished":
         if (next.state !== "authorising" || event.event === "step_started") next.state = "running";
         break;
-      case "plan_finished":
-        next.state = event.ok ? "done" : event.message.startsWith("Cancelled") ? "cancelled" : "failed";
-        toast(event.message, event.ok ? "good" : "error");
+      case "plan_finished": {
+        const wasCancelled = cancelling[event.plan] !== undefined || event.message.startsWith("Cancelled");
+        next.state = event.ok ? "done" : wasCancelled ? "cancelled" : "failed";
+        ended = true;
         break;
+      }
     }
+    const rest = { ...cancelling };
+    if (ended) delete rest[event.plan];
     set({
       plans: { ...plans, [event.plan]: next },
       order: plans[event.plan] ? order : [...order, event.plan],
+      cancelling: rest,
     });
+    if (ended && event.event === "plan_finished") {
+      // A failure stays on screen until it is looked at; anything else leaves with its toast.
+      toast(event.message, next.state === "done" ? "good" : next.state === "failed" ? "error" : "neutral");
+      if (next.state !== "failed") {
+        window.setTimeout(() => {
+          const now = get().plans[event.plan];
+          if (now && now.state === next.state) get().dismiss(event.plan);
+        }, LINGER_MS);
+      }
+      if (next.state === "done") for (const listener of [...finished]) listener(next);
+    }
   },
 
+  markCancelling: (id) => set((s) => ({ cancelling: { ...s.cancelling, [id]: true } })),
+
   dismiss: (id) => {
-    const { plans, order } = get();
+    const { plans, order, cancelling } = get();
     const rest = { ...plans };
     delete rest[id];
-    set({ plans: rest, order: order.filter((o) => o !== id) });
+    const stillCancelling = { ...cancelling };
+    delete stillCancelling[id];
+    set({ plans: rest, order: order.filter((o) => o !== id), cancelling: stillCancelling });
   },
 }));
 
-const LIVE = new Set(["pending", "authorising", "running"]);
+/** Plans still running, newest last. */
+export function selectLivePlans(state: ActivityState): PlanStatus[] {
+  return state.order.map((id) => state.plans[id]).filter((p): p is PlanStatus => p !== undefined && isLive(p.state));
+}
 
-/** The plan the panel shows: the newest one still running, else the newest failure awaiting a look. */
+/** The plan the panel shows: the newest one still running, else the newest one that ended and has not been dismissed. */
 export function selectActivePlan(state: ActivityState): PlanStatus | null {
   for (let i = state.order.length - 1; i >= 0; i -= 1) {
     const p = state.plans[state.order[i]];
-    if (p && LIVE.has(p.state)) return p;
+    if (p && isLive(p.state)) return p;
   }
   for (let i = state.order.length - 1; i >= 0; i -= 1) {
     const p = state.plans[state.order[i]];
-    if (p && p.state === "failed") return p;
+    if (p) return p;
   }
   return null;
 }
