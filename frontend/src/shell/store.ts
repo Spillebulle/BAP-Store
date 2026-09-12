@@ -1,0 +1,123 @@
+// The shell's state: which view is in front and how we got there, the global
+// status line, and what every page needs from the machine (system, sources,
+// settings). Routing is view state rather than URLs because a window has no
+// address bar and no history to share; a small stack gives Back its meaning.
+
+import { create } from "zustand";
+import * as api from "../api";
+import type { Settings, SourceStatus, SystemInfo } from "../types";
+
+export type View = "search" | "app" | "installed" | "updates" | "drivers" | "settings";
+
+export interface Location {
+  view: View;
+  /** The App key when `view` is "app". */
+  appKey?: string;
+}
+
+const VIEWS: View[] = ["search", "app", "installed", "updates", "drivers", "settings"];
+const HISTORY_LIMIT = 50;
+
+/** Only a browser has a query string; the window never does. Screenshots and the dev server use ?view=. */
+function initialLocation(): Location {
+  if (api.inTauri) return { view: "search" };
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get("view");
+  const appKey = params.get("app") ?? undefined;
+  if (view && VIEWS.includes(view as View)) return { view: view as View, appKey };
+  return { view: "search" };
+}
+
+interface ShellState extends Location {
+  history: Location[];
+  go: (view: View, appKey?: string) => void;
+  openApp: (appKey: string) => void;
+  back: () => void;
+
+  /** The top bar's global status: "Checking for updates…", or nothing. */
+  status: string | null;
+  setStatus: (status: string | null) => void;
+
+  system: SystemInfo | null;
+  sources: SourceStatus[];
+  settings: Settings | null;
+  /** What went wrong loading the above, as a sentence for the page. */
+  loadError: string | null;
+  updateCount: number;
+  setUpdateCount: (count: number) => void;
+
+  load: () => Promise<void>;
+  /** Settings apply live: the patch is saved and the store takes what came back. */
+  saveSettings: (patch: Partial<Settings>) => Promise<void>;
+}
+
+function message(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+export const useShell = create<ShellState>((set, get) => ({
+  ...initialLocation(),
+  history: [],
+
+  go: (view, appKey) => {
+    const { view: here, appKey: hereKey, history } = get();
+    if (view === here && appKey === hereKey) return;
+    set({
+      view,
+      appKey,
+      history: [...history.slice(-(HISTORY_LIMIT - 1)), { view: here, appKey: hereKey }],
+    });
+  },
+  openApp: (appKey) => get().go("app", appKey),
+  back: () => {
+    const { history } = get();
+    const previous = history[history.length - 1];
+    if (!previous) {
+      set({ view: "search", appKey: undefined });
+      return;
+    }
+    set({ view: previous.view, appKey: previous.appKey, history: history.slice(0, -1) });
+  },
+
+  status: null,
+  setStatus: (status) => set({ status }),
+
+  system: null,
+  sources: [],
+  settings: null,
+  loadError: null,
+  updateCount: 0,
+  setUpdateCount: (updateCount) => set({ updateCount }),
+
+  load: async () => {
+    try {
+      const [system, sources, settings] = await Promise.all([api.system_info(), api.sources(), api.settings_get()]);
+      set({ system, sources, settings, loadError: null });
+    } catch (e) {
+      set({ loadError: message(e) });
+    }
+  },
+
+  saveSettings: async (patch) => {
+    const current = get().settings;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    // Optimistic: the control moves at once; the saved copy replaces it when it lands.
+    set({ settings: next });
+    try {
+      set({ settings: await api.settings_set(next) });
+    } catch (e) {
+      set({ settings: current, loadError: message(e) });
+      throw e;
+    }
+  },
+}));
+
+/** The nav row that owns the current view: an application page belongs to the page it was opened from. */
+export function selectNav(state: ShellState): View {
+  if (state.view !== "app") return state.view;
+  for (let i = state.history.length - 1; i >= 0; i -= 1) {
+    if (state.history[i].view !== "app") return state.history[i].view;
+  }
+  return "search";
+}
