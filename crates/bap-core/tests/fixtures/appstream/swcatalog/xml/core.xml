@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<components version="1.0" origin="archlinux-arch-core" time="2026-08-21T22:07:54Z">
+<component type="desktop-application">
+  <id>links.desktop</id>
+  <name>Links</name>
+  <summary>Minimal web browser in graphical mode</summary>
+  <description>
+    <p>A text WWW browser, similar to Lynx</p>
+  </description>
+  <pkgname>links</pkgname>
+  <launchable type="desktop-id">links.desktop</launchable>
+  <icon type="cached" width="64" height="64">links_links-48x48.png</icon>
+  <icon type="stock">links-48x48</icon>
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+  </categories>
+</component>
+</components>
