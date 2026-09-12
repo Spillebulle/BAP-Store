@@ -63,7 +63,8 @@ impl Asset {
 pub struct Release {
     pub version: Version,
     pub tag: String,
-    /// The release's title, which the workflow sets to "BAP Store <v>".
+    /// The release's title. The workflow sets it to the bare version; a
+    /// release with no title at all is called "BAP Store <v>" here.
     pub name: String,
     /// `CHANGELOG.md`'s section for this version, which is what the workflow
     /// publishes as the release body. Markdown.
@@ -138,30 +139,55 @@ pub fn parse(json: &str) -> Result<Option<Release>> {
     }))
 }
 
-/// Ask GitHub for the newest release, through the six-hour disk cache.
+/// Ask GitHub for the newest release, through the six-hour disk cache, or
+/// past it when `fresh` is set: a check the user asked for by name goes to
+/// GitHub whatever the cache holds, and stores what it gets.
 ///
 /// A 404 is a repository with no release yet, which is `Ok(None)`: the page
 /// says so rather than showing an error for a state that is expected before
-/// the first release. Every other failure is an error in a sentence that
-/// names GitHub and says to try again.
+/// the first release. A 403 or 429 is GitHub's unauthenticated limit for
+/// this address, sixty requests an hour, and the sentence says so and when
+/// to try again. Every other failure is an error in a sentence that names
+/// GitHub and says to try again.
 ///
 /// The cache is `Client::get_text_cached`, which carries no headers and no
-/// status code, so the 404 is recognised from the sentence `http.rs` writes
-/// for it. A typed status would be better; the alternative, a second cache
-/// in this module over `Client::raw()`, would duplicate the one that exists.
-pub fn latest(client: &Client) -> Result<Option<Release>> {
-    match client.get_text_cached(API_LATEST, CACHE_FOR) {
+/// status code, so the statuses are recognised from the sentence `http.rs`
+/// writes for them. A typed status would be better; the alternative, a
+/// second cache in this module over `Client::raw()`, would duplicate the one
+/// that exists.
+pub fn latest(client: &Client, fresh: bool) -> Result<Option<Release>> {
+    let answer = if fresh {
+        client.get_text_fresh(API_LATEST)
+    } else {
+        client.get_text_cached(API_LATEST, CACHE_FOR)
+    };
+    match answer {
         Ok(text) => parse(&text),
         Err(e) if is_not_found(&e) => Ok(None),
-        Err(e) => Err(Error::new(format!(
-            "Could not check GitHub for a newer BAP Store: {}. Try again later.",
-            e.message
-        ))),
+        Err(e) => Err(describe_failure(&e)),
     }
 }
 
 fn is_not_found(e: &Error) -> bool {
     e.message.contains("answered 404")
+}
+
+fn is_rate_limited(e: &Error) -> bool {
+    e.message.contains("answered 403") || e.message.contains("answered 429")
+}
+
+/// The sentence for a request that failed for a reason other than "no
+/// release yet".
+fn describe_failure(e: &Error) -> Error {
+    if is_rate_limited(e) {
+        return Error::new(
+            "GitHub's request limit for this address is used up, so a newer BAP Store could not be checked for. Try again in an hour.",
+        );
+    }
+    Error::new(format!(
+        "Could not check GitHub for a newer BAP Store: {}. Try again later.",
+        e.message
+    ))
 }
 
 /// `2026-09-01T12:34:56Z` as Unix seconds. GitHub's timestamps are always
@@ -271,5 +297,29 @@ mod tests {
             "api.github.com answered 403 Forbidden"
         )));
         assert!(!is_not_found(&Error::new("could not reach api.github.com")));
+    }
+
+    #[test]
+    fn a_403_or_429_names_the_request_limit_and_when_to_try_again() {
+        for status in ["403 Forbidden", "429 Too Many Requests"] {
+            let e = describe_failure(&Error::new(format!("api.github.com answered {status}")));
+            assert_eq!(
+                e.message,
+                "GitHub's request limit for this address is used up, so a newer BAP Store could not be checked for. Try again in an hour."
+            );
+        }
+        // Anything else keeps the reason and says to try again.
+        let e = describe_failure(&Error::new("could not reach api.github.com"));
+        assert_eq!(
+            e.message,
+            "Could not check GitHub for a newer BAP Store: could not reach api.github.com. Try again later."
+        );
+        assert!(
+            !describe_failure(&Error::new(
+                "api.github.com answered 500 Internal Server Error"
+            ))
+            .message
+            .contains("limit")
+        );
     }
 }

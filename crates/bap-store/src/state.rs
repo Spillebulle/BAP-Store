@@ -6,7 +6,7 @@
 //! one. That is what lets a worker thread outlive the command that started
 //! it without borrowing anything from Tauri.
 
-use crate::commands::SelfUpdate;
+use crate::commands::{SelfUpdate, selfupdate_adapter};
 use crate::settings::Settings;
 use bap_core::transaction::CancelToken;
 use bap_core::updates::UpdateList;
@@ -14,8 +14,13 @@ use bap_core::{Event, Plan, Store};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
+
+/// What answers a self-update check: `selfupdate_adapter::check` for the
+/// window, a table for the tests. The argument is `fresh`.
+pub type SelfUpdateChecker = Arc<dyn Fn(bool) -> Result<SelfUpdate, String> + Send + Sync>;
 
 /// How many finished plans the activity list remembers.
 pub const KEPT_PLANS: usize = 20;
@@ -66,7 +71,13 @@ struct Inner {
     /// One flag per plan id, set by `cancel_plan`, read by the runner.
     cancels: Mutex<HashMap<String, CancelToken>>,
     updates: Mutex<Option<(Instant, UpdateList)>>,
+    /// Whether the sources have been asked to refresh their indexes this
+    /// session. The first update check does it; a transaction empties the
+    /// update cache but does not unset this, so the minutes-long refresh
+    /// runs once, not after every install.
+    updates_refreshed: AtomicBool,
     self_update: Mutex<Option<(Instant, SelfUpdate)>>,
+    self_update_checker: SelfUpdateChecker,
 }
 
 impl AppState {
@@ -77,18 +88,50 @@ impl AppState {
 
     /// The state with its settings file at `settings_path`.
     pub fn at(settings_path: PathBuf) -> AppState {
+        AppState::build(settings_path, None, Arc::new(selfupdate_adapter::check))
+    }
+
+    /// The state with the store already built, so a test runs against
+    /// sources it chose rather than the machine's.
+    pub fn with_store(settings_path: PathBuf, store: Store) -> AppState {
+        AppState::build(
+            settings_path,
+            Some(store),
+            Arc::new(selfupdate_adapter::check),
+        )
+    }
+
+    /// [`AppState::with_store`] with the self-update check answered by
+    /// `checker` instead of GitHub.
+    pub fn with_store_and_checker(
+        settings_path: PathBuf,
+        store: Store,
+        checker: SelfUpdateChecker,
+    ) -> AppState {
+        AppState::build(settings_path, Some(store), checker)
+    }
+
+    fn build(settings_path: PathBuf, store: Option<Store>, checker: SelfUpdateChecker) -> AppState {
         let settings = Settings::load_from(&settings_path);
         AppState {
             inner: Arc::new(Inner {
-                store: RwLock::new(None),
+                store: RwLock::new(store.map(Arc::new)),
                 settings: Mutex::new(settings),
                 settings_path,
                 plans: Mutex::new(Vec::new()),
                 cancels: Mutex::new(HashMap::new()),
                 updates: Mutex::new(None),
+                updates_refreshed: AtomicBool::new(false),
                 self_update: Mutex::new(None),
+                self_update_checker: checker,
             }),
         }
+    }
+
+    /// Ask whether a newer BAP Store exists, through whatever this state
+    /// was built to ask.
+    pub fn check_self_update(&self, fresh: bool) -> Result<SelfUpdate, String> {
+        (self.inner.self_update_checker)(fresh)
     }
 
     /// The store, detected on first use. Detection happens under the write
@@ -178,6 +221,16 @@ impl AppState {
 
     pub fn invalidate_updates(&self) {
         *self.inner.updates.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// Whether an update check this session has already asked the sources
+    /// to refresh their indexes.
+    pub fn updates_refreshed_once(&self) -> bool {
+        self.inner.updates_refreshed.load(Ordering::Relaxed)
+    }
+
+    pub fn mark_updates_refreshed(&self) {
+        self.inner.updates_refreshed.store(true, Ordering::Relaxed);
     }
 
     /// What a finished transaction invalidates: the update list and the
@@ -513,5 +566,28 @@ mod tests {
         assert!(!state.has_store());
         let c = state.store();
         assert!(!Arc::ptr_eq(&a, &c), "detected again");
+    }
+
+    #[test]
+    fn a_given_store_is_used_until_a_transaction_forgets_it() {
+        let dir =
+            std::env::temp_dir().join(format!("bap-store-state-{}-given", std::process::id()));
+        let state = AppState::with_store(
+            dir.join(crate::settings::FILE_NAME),
+            Store {
+                system: bap_core::system::from_os_release(""),
+                sources: Vec::new(),
+            },
+        );
+        assert!(state.has_store(), "no detection needed");
+        assert!(state.store().sources.is_empty());
+        assert!(!state.updates_refreshed_once());
+        state.mark_updates_refreshed();
+        state.invalidate_after_transaction();
+        assert!(!state.has_store());
+        assert!(
+            state.updates_refreshed_once(),
+            "a transaction does not ask for the refresh again"
+        );
     }
 }

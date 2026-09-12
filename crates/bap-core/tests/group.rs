@@ -5,7 +5,7 @@
 //! Flathub and the Snap Store gave on 2026-09-12; pacman's summary is its
 //! package description, the others carry the AppStream one.
 
-use bap_core::group::{group, normalise_key};
+use bap_core::group::{group, group_with, normalise_key};
 use bap_core::model::*;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -570,40 +570,16 @@ fn a_package_without_an_id_cannot_bridge_two_different_ids() {
 fn false_friends_never_join_even_with_an_app_on_one_side() {
     let pairs = vec![
         (
-            with_appstream(
-                app(
-                    SourceKind::Flatpak,
-                    "flathub/app/org.fcitx.Fcitx5/x86_64/stable",
-                    "Fcitx 5",
-                ),
-                "org.fcitx.Fcitx5",
-            ),
-            pkg(SourceKind::Pacman, "fcitx5-qt", "fcitx5-qt"),
+            app(SourceKind::Pacman, "wl-clipboard", "wl-clipboard"),
+            pkg(SourceKind::Aur, "wl-clipboard-x11", "wl-clipboard-x11"),
         ),
         (
-            app(SourceKind::Pacman, "fcitx5", "Fcitx 5"),
-            pkg(SourceKind::Aur, "fcitx5-gtk", "fcitx5-gtk"),
-        ),
-        (
-            pkg(SourceKind::Pacman, "dash", "dash"),
-            app(SourceKind::Aur, "dash-qt", "dash-qt"),
-        ),
-        (
-            pkg(SourceKind::Pacman, "mpc", "mpc"),
-            app(SourceKind::Aur, "mpc-qt", "mpc-qt"),
-        ),
-        (
-            app(SourceKind::Pacman, "discord", "Discord"),
-            pkg(SourceKind::Aur, "discord-qt", "discord-qt"),
+            pkg(SourceKind::Pacman, "libxkbcommon", "libxkbcommon"),
+            app(SourceKind::Aur, "libxkbcommon-x11", "libxkbcommon-x11"),
         ),
         (
             app(SourceKind::Pacman, "ruby", "ruby"),
             pkg(SourceKind::Aur, "ruby-git", "ruby-git"),
-        ),
-        // Two different false friends of one base are not each other either.
-        (
-            pkg(SourceKind::Pacman, "fcitx5-qt", "fcitx5-qt"),
-            app(SourceKind::Aur, "fcitx5-gtk", "fcitx5-gtk"),
         ),
     ];
     for (a, b) in pairs {
@@ -624,20 +600,205 @@ fn false_friends_never_join_even_with_an_app_on_one_side() {
 fn a_false_friend_still_joins_its_own_editions() {
     let apps = group(
         vec![
-            app(SourceKind::Pacman, "fcitx5-qt", "fcitx5-qt"),
-            app(SourceKind::Aur, "fcitx5-qt-git", "fcitx5-qt-git"),
-            app(SourceKind::Aur, "fcitx5-git", "fcitx5-git"),
+            app(SourceKind::Pacman, "wl-clipboard-x11", "wl-clipboard-x11"),
+            app(
+                SourceKind::Aur,
+                "wl-clipboard-x11-git",
+                "wl-clipboard-x11-git",
+            ),
+            app(SourceKind::Aur, "wl-clipboard-git", "wl-clipboard-git"),
         ],
         "",
     );
     assert_eq!(apps.len(), 2, "{:?}", names(&apps));
     assert_eq!(
-        editions(by_key(&apps, "name:fcitx5qt")),
+        editions(by_key(&apps, "name:wlclipboardx11")),
         vec![
             (SourceKind::Pacman, MatchedBy::Name, 0.8),
             (SourceKind::Aur, MatchedBy::Name, 0.8)
         ]
     );
+}
+
+/// `-qt` and `-gtk` are not edition suffixes: on real data they name a
+/// front-end, a binding or a module far more often than a build of the same
+/// program, and every such name used to need a false-friend entry.
+#[test]
+fn toolkit_suffixes_name_different_programs_not_editions() {
+    // Live search "neovim" on 2026-09-13: three programs, three rows.
+    let apps = group(
+        vec![
+            with_summary(
+                with_appstream(
+                    app(SourceKind::Pacman, "neovim", "Neovim"),
+                    "io.neovim.nvim",
+                ),
+                "Fork of Vim aiming to improve user experience, plugins, and GUIs",
+            ),
+            with_summary(
+                with_appstream(app(SourceKind::Pacman, "neovim-qt", "Neovim-Qt"), "nvim-qt"),
+                "Qt GUI for Neovim text editor",
+            ),
+            with_summary(
+                pkg(SourceKind::Aur, "neovim-gtk", "neovim-gtk"),
+                "GTK UI for Neovim written in Rust",
+            ),
+        ],
+        "neovim",
+    );
+    assert_eq!(names(&apps), vec!["Neovim", "Neovim-Qt", "neovim-gtk"]);
+    // Input method modules stay apart from the input method too, with no
+    // list entry needed.
+    let apps = group(
+        vec![
+            app(SourceKind::Pacman, "fcitx5", "Fcitx 5"),
+            pkg(SourceKind::Aur, "fcitx5-qt", "fcitx5-qt"),
+            pkg(SourceKind::Aur, "fcitx5-gtk", "fcitx5-gtk"),
+        ],
+        "",
+    );
+    assert_eq!(apps.len(), 3, "{:?}", names(&apps));
+    // The real editions the suffix once joined still meet, through the
+    // catalogue's id rather than the name.
+    let apps = group(
+        vec![
+            with_appstream(
+                app(SourceKind::Pacman, "wireshark-qt", "Wireshark"),
+                "org.wireshark.Wireshark",
+            ),
+            with_appstream(
+                app(
+                    SourceKind::Flatpak,
+                    "flathub/app/org.wireshark.Wireshark/x86_64/stable",
+                    "Wireshark",
+                ),
+                "org.wireshark.Wireshark",
+            ),
+            pkg(SourceKind::Aur, "wireshark-qt-git", "wireshark-qt-git"),
+        ],
+        "wireshark",
+    );
+    assert_eq!(apps.len(), 1, "{:?}", names(&apps));
+    assert_eq!(
+        editions(&apps[0]),
+        vec![
+            (SourceKind::Pacman, MatchedBy::AppStream, 1.0),
+            (SourceKind::Flatpak, MatchedBy::AppStream, 1.0),
+            (SourceKind::Aur, MatchedBy::Name, 0.8)
+        ]
+    );
+}
+
+/// `-beta` is a release channel, like `-canary`: two builds of one beta
+/// channel belong together and apart from the stable row.
+#[test]
+fn a_beta_channel_is_its_own_row_and_a_git_build_is_not() {
+    let apps = group(
+        vec![
+            with_appstream(
+                app(SourceKind::Pacman, "signal-desktop", "Signal"),
+                "org.signal.Signal",
+            ),
+            pkg(
+                SourceKind::Aur,
+                "signal-desktop-beta",
+                "signal-desktop-beta",
+            ),
+            pkg(SourceKind::Aur, "signal-desktop-git", "signal-desktop-git"),
+        ],
+        "signal",
+    );
+    assert_eq!(apps.len(), 2, "{:?}", names(&apps));
+    assert_eq!(
+        editions(by_key(&apps, "org.signal.Signal")),
+        vec![
+            (SourceKind::Pacman, MatchedBy::Name, 0.8),
+            (SourceKind::Aur, MatchedBy::Name, 0.8)
+        ],
+        "the git build joins, the beta channel does not"
+    );
+    assert_eq!(
+        by_key(&apps, "name:signaldesktopbeta").editions[0].matched_by,
+        MatchedBy::Alone
+    );
+}
+
+// Rule 4: one source, two ids, two applications, whatever bridges them.
+
+/// Live search "element" on 2026-09-13: the Arch catalogue gives `element`
+/// (an audio plugin host) the desktop-file id `element` and
+/// `element-desktop` (the Matrix client) `io.element.Element`; the AUR's
+/// `element-git` borrows the first id and `element-desktop-git` the second,
+/// and both answer to the name key `element`. Two rows, not one.
+#[test]
+fn one_source_giving_two_ids_is_two_rows_even_through_an_aur_bridge() {
+    let packages = vec![
+        with_summary(
+            with_appstream(app(SourceKind::Pacman, "element", "Element"), "element"),
+            "Audio Plugin Host and Modular Instrument",
+        ),
+        with_summary(
+            with_appstream(
+                app(SourceKind::Pacman, "element-desktop", "Element"),
+                "io.element.Element",
+            ),
+            "Glossy Matrix collaboration client for desktop",
+        ),
+        with_summary(
+            with_appstream(
+                app(SourceKind::Aur, "element-git", "element-git"),
+                "element",
+            ),
+            "Audio Plugin Host and Modular Instrument (git version)",
+        ),
+        with_summary(
+            with_appstream(
+                app(
+                    SourceKind::Aur,
+                    "element-desktop-git",
+                    "element-desktop-git",
+                ),
+                "io.element.Element",
+            ),
+            "Glossy Matrix collaboration client for desktop (git version)",
+        ),
+    ];
+    let apps = group(packages, "element");
+    assert_eq!(apps.len(), 2, "{:?}", names(&apps));
+    let matrix = by_key(&apps, "io.element.Element");
+    assert_eq!(
+        editions(matrix),
+        vec![
+            (SourceKind::Pacman, MatchedBy::AppStream, 1.0),
+            (SourceKind::Aur, MatchedBy::AppStream, 1.0)
+        ]
+    );
+    assert_eq!(
+        matrix.summary.as_deref(),
+        Some("Glossy Matrix collaboration client for desktop")
+    );
+    let host = by_key(&apps, "element");
+    assert_eq!(
+        editions(host),
+        vec![
+            (SourceKind::Pacman, MatchedBy::AppStream, 1.0),
+            (SourceKind::Aur, MatchedBy::AppStream, 1.0)
+        ]
+    );
+    assert_eq!(
+        host.summary.as_deref(),
+        Some("Audio Plugin Host and Modular Instrument")
+    );
+    // The rule is per source: another source's different id for the same
+    // name is the ordinary name match it always was.
+    let apps = group(
+        vec![
+            with_appstream(app(SourceKind::Pacman, "foo", "Foo"), "foo"),
+            with_appstream(app(SourceKind::Snap, "foo", "Foo"), "org.example.Foo"),
+        ],
+        "foo",
+    );
+    assert_eq!(apps.len(), 1, "{:?}", names(&apps));
 }
 
 #[test]
@@ -915,6 +1076,95 @@ fn app_prefers_metadata_by_source_and_the_longest_summary() {
     assert_eq!(apps[0].summary.as_deref(), Some("Bar (stable)"));
 }
 
+/// An AUR pkgdesc is longer than a catalogue summary and describes the
+/// build, so when a catalogue describes any edition only those compete.
+#[test]
+fn app_summary_comes_from_a_catalogue_edition_when_there_is_one() {
+    // Live search "firefox" on 2026-09-13, reduced.
+    let apps = group(
+        vec![
+            with_summary(
+                with_appstream(
+                    app(SourceKind::Pacman, "firefox", "Firefox"),
+                    "org.mozilla.firefox",
+                ),
+                "Fast, Private & Safe Web Browser",
+            ),
+            with_summary(
+                with_appstream(
+                    app(SourceKind::Aur, "firefox-bin", "firefox-bin"),
+                    "org.mozilla.firefox",
+                ),
+                "Standalone web browser from mozilla.org - Static binaries from upstream",
+            ),
+            with_summary(
+                app(SourceKind::Github, "mozilla/firefox", "firefox"),
+                "The Firefox web browser, mirrored on GitHub with a long description",
+            ),
+        ],
+        "firefox",
+    );
+    assert_eq!(apps.len(), 1, "{:?}", names(&apps));
+    assert_eq!(
+        apps[0].summary.as_deref(),
+        Some("Fast, Private & Safe Web Browser"),
+        "the AUR and GitHub summaries do not compete with the catalogue's"
+    );
+    // Two catalogue editions still compete on length: Flathub's summary
+    // beats pacman's package description.
+    let apps = group(
+        vec![
+            with_summary(
+                with_appstream(app(SourceKind::Pacman, "vlc", "VLC"), "org.videolan.vlc"),
+                "Multi-platform MPEG, VCD/DVD, and DivX player",
+            ),
+            with_summary(
+                app(
+                    SourceKind::Flatpak,
+                    "flathub/app/org.videolan.VLC/x86_64/stable",
+                    "VLC",
+                ),
+                "VLC media player, the open-source multimedia player",
+            ),
+            with_summary(
+                with_appstream(
+                    app(SourceKind::Aur, "vlc-git", "vlc-git"),
+                    "org.videolan.vlc",
+                ),
+                "Multi-platform MPEG, VCD/DVD, and DivX player (monolithic) (git version)",
+            ),
+        ],
+        "vlc",
+    );
+    assert_eq!(
+        apps[0].summary.as_deref(),
+        Some("VLC media player, the open-source multimedia player")
+    );
+    // With no catalogue edition at all, the longest summary still wins.
+    let apps = group(
+        vec![
+            with_summary(
+                pkg(SourceKind::Pacman, "yay", "yay"),
+                "Pacman wrapper and AUR helper written in go",
+            ),
+            with_summary(
+                pkg(SourceKind::Aur, "yay-bin", "yay-bin"),
+                "Yet another yogurt. Pacman wrapper and AUR helper written in go. Pre-compiled.",
+            ),
+        ],
+        "yay",
+    );
+    assert_eq!(apps.len(), 1, "{:?}", names(&apps));
+    assert!(
+        apps[0]
+            .summary
+            .as_deref()
+            .is_some_and(|s| s.starts_with("Yet another")),
+        "{:?}",
+        apps[0].summary
+    );
+}
+
 #[test]
 fn app_aggregates_installed_updated_and_popularity() {
     let mut a = app(SourceKind::Pacman, "foo", "Foo");
@@ -1136,6 +1386,51 @@ fn sort_is_relevance_then_app_first_then_name() {
     assert_eq!(
         names(&apps),
         vec!["steam-acf", "steam-tui", "steam-devices", "steamcmd"]
+    );
+}
+
+/// Live search "docker" on 2026-09-13: the catalogue names the Cockpit
+/// add-on `cockpit-docker` "Docker", so it ties with pacman's `docker` on
+/// relevance and kind. The package the source itself calls by the query
+/// comes first, in both sorts.
+#[test]
+fn a_package_the_source_names_after_the_query_wins_a_tie() {
+    let packages = || {
+        vec![
+            with_summary(
+                with_appstream(
+                    pkg(SourceKind::Pacman, "cockpit-docker", "Docker"),
+                    "me.chabad360.docker",
+                ),
+                "Cockpit UI for docker containers",
+            ),
+            with_summary(
+                pkg(SourceKind::Pacman, "docker", "docker"),
+                "Pack, ship and run any application as a lightweight container",
+            ),
+        ]
+    };
+    let apps = group(packages(), "docker");
+    assert_eq!(names(&apps), vec!["docker", "Docker"]);
+    assert!(close(apps[0].relevance, apps[1].relevance), "a tie");
+    // The tie-break comes after relevance and kind: an application still
+    // outranks a package the source names after the query.
+    let mut with_app = packages();
+    with_app[0].kind = PackageKind::App;
+    let apps = group(with_app, "docker");
+    assert_eq!(names(&apps), vec!["Docker", "docker"]);
+    // The split path sorts the rows again, by the same rule.
+    let apps = group_with(packages(), "docker", &["pacman:cockpit-docker".to_string()]);
+    assert_eq!(names(&apps), vec!["docker", "Docker"]);
+    let apps = group_with(
+        packages(),
+        "  Docker ",
+        &["pacman:cockpit-docker".to_string()],
+    );
+    assert_eq!(
+        names(&apps),
+        vec!["docker", "Docker"],
+        "the query is trimmed and lower-cased"
     );
 }
 

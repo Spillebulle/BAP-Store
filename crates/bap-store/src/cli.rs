@@ -247,10 +247,18 @@ fn editions(app: &App, installed: bool) -> String {
 }
 
 /// Failures to stderr, one sentence each; exit 1 if there were any, since
-/// a partial answer is a failure for anything that scripts this.
+/// a partial answer is a failure for anything that scripts this. A sentence
+/// that already opens with the source's label (the stale-list line from
+/// `updates::collect_with`) is printed as it is.
 fn report_failures(failed: &[(SourceKind, String)]) -> i32 {
     for (kind, message) in failed {
-        eprintln!("{}: {}", kind.label(), sentence(message));
+        let label = kind.label();
+        let text = sentence(message);
+        if text.starts_with(&format!("{label}: ")) {
+            eprintln!("{text}");
+        } else {
+            eprintln!("{label}: {text}");
+        }
     }
     if failed.is_empty() { 0 } else { 1 }
 }
@@ -430,7 +438,7 @@ fn plan(args: &[String]) -> i32 {
     let plan = match store.plan(&ops) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("The plan could not be built: {}", sentence(&e.message));
+            eprintln!("The plan could not be built. {}", sentence(&e.message));
             return 1;
         }
     };
@@ -550,10 +558,12 @@ fn self_update(args: &[String]) -> i32 {
     if let Some(code) = no_arguments("self-update", args) {
         return code;
     }
-    let update = match selfupdate_adapter::check() {
+    // Asked for by name, so past the disk cache: the answer is GitHub's or
+    // a sentence saying why it could not be.
+    let update = match selfupdate_adapter::check(true) {
         Ok(u) => u,
         Err(e) => {
-            eprintln!("The check failed: {}", sentence(&e));
+            eprintln!("The check failed. {}", sentence(&e));
             return 1;
         }
     };
@@ -566,8 +576,9 @@ fn self_update(args: &[String]) -> i32 {
             "Newest release: {}. This copy is up to date.",
             latest.version
         ),
+        // The core's sentence already names GitHub and says what to do.
         None => match &update.error {
-            Some(e) => println!("The newest release could not be checked: {}", sentence(e)),
+            Some(e) => println!("{}", sentence(e)),
             None => println!("No release has been published yet."),
         },
     }

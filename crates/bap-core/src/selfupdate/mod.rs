@@ -1,8 +1,9 @@
 //! How this copy was installed, whether a newer release exists, and the one
 //! true thing to say about getting it. Muster's `update::install` shape,
 //! transcribed: [`install::detect`] is a pure function of a [`Probe`],
-//! [`release::latest`] asks GitHub once through a six-hour cache, and
-//! [`remedy::remedy`] chooses from the two what to say and what to run.
+//! [`release::latest`] asks GitHub through a six-hour cache (or past it, for
+//! a check the user asked for), and [`remedy::remedy`] chooses from the two
+//! what to say and what to run.
 //!
 //! [`check`] does the three in order and returns a [`SelfUpdate`] the page
 //! draws as it is; [`plan`] turns an actionable [`Remedy`] into the steps
@@ -11,9 +12,9 @@
 //!
 //! # Release asset names
 //!
-//! The release workflow (`.github/workflows/release.yml`, to be written)
-//! must publish these names, spelt exactly so, because this module names
-//! them to users and `tests/selfupdate.rs` pins them:
+//! The release workflow (`.github/workflows/release.yml`) must publish
+//! these names, spelt exactly so, because this module names them to users
+//! and `tests/selfupdate.rs` pins them:
 //!
 //! | Format | x86-64 | ARM64 |
 //! |---|---|---|
@@ -21,7 +22,7 @@
 //! | rpm package | `bap-store-<v>-1.x86_64.rpm` | `bap-store-<v>-1.aarch64.rpm` |
 //! | pacman package | `bap-store-bin-<v>-1-x86_64.pkg.tar.zst` | not built |
 //! | AppImage | `BAP-Store-<v>-x86_64.AppImage` | `BAP-Store-<v>-aarch64.AppImage` |
-//! | Flatpak bundle | `bap-store-<v>-x86_64.flatpak` | not built |
+//! | Flatpak bundle | `bap-store-<v>-x86_64.flatpak` (not built yet; the name is reserved so a bundle, when it ships, is found without a code change) | not built |
 //!
 //! `<v>` is the workspace version with no `v`; the tag is `v<v>`. No
 //! tarball is published: a portable copy is told about the AppImage. A
@@ -76,11 +77,13 @@ pub struct SelfUpdate {
     pub error: Option<String>,
 }
 
-/// Detect the installation, ask GitHub, and choose the remedy.
-pub fn check(client: &Client, probe: &Probe) -> SelfUpdate {
+/// Detect the installation, ask GitHub, and choose the remedy. `fresh`
+/// goes past the six-hour disk cache: a check the user asked for by name
+/// must reach GitHub, or say why it could not.
+pub fn check(client: &Client, probe: &Probe, fresh: bool) -> SelfUpdate {
     let installation = install::detect(probe);
     let current = Version::current();
-    match release::latest(client) {
+    match release::latest(client, fresh) {
         Ok(latest) => assemble(
             &current,
             latest.as_ref(),

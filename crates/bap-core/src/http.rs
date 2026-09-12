@@ -153,16 +153,33 @@ impl Client {
         }
         match self.get_text(url) {
             Ok(text) => {
-                if let Some(parent) = path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                let tmp = path.with_extension("tmp");
-                if std::fs::write(&tmp, &text).is_ok() {
-                    let _ = std::fs::rename(&tmp, &path);
-                }
+                self.store_text(&path, &text);
                 Ok(text)
             }
             Err(e) => std::fs::read_to_string(&path).map_err(|_| e),
+        }
+    }
+
+    /// GET text from the network whatever the disk cache holds, and store
+    /// the answer for [`Client::get_text_cached`] to find. For a check the
+    /// user asked for by name: the answer is the network's or an error,
+    /// never a stale copy presented as fresh.
+    pub fn get_text_fresh(&self, url: &str) -> Result<String> {
+        let text = self.get_text(url)?;
+        self.store_text(&self.cache_path(url), &text);
+        Ok(text)
+    }
+
+    /// Write a cached answer in place, through a temporary file so a
+    /// reader never sees half of it. A cache that cannot be written is not
+    /// an error: the answer was fetched, and will be again.
+    fn store_text(&self, path: &std::path::Path, text: &str) {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, text).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
         }
     }
 
@@ -214,5 +231,39 @@ fn describe(url: &str, e: &reqwest::Error) -> String {
         format!("could not reach {h}")
     } else {
         format!("{h}: {e}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cached answer for an address nothing listens on: the cached read
+    /// returns it, the fresh read does not. Port 9 (discard) on the loopback
+    /// is refused at once on a machine with nothing there, and a sandbox
+    /// that blocks the connect gives the same answer.
+    #[test]
+    fn a_fresh_read_never_returns_the_cached_copy() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let client = Client::new(dir.path().to_path_buf());
+        let url = "http://127.0.0.1:9/releases/latest";
+        client.store_text(&client.cache_path(url), "{\"cached\":true}");
+        assert_eq!(
+            client
+                .get_text_cached(url, Duration::from_secs(3600))
+                .expect("the cached copy"),
+            "{\"cached\":true}"
+        );
+        let err = client
+            .get_text_fresh(url)
+            .expect_err("nothing listens, so a fresh read fails rather than answering from disk");
+        assert!(err.message.contains("127.0.0.1:9"), "{err}");
+        assert_eq!(
+            client
+                .get_text_cached(url, Duration::from_secs(3600))
+                .expect("still there"),
+            "{\"cached\":true}",
+            "a failed fresh read leaves the cache as it was"
+        );
     }
 }

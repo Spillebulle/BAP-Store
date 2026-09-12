@@ -13,12 +13,17 @@
 //! different sources that share a key join when one of them is an
 //! application or their summaries agree, and such an edition carries a
 //! confidence below 1 so the page can say "matched by name". Two packages
-//! from one source never join by name: the AUR's `yay` and `yay-bin` may
-//! well be the same program, but the source that lists both is the authority
-//! on that, and a row that claims a certainty it does not have is the one
-//! thing the grouper must never draw. Nor do two packages whose catalogues
-//! gave them different reverse-DNS ids: GNOME's "Files" and elementary's
-//! "Files" share a name and nothing else.
+//! from one source never join each other by name: the AUR's `yay` and
+//! `yay-bin` may well be the same program, but the source that lists both is
+//! the authority on that. They share a row only when an edition from a third
+//! source matches both, as pacman's `firefox` does for the AUR's
+//! `firefox-git` and `firefox-nightly`, and each such member carries its own
+//! name confidence. Nor do two packages whose catalogues gave them different
+//! reverse-DNS ids: GNOME's "Files" and elementary's "Files" share a name and
+//! nothing else. And no bridge joins two packages one source gave different
+//! ids to: the Arch catalogue's `element` (an audio plugin host) and
+//! `element-desktop` (the Matrix client) stay apart however many AUR builds
+//! answer to `element`.
 //!
 //! Adding a heuristic means adding a fixture where it fires and one where it
 //! must not (`CLAUDE.md`).
@@ -48,13 +53,15 @@ pub fn group_with(packages: Vec<Package>, query: &str, split: &[String]) -> Vec<
     for package in apart {
         apps.extend(group(vec![package], query));
     }
-    if query.trim().is_empty() {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
         apps.sort_by_key(|a| a.name.to_lowercase());
     } else {
         apps.sort_by(|a, b| {
             b.relevance
                 .total_cmp(&a.relevance)
                 .then_with(|| kind_rank(a.kind).cmp(&kind_rank(b.kind)))
+                .then_with(|| named_by_source(b, &query).cmp(&named_by_source(a, &query)))
                 .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
     }
@@ -179,6 +186,7 @@ pub fn group(packages: Vec<Package>, query: &str) -> Vec<App> {
         apps.sort_by(|(a, sa), (b, sb)| {
             sb.total_cmp(sa)
                 .then_with(|| kind_rank(a.kind).cmp(&kind_rank(b.kind)))
+                .then_with(|| named_by_source(b, &query).cmp(&named_by_source(a, &query)))
                 .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
                 .then_with(|| a.key.cmp(&b.key))
         });
@@ -225,57 +233,44 @@ pub fn appstream_id(package: &Package) -> Option<String> {
 
 /// Names that share a key with a program they are not. Each is the raw name
 /// of a package in the Arch repositories or the AUR whose suffix reads as
-/// an edition but marks a binding, a module or an unrelated program. The
-/// first of each pair is what it would wrongly join; the second never joins
-/// anything but its own editions (`fcitx5-qt-git` is still `fcitx5-qt`).
+/// an edition but marks a shim or an unrelated program. The first of each
+/// pair is what it would wrongly join; the second never joins anything but
+/// its own editions (`wl-clipboard-x11-git` is still `wl-clipboard-x11`).
 ///
 /// Not on the list, and checked: `python-git`, `perl-git`, `nodejs-git`,
 /// `rust-git`, `go-bin` and `yay-bin` are the same programs as their bases.
+/// The toolkit names (`fcitx5-qt`, `bluez-qt`, `colord-gtk`, `discord-qt`,
+/// `neovim-gtk` and a dozen more) were on this list while `-qt` and `-gtk`
+/// were edition suffixes; they are gone because those suffixes are, see
+/// [`EDITION_SUFFIXES`].
 const FALSE_FRIENDS: &[(&str, &str)] = &[
-    // Input method toolkit modules, not the input method.
-    ("fcitx5", "fcitx5-qt"),
-    ("fcitx5", "fcitx5-gtk"),
-    ("ibus", "ibus-qt"),
-    // Toolkit bindings for a daemon or library.
-    ("appstream", "appstream-qt"),
-    ("bluez", "bluez-qt"),
-    ("networkmanager", "networkmanager-qt"),
-    ("modemmanager", "modemmanager-qt"),
-    ("pulseaudio", "pulseaudio-qt"),
-    ("colord", "colord-gtk"),
-    ("spice", "spice-gtk"),
-    ("xdg-desktop-portal", "xdg-desktop-portal-gtk"),
+    // An X11 shim for a Wayland library or tool, not the thing itself.
     ("libxkbcommon", "libxkbcommon-x11"),
-    ("libvlc", "libvlc-qt"),
-    // A different program that happens to end in a toolkit or a shim.
-    ("dash", "dash-qt"),
-    ("tea", "tea-qt"),
-    ("mpc", "mpc-qt"),
-    ("discord", "discord-qt"),
-    ("libarchive", "libarchive-qt"),
-    ("libexif", "libexif-gtk"),
     ("wl-clipboard", "wl-clipboard-x11"),
     // A library about git, not the language from git.
     ("ruby", "ruby-git"),
 ];
 
 /// Edition suffixes, stripped once from the end of a name when at least
-/// three letters or digits remain. `-canary`, `-devel` and `-staging` are
-/// deliberately absent: a canary or staging build is a different release
-/// channel, and the AUR's `-devel` packages are as often a separate
-/// upstream branch as a newer build.
+/// three letters or digits remain. `-canary`, `-beta`, `-devel` and
+/// `-staging` are deliberately absent: a canary, beta or staging build is a
+/// different release channel (`discord-canary` and `signal-desktop-beta`
+/// are rows of their own), and the AUR's `-devel` packages are as often a
+/// separate upstream branch as a newer build. `-qt` and `-gtk` are absent
+/// too: on real data they name a different program far more often than an
+/// edition (`neovim-qt` and `neovim-gtk` are front-ends, not Neovim;
+/// `bluez-qt` is a binding, not BlueZ), and the editions they did name
+/// (`wireshark-qt`, `transmission-gtk`) meet their siblings through the
+/// catalogue's AppStream id, which needs no suffix rule.
 const EDITION_SUFFIXES: &[&str] = &[
     "-bin",
     "-git",
     "-appimage",
     "-nightly",
-    "-beta",
     "-stable",
     "-electron",
     "-wayland",
     "-x11",
-    "-qt",
-    "-gtk",
 ];
 
 /// Last segments of a reverse-DNS id that name nothing on their own. For
@@ -394,6 +389,9 @@ const STOP_WORDS: &[&str] = &[
 
 /// What the grouper needs to know about a package, computed once.
 struct Facts {
+    /// Where the package comes from, for the per-source id check in
+    /// [`Sets::union`].
+    source: SourceKind,
     /// Lower-cased AppStream id for matching, `None` when the package has
     /// none and is not a Flatpak app.
     appstream_key: Option<String>,
@@ -431,6 +429,7 @@ impl Facts {
             keys.push(format!("{}:{}", package.source.id(), package.id));
         }
         Facts {
+            source: package.source,
             appstream_key: appstream.map(|id| id.to_lowercase()),
             keys,
             impostor,
@@ -448,8 +447,8 @@ fn alphanumeric(s: &str) -> String {
 }
 
 /// The key an app without an AppStream id is named by: its name's key, or
-/// for a false friend the unstripped name, so `fcitx5-qt` is
-/// `name:fcitx5qt` and not a second `name:fcitx5`.
+/// for a false friend the unstripped name, so `wl-clipboard-x11` is
+/// `name:wlclipboardx11` and not a second `name:wlclipboard`.
 fn app_name_key(name: &str) -> String {
     match impostor_of(&name.trim().to_lowercase()) {
         Some(impostor) => alphanumeric(impostor),
@@ -472,6 +471,16 @@ fn source_name(package: &Package) -> &str {
         SourceKind::Github => package.id.rsplit('/').next().unwrap_or(&package.id),
         _ => &package.id,
     }
+}
+
+/// Whether one of the app's editions is called exactly the query by its own
+/// source. The sort's tie-break between two apps that answer the query
+/// equally well: pacman's `docker` outranks `cockpit-docker`, which the
+/// catalogue names "Docker" too. `query` is trimmed and lower-cased.
+fn named_by_source(app: &App, query: &str) -> bool {
+    app.editions
+        .iter()
+        .any(|e| source_name(&e.package).to_lowercase() == query)
 }
 
 /// Whether two packages sharing a name key are the same application, and
@@ -680,6 +689,15 @@ fn kind_rank(kind: PackageKind) -> u8 {
     if kind == PackageKind::App { 0 } else { 1 }
 }
 
+/// Whether a catalogue describes the package: it carries an AppStream id
+/// from a source whose metadata is a catalogue's. The AUR and GitHub only
+/// borrow an id (by package name, or by the repository's own metainfo);
+/// their summaries are a packager's pkgdesc and a repository description.
+fn from_catalogue(package: &Package) -> bool {
+    appstream_id(package).is_some()
+        && !matches!(package.source, SourceKind::Aur | SourceKind::Github)
+}
+
 fn display_name(package: &Package) -> &str {
     if package.name.trim().is_empty() {
         &package.id
@@ -735,19 +753,31 @@ fn assemble(mut editions: Vec<(Edition, &Facts)>) -> (App, Keys) {
 
     let mut by_metadata: Vec<&Package> = editions.iter().map(|(e, _)| &e.package).collect();
     by_metadata.sort_by_key(|p| metadata_rank(p.source));
-    // The longest summary; on a tie the preferred source keeps it, which
-    // `max_by_key` would not do (it returns the last maximum).
-    let mut summary: Option<&str> = None;
-    for s in by_metadata
-        .iter()
-        .filter_map(|p| p.summary.as_deref())
-        .filter(|s| !s.trim().is_empty())
-    {
-        if summary.is_none_or(|best| s.chars().count() > best.chars().count()) {
-            summary = Some(s);
+    // The summary describes the application, so when a catalogue describes
+    // any edition only those compete: an AUR pkgdesc is longer than a
+    // catalogue summary and describes the build ("Static binaries from
+    // upstream"), not the program. Among the candidates the longest wins;
+    // on a tie the preferred source keeps it, which `max_by_key` would not
+    // do (it returns the last maximum).
+    let longest = |candidates: &[&Package]| -> Option<String> {
+        let mut best: Option<&str> = None;
+        for s in candidates
+            .iter()
+            .filter_map(|p| p.summary.as_deref())
+            .filter(|s| !s.trim().is_empty())
+        {
+            if best.is_none_or(|b| s.chars().count() > b.chars().count()) {
+                best = Some(s);
+            }
         }
-    }
-    let summary = summary.map(str::to_string);
+        best.map(str::to_string)
+    };
+    let catalogue: Vec<&Package> = by_metadata
+        .iter()
+        .copied()
+        .filter(|p| from_catalogue(p))
+        .collect();
+    let summary = longest(&catalogue).or_else(|| longest(&by_metadata));
     let icon = by_metadata.iter().find_map(|p| p.icon.clone());
     let developer = by_metadata
         .iter()
@@ -882,14 +912,28 @@ fn make_keys_unique(apps: &mut [App]) {
 
 /// Disjoint sets over package indices, with path halving and the lower
 /// index kept as root so a set's root is its first member. Each set
-/// remembers the one reverse-DNS AppStream id its members carry, and two
-/// sets with different ones refuse to join: the catalogues have said these
-/// are different applications, and no name match outranks that. Keeping
-/// the id on the set rather than checking the two packages of a pair is what
-/// stops a third package with no id from bridging them.
+/// remembers two things about its members' AppStream ids, and a union that
+/// would contradict either is refused: the catalogues have said these are
+/// different applications, and no name match outranks that.
+///
+/// The first is the one reverse-DNS id the set carries, so GNOME's
+/// `org.gnome.nautilus` and elementary's `io.elementary.files` never share
+/// a row. The second is the id each source's members carry, whatever its
+/// shape: the Arch catalogue gave `element` (an audio plugin host) and
+/// `element-desktop` (the Matrix client) the ids `element` and
+/// `io.element.Element`, and two sets that disagree on pacman's id are two
+/// applications, even though the first id is not reverse-DNS and even when
+/// an AUR build that answers to `element` would bridge them by name.
+///
+/// Keeping both on the set rather than checking the two packages of a pair
+/// is what stops a third package with no id from bridging them.
 struct Sets<'a> {
     parent: Vec<usize>,
     vendor_id: Vec<Option<&'a str>>,
+    /// For each root, the AppStream id every source's members carry, one
+    /// entry per (source, id). Two entries for one source cannot occur in
+    /// a set: that is what `union` refuses.
+    source_ids: Vec<Vec<(SourceKind, &'a str)>>,
 }
 
 impl<'a> Sets<'a> {
@@ -898,13 +942,44 @@ impl<'a> Sets<'a> {
             .iter()
             .map(|f| f.appstream_key.as_deref().filter(|id| is_reverse_dns(id)))
             .collect();
-        Sets::with_ids(vendor_id)
+        let source_ids = facts
+            .iter()
+            .map(|f| {
+                f.appstream_key
+                    .as_deref()
+                    .map(|id| vec![(f.source, id)])
+                    .unwrap_or_default()
+            })
+            .collect();
+        Sets {
+            parent: (0..facts.len()).collect(),
+            vendor_id,
+            source_ids,
+        }
     }
 
+    /// A set per index with the given reverse-DNS ids and no per-source
+    /// ids, for the unit tests.
+    #[cfg(test)]
     fn with_ids(vendor_id: Vec<Option<&'a str>>) -> Sets<'a> {
         Sets {
             parent: (0..vendor_id.len()).collect(),
+            source_ids: vec![Vec::new(); vendor_id.len()],
             vendor_id,
+        }
+    }
+
+    /// A set per index with the given per-source ids and no reverse-DNS
+    /// ids, for the unit tests.
+    #[cfg(test)]
+    fn with_source_ids(source_ids: Vec<Option<(SourceKind, &'a str)>>) -> Sets<'a> {
+        Sets {
+            parent: (0..source_ids.len()).collect(),
+            vendor_id: vec![None; source_ids.len()],
+            source_ids: source_ids
+                .into_iter()
+                .map(|id| id.into_iter().collect())
+                .collect(),
         }
     }
 
@@ -917,8 +992,8 @@ impl<'a> Sets<'a> {
     }
 
     /// Join the two sets. Returns whether `a` and `b` are in one set
-    /// afterwards, which is false only when each set carries a different
-    /// reverse-DNS id.
+    /// afterwards, which is false only when the sets carry different
+    /// reverse-DNS ids, or one source gave their members different ids.
     fn union(&mut self, a: usize, b: usize) -> bool {
         let (ra, rb) = (self.find(a), self.find(b));
         if ra == rb {
@@ -928,9 +1003,20 @@ impl<'a> Sets<'a> {
             (Some(x), Some(y)) if x != y => return false,
             (x, y) => x.or(y),
         };
+        let disagree = self.source_ids[ra].iter().any(|(source, id)| {
+            self.source_ids[rb]
+                .iter()
+                .any(|(other, other_id)| other == source && other_id != id)
+        });
+        if disagree {
+            return false;
+        }
         let (low, high) = if ra < rb { (ra, rb) } else { (rb, ra) };
         self.parent[high] = low;
         self.vendor_id[low] = joined;
+        let mut moved = std::mem::take(&mut self.source_ids[high]);
+        moved.retain(|entry| !self.source_ids[low].contains(entry));
+        self.source_ids[low].append(&mut moved);
         true
     }
 }
@@ -978,14 +1064,20 @@ mod tests {
         assert_eq!(normalise_key("steam-git"), "steam");
         assert_eq!(normalise_key("yay-bin"), "yay");
         assert_eq!(normalise_key("firefox-nightly"), "firefox");
-        assert_eq!(normalise_key("telegram-desktop-beta"), "telegramdesktop");
         assert_eq!(normalise_key("wine-stable"), "wine");
         assert_eq!(normalise_key("vscodium-electron"), "vscodium");
         assert_eq!(normalise_key("tilda-wayland"), "tilda");
         assert_eq!(normalise_key("kwin-x11"), "kwin");
-        assert_eq!(normalise_key("wireshark-qt"), "wireshark");
-        assert_eq!(normalise_key("transmission-gtk"), "transmission");
         assert_eq!(normalise_key("obsidian-appimage"), "obsidian");
+        // A release channel and a toolkit front-end are not editions.
+        assert_eq!(
+            normalise_key("telegram-desktop-beta"),
+            "telegramdesktopbeta"
+        );
+        assert_eq!(normalise_key("signal-desktop-beta"), "signaldesktopbeta");
+        assert_eq!(normalise_key("wireshark-qt"), "wiresharkqt");
+        assert_eq!(normalise_key("transmission-gtk"), "transmissiongtk");
+        assert_eq!(normalise_key("neovim-qt"), "neovimqt");
         // Only the last suffix goes.
         assert_eq!(normalise_key("brave-beta-bin"), "bravebeta");
         assert_eq!(normalise_key("fcitx5-qt-git"), "fcitx5qt");
@@ -1084,7 +1176,10 @@ mod tests {
             assert_eq!(impostor_of(base), None, "{base} is the real thing");
         }
         // An edition of a false friend is still that false friend.
-        assert_eq!(impostor_of("fcitx5-qt-git"), Some("fcitx5-qt"));
+        assert_eq!(
+            impostor_of("wl-clipboard-x11-git"),
+            Some("wl-clipboard-x11")
+        );
         for edition in [
             "python-git",
             "perl-git",
@@ -1092,6 +1187,9 @@ mod tests {
             "rust-git",
             "yay-bin",
             "firefox-nightly",
+            // No longer a clash at all, so no longer a false friend.
+            "fcitx5-qt",
+            "neovim-gtk",
         ] {
             assert_eq!(
                 impostor_of(edition),
@@ -1143,5 +1241,37 @@ mod tests {
         assert!(sets.union(3, 3), "a set is in one set with itself");
         let mut same = Sets::with_ids(vec![Some("org.gimp.gimp"), Some("org.gimp.gimp")]);
         assert!(same.union(0, 1), "the same id joins");
+    }
+
+    #[test]
+    fn sets_refuse_to_join_when_one_source_gave_the_members_different_ids() {
+        // pacman's element (a plain desktop-file id, so no vendor id) and
+        // element-desktop, with an AUR build that answers to both by name.
+        let mut sets = Sets::with_source_ids(vec![
+            Some((SourceKind::Pacman, "element")),
+            Some((SourceKind::Pacman, "io.element.element")),
+            Some((SourceKind::Aur, "element")),
+            None,
+        ]);
+        assert!(!sets.union(0, 1), "one source, two ids: two applications");
+        assert!(sets.union(2, 0), "another source's id is no contradiction");
+        assert!(
+            !sets.union(2, 1),
+            "and having joined one, the AUR build cannot bridge to the other"
+        );
+        assert!(sets.union(3, 1), "no id joins anything");
+        assert!(!sets.union(3, 0), "but carries its set's ids with it");
+        let root = sets.find(3);
+        assert_eq!(
+            sets.source_ids[root],
+            vec![(SourceKind::Pacman, "io.element.element")]
+        );
+        // The same id from one source twice is one entry, not a clash.
+        let mut same = Sets::with_source_ids(vec![
+            Some((SourceKind::Pacman, "org.gnu.emacs")),
+            Some((SourceKind::Pacman, "org.gnu.emacs")),
+        ]);
+        assert!(same.union(0, 1));
+        assert_eq!(same.source_ids[0].len(), 1);
     }
 }

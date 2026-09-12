@@ -321,14 +321,17 @@ pub mod logic {
     /// The merged update list, from the cache when it is under ten minutes
     /// old and the page did not insist. A forced check, and the first check
     /// of a session, ask the sources to refresh their indexes first (root
-    /// free), so what the page shows is what the machine would get.
+    /// free), so what the page shows is what the machine would get. Only
+    /// the first: a finished transaction empties the cache, and the check
+    /// after it reads the databases the transaction just wrote rather than
+    /// fetching them all again.
     pub fn updates(state: &AppState, force: bool) -> UpdateList {
         if !force && let Some(list) = state.cached_updates(UPDATES_MAX_AGE) {
             return list;
         }
-        let first = state.cached_updates(std::time::Duration::MAX).is_none();
         let store = state.store();
-        let list = if force || first {
+        let list = if force || !state.updates_refreshed_once() {
+            state.mark_updates_refreshed();
             store.updates_refreshed()
         } else {
             store.updates()
@@ -362,22 +365,26 @@ pub mod logic {
         ops: Vec<Op>,
         emit: impl Fn(&Event) + Send + Sync + 'static,
     ) -> Result<String, String> {
-        let plan = state.store().plan(&ops).map_err(|e| sentence(&e.message))?;
+        let store = state.store();
+        let plan = store.plan(&ops).map_err(|e| sentence(&e.message))?;
         if plan.steps.is_empty() {
             return Err(
                 "There is nothing to do. Everything asked for is already in place.".to_string(),
             );
         }
-        Ok(start_plan(state, plan, emit))
+        Ok(start_plan(state, store, plan, emit))
     }
 
     /// Record the plan and run it on a thread of its own. The thread holds a
     /// clone of the state, not a borrow, so it outlives the command that
-    /// started it. Every event is appended to the plan's record before it
-    /// is sent, so a page that reacts to an event by asking `active_plans`
-    /// already sees it there.
+    /// started it, and the store the plan was built from, so the sources
+    /// that built it are the ones told how it ended even when another
+    /// plan has reset the state's store in the meantime. Every event is
+    /// appended to the plan's record before it is sent, so a page that
+    /// reacts to an event by asking `active_plans` already sees it there.
     pub fn start_plan(
         state: &AppState,
+        store: Arc<Store>,
         plan: Plan,
         emit: impl Fn(&Event) + Send + Sync + 'static,
     ) -> String {
@@ -392,7 +399,9 @@ pub mod logic {
         let worker_emit = emit.clone();
         let spawned = std::thread::Builder::new()
             .name(format!("plan {id}"))
-            .spawn(move || run_to_completion(&worker_state, &runner, &plan, worker_emit.as_ref()));
+            .spawn(move || {
+                run_to_completion(&worker_state, &store, &runner, &plan, worker_emit.as_ref())
+            });
         if let Err(e) = spawned {
             // No thread means no runner, so settle the plan here rather than
             // leave the panel waiting on something nobody is running.
@@ -408,9 +417,12 @@ pub mod logic {
     }
 
     /// What happens to every event a plan produces: recorded on the plan,
-    /// acted on, then sent to the page, in that order.
+    /// acted on, then sent to the page, in that order. `store` is the one
+    /// the plan was built from, not the state's current one, which another
+    /// plan may have reset since.
     pub fn deliver(
         state: &AppState,
+        store: &Store,
         id: &str,
         event: Event,
         emit: &(dyn Fn(&Event) + Send + Sync),
@@ -422,11 +434,10 @@ pub mod logic {
         state.push_event(id, event.clone());
         if let Some(ok) = finished
             && let Some(ops) = state.plan_ops(id)
-            && state.has_store()
         {
             // The sources that keep their own records (GitHub) learn how it
-            // went before the store is dropped below.
-            state.store().finished(&ops, ok);
+            // went before the state's store is dropped below.
+            store.finished(&ops, ok);
         }
         if finished == Some(true) {
             // The machine changed under the sources. The store is detected
@@ -441,12 +452,13 @@ pub mod logic {
 
     fn run_to_completion(
         state: &AppState,
+        store: &Store,
         runner: &Runner,
         plan: &Plan,
         emit: &(dyn Fn(&Event) + Send + Sync),
     ) {
         let id = plan.id.clone();
-        let mut sink = |event: Event| deliver(state, &id, event, emit);
+        let mut sink = |event: Event| deliver(state, store, &id, event, emit);
         let outcome = runner.execute(plan, &mut sink);
         // The runner ends every run with PlanFinished; this only guards
         // the invariant the panel relies on, so it never waits for ever.
@@ -459,9 +471,11 @@ pub mod logic {
         }
     }
 
-    /// Whether a newer BAP Store exists. Cached for an hour; a forced check
-    /// (the button) always goes out, an unforced one (start-up) only when
-    /// the setting allows it, because that is what the setting promises.
+    /// Whether a newer BAP Store exists. Cached for an hour in memory and
+    /// six hours on disk; a forced check (the button) goes past both to
+    /// GitHub, an unforced one (start-up) reads the caches and asks only
+    /// when the setting allows it, because that is what the setting
+    /// promises.
     pub fn self_update_check(state: &AppState, force: bool) -> Result<SelfUpdate, String> {
         if !force && let Some(cached) = state.cached_self_update(SELF_UPDATE_MAX_AGE) {
             return Ok(cached);
@@ -469,13 +483,13 @@ pub mod logic {
         if !force && !state.settings().self_update_check {
             return Ok(selfupdate_adapter::unchecked());
         }
-        let result = selfupdate_adapter::check()?;
+        let result = state.check_self_update(force)?;
         state.store_self_update(result.clone());
         Ok(result)
     }
 
-    /// Apply the remedy from the last check, checking first if there was
-    /// none this hour.
+    /// Apply the remedy from the last check, checking first, past every
+    /// cache, if there was none this hour.
     pub fn self_update_apply(
         state: &AppState,
         emit: impl Fn(&Event) + Send + Sync + 'static,
@@ -483,7 +497,7 @@ pub mod logic {
         let update = match state.cached_self_update(SELF_UPDATE_MAX_AGE) {
             Some(u) => u,
             None => {
-                let u = selfupdate_adapter::check()?;
+                let u = state.check_self_update(true)?;
                 state.store_self_update(u.clone());
                 u
             }
@@ -492,7 +506,7 @@ pub mod logic {
         if plan.steps.is_empty() {
             return Err("The update has no steps to run on this machine. The check says how to get it instead.".to_string());
         }
-        Ok(start_plan(state, plan, emit))
+        Ok(start_plan(state, state.store(), plan, emit))
     }
 
     /// Remember that this edition does not belong to its group.
@@ -508,24 +522,114 @@ mod tests {
     // The logic functions share names with the Tauri wrappers, so only the
     // logic side is glob-imported and the rest is named.
     use super::logic::*;
-    use super::{PlanPreview, sentence};
+    use super::{PlanPreview, selfupdate_adapter, sentence};
     use crate::settings::Settings;
-    use crate::state::{AppState, PlanState};
+    use crate::state::{AppState, PlanState, SelfUpdateChecker};
     use bap_core::updates::UpdateList;
-    use bap_core::{Event, Op, PackageRef, Plan, Query, SourceKind};
-    use std::sync::mpsc;
+    use bap_core::{
+        Event, Op, Package, PackageRef, Plan, Query, Source, SourceKind, SourceStatus, Step, Store,
+        Update,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::time::Duration;
 
-    fn scratch_state(name: &str) -> AppState {
+    fn scratch_path(name: &str) -> std::path::PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let dir = std::env::temp_dir().join(format!(
-            "bap-store-cmd-{}-{nanos}-{name}",
-            std::process::id()
-        ));
-        AppState::at(dir.join(crate::settings::FILE_NAME))
+        std::env::temp_dir()
+            .join(format!(
+                "bap-store-cmd-{}-{nanos}-{name}",
+                std::process::id()
+            ))
+            .join(crate::settings::FILE_NAME)
+    }
+
+    /// A state over the machine's own sources, for the tests whose subject
+    /// is the plan machinery rather than a source.
+    fn scratch_state(name: &str) -> AppState {
+        AppState::at(scratch_path(name))
+    }
+
+    /// A store with no sources: nothing is read, nothing is fetched.
+    fn empty_store() -> Store {
+        Store {
+            system: bap_core::system::from_os_release(""),
+            sources: Vec::new(),
+        }
+    }
+
+    /// A state over `store`, so a test never detects the machine's sources.
+    fn state_with(name: &str, store: Store) -> AppState {
+        AppState::with_store(scratch_path(name), store)
+    }
+
+    /// A source that answers nothing and counts what it was asked.
+    #[derive(Default)]
+    struct Counts {
+        refreshes: AtomicUsize,
+        finished: Mutex<Vec<(Op, bool)>>,
+    }
+
+    struct Fake {
+        kind: SourceKind,
+        counts: Arc<Counts>,
+    }
+
+    impl Fake {
+        fn store(kind: SourceKind) -> (Store, Arc<Counts>) {
+            let counts = Arc::new(Counts::default());
+            let store = Store {
+                system: bap_core::system::from_os_release(""),
+                sources: vec![Box::new(Fake {
+                    kind,
+                    counts: counts.clone(),
+                })],
+            };
+            (store, counts)
+        }
+    }
+
+    impl Source for Fake {
+        fn kind(&self) -> SourceKind {
+            self.kind
+        }
+        fn status(&self) -> SourceStatus {
+            SourceStatus {
+                kind: self.kind,
+                available: true,
+                reason: None,
+                detail: None,
+            }
+        }
+        fn search(&self, _query: &Query) -> bap_core::Result<Vec<Package>> {
+            Ok(Vec::new())
+        }
+        fn installed(&self) -> bap_core::Result<Vec<Package>> {
+            Ok(Vec::new())
+        }
+        fn updates(&self) -> bap_core::Result<Vec<Update>> {
+            Ok(Vec::new())
+        }
+        fn details(&self, id: &str) -> bap_core::Result<Package> {
+            Err(bap_core::Error::new(format!("{id} is not known.")))
+        }
+        fn plan(&self, _op: &Op) -> bap_core::Result<Vec<Step>> {
+            Ok(Vec::new())
+        }
+        fn refresh_index(&self) -> bap_core::Result<()> {
+            self.counts.refreshes.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        fn finished(&self, op: &Op, ok: bool) {
+            self.counts
+                .finished
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((op.clone(), ok));
+        }
     }
 
     fn steam() -> PackageRef {
@@ -607,7 +711,7 @@ mod tests {
 
     #[test]
     fn updates_come_from_the_cache_unless_forced() {
-        let state = scratch_state("updates");
+        let state = state_with("updates", empty_store());
         state.store_updates(UpdateList {
             checked_at: 42,
             ..UpdateList::default()
@@ -620,6 +724,28 @@ mod tests {
             fresh.checked_at,
             "and is cached in turn"
         );
+    }
+
+    #[test]
+    fn the_index_refresh_runs_once_a_session_and_again_only_when_forced() {
+        let (store, counts) = Fake::store(SourceKind::Pacman);
+        let state = state_with("refresh-once", store);
+        let refreshes = || counts.refreshes.load(Ordering::SeqCst);
+
+        updates(&state, false);
+        assert_eq!(refreshes(), 1, "the first check of a session refreshes");
+        updates(&state, false);
+        assert_eq!(refreshes(), 1, "the second is answered from the cache");
+
+        // A finished transaction empties the update cache (and forgets the
+        // store, which `state.rs` covers: the flag survives that too); the
+        // check after it reads what is on disk rather than fetching every
+        // package list again.
+        state.invalidate_updates();
+        updates(&state, false);
+        assert_eq!(refreshes(), 1, "no refresh after a transaction");
+        updates(&state, true);
+        assert_eq!(refreshes(), 2, "a forced check always refreshes");
     }
 
     #[test]
@@ -654,7 +780,7 @@ mod tests {
 
     #[test]
     fn a_started_plan_settles_and_tells_the_page_when_the_runner_stops() {
-        let state = scratch_state("start");
+        let state = state_with("start", empty_store());
         let plan = Plan {
             id: "plan-test".into(),
             ops: vec![Op::Install { package: steam() }],
@@ -674,7 +800,7 @@ mod tests {
             }],
         };
         let (tx, rx) = mpsc::channel::<Event>();
-        let id = start_plan(&state, plan, move |e| {
+        let id = start_plan(&state, state.store(), plan, move |e| {
             let _ = tx.send(e.clone());
         });
         assert_eq!(id, "plan-test");
@@ -710,13 +836,13 @@ mod tests {
 
     #[test]
     fn a_successful_plan_forgets_the_store_and_the_update_list() {
-        let state = scratch_state("invalidate");
+        let state = state_with("invalidate", empty_store());
         let plan = Plan {
             id: "plan-ok".into(),
             ops: Vec::new(),
             steps: Vec::new(),
         };
-        let _ = state.store();
+        let store = state.store();
         state.store_updates(UpdateList::default());
         state.add_plan(plan);
         // The sink's policy is what is under test, so drive it the way the
@@ -727,6 +853,7 @@ mod tests {
         };
         deliver(
             &state,
+            &store,
             "plan-ok",
             Event::Log {
                 plan: "plan-ok".into(),
@@ -739,6 +866,7 @@ mod tests {
         assert!(state.has_store(), "a log line changes nothing");
         deliver(
             &state,
+            &store,
             "plan-ok",
             Event::PlanFinished {
                 plan: "plan-ok".into(),
@@ -759,9 +887,55 @@ mod tests {
         assert_eq!(rx.try_iter().count(), 2, "both events reached the page");
     }
 
+    /// The sources that built a plan are told how it ended, even when
+    /// another plan finished first and reset the state's store: a GitHub
+    /// install record would otherwise be lost.
+    #[test]
+    fn the_sources_that_built_a_plan_are_told_how_it_ended_after_a_reset() {
+        let (store, counts) = Fake::store(SourceKind::Github);
+        let state = state_with("finished", store);
+        let op = Op::Install {
+            package: PackageRef {
+                source: SourceKind::Github,
+                id: "sharkdp/bat".into(),
+            },
+        };
+        let bound = state.store();
+        state.add_plan(Plan {
+            id: "plan-b".into(),
+            ops: vec![op.clone()],
+            steps: Vec::new(),
+        });
+        // Plan A finishes first and resets the store under plan B.
+        state.invalidate_after_transaction();
+        assert!(!state.has_store());
+        deliver(
+            &state,
+            &bound,
+            "plan-b",
+            Event::PlanFinished {
+                plan: "plan-b".into(),
+                ok: true,
+                message: "Installed.".into(),
+            },
+            &|_| {},
+        );
+        let finished = counts.finished.lock().unwrap();
+        assert_eq!(finished.as_slice(), &[(op, true)]);
+    }
+
     #[test]
     fn a_self_update_check_respects_the_setting_unless_forced() {
-        let state = scratch_state("selfupdate");
+        // A checker that answers from a table and remembers whether it was
+        // asked to go past the disk cache, so GitHub is never asked here.
+        let asked: Arc<Mutex<Vec<bool>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen = asked.clone();
+        let checker: SelfUpdateChecker = Arc::new(move |fresh: bool| {
+            seen.lock().unwrap().push(fresh);
+            Ok(selfupdate_adapter::unchecked())
+        });
+        let state =
+            AppState::with_store_and_checker(scratch_path("selfupdate"), empty_store(), checker);
         let mut settings = state.settings();
         settings.self_update_check = false;
         state.set_settings(settings).unwrap();
@@ -774,6 +948,7 @@ mod tests {
                 .is_none(),
             "nothing was asked, so nothing was cached"
         );
+        assert!(asked.lock().unwrap().is_empty(), "the setting was honoured");
 
         let forced = self_update_check(&state, true).unwrap();
         assert_eq!(forced.current, env!("CARGO_PKG_VERSION"));
@@ -782,9 +957,19 @@ mod tests {
                 .cached_self_update(Duration::from_secs(3600))
                 .is_some()
         );
+        assert_eq!(
+            asked.lock().unwrap().as_slice(),
+            &[true],
+            "a forced check goes past the disk cache"
+        );
 
         let err = self_update_apply(&state, |_| {}).unwrap_err();
         assert!(err.starts_with("BAP Store is up to date"), "{err}");
+        assert_eq!(
+            asked.lock().unwrap().len(),
+            1,
+            "apply used the check from a moment ago"
+        );
     }
 
     #[test]
