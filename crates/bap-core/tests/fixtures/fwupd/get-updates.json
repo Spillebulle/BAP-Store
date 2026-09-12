@@ -1,0 +1,204 @@
+{
+  "Devices": [
+    {
+      "Name": "UEFI dbx",
+      "DeviceId": "362301da643102b9f38477387e2193e57abaa590",
+      "ParentDeviceId": "adf9b09c46cea62d1b16348b52885bd168430bcc",
+      "CompositeId": "adf9b09c46cea62d1b16348b52885bd168430bcc",
+      "InstanceIds": [
+        "UEFI\\CRT_A1117F516A32CEFCBA3F2D1ACE10A87972FD6BBE8FE0D0B996E09E65D802A503&ARCH_X64",
+        "UEFI\\CRT_C3CFB7E3BA862CED3CDC1D0C5EF0C25717F07FBC8FD348BBCBE4B1FF89CA1402&ARCH_X64"
+      ],
+      "Guid": [
+        "f8ba2887-9411-5c36-9cee-88995bb39731",
+        "ffd507a7-7e20-5857-97c7-dcf391b4b23b"
+      ],
+      "Summary": "UEFI revocation database",
+      "DetailsUrl": "https://uefi.org/revocationlistfile",
+      "Plugin": "uefi_dbx",
+      "Protocols": [
+        "org.uefi.dbx2"
+      ],
+      "Flags": [
+        "internal",
+        "updatable",
+        "supported",
+        "needs-reboot",
+        "usable-during-update",
+        "only-version-upgrade",
+        "signed-payload",
+        "can-emulation-tag"
+      ],
+      "Checksums": [
+        "6a0e824654b7479152058cf738a378e629483874b6dbd67e0d8c3327b2fcac64"
+      ],
+      "Vendor": "Microsoft",
+      "VendorIds": [
+        "UEFI:Microsoft"
+      ],
+      "Version": "20230301",
+      "VersionLowest": "20230301",
+      "VersionFormat": "number",
+      "Icons": [
+        "application-certificate"
+      ],
+      "InstallDuration": 1,
+      "Created": 1788992244,
+      "Releases": [
+        {
+          "AppstreamId": "com.microsoft.dbx.x64.firmware",
+          "ReleaseId": "143971",
+          "RemoteId": "lvfs",
+          "Name": "Secure Boot dbx",
+          "NameVariantSuffix": "x64",
+          "Summary": "UEFI Secure Boot Forbidden Signature Database",
+          "Description": "<p>This updates the list of forbidden signatures (the &quot;dbx&quot;) to the latest release from Microsoft.</p><p>Some insecure bootloaders were added, due to security vulnerabilities that allowed an attacker to bypass UEFI Secure Boot. The additional entries were from:</p><ul><li>Baramanudi Management Suite</li><li>EAZ EasyFix</li><li>Finland Matriculation Examination Board</li><li>NTC IT ROSA Linux</li><li>PC-Doctor</li><li>Spyrus WTGCreator</li><li>WhiteCanyon blancco</li><li>Some ancient shim releases for OpenSUSE, Oracle and Red Hat</li></ul>",
+          "Version": "20260402",
+          "Filename": "DBXUpdate-20260402-x64.cab",
+          "Protocol": "org.uefi.dbx2",
+          "Categories": [
+            "X-Configuration",
+            "X-System"
+          ],
+          "Issues": [
+            "616257",
+            "CVE-2026-8863"
+          ],
+          "Checksum": [
+            "699ad9c1e22655ebe0325ca9f6237b12bcffd8cc",
+            "9edea8bc287bf9bf4659856b28cf421f330eb2f658c163eab0a03512a98c0e78"
+          ],
+          "License": "LicenseRef-proprietary",
+          "Size": 24629,
+          "Created": 1756771200,
+          "Locations": [
+            "https://fwupd.org/downloads/9edea8bc287bf9bf4659856b28cf421f330eb2f658c163eab0a03512a98c0e78-DBXUpdate-20260402-x64.cab"
+          ],
+          "Homepage": "https://uefi.org/revocationlistfile",
+          "Urgency": "high",
+          "Vendor": "Linux Foundation",
+          "Flags": [
+            "trusted-metadata",
+            "is-upgrade"
+          ],
+          "InstallDuration": 1
+        },
+        {
+          "AppstreamId": "com.microsoft.dbx.x64.firmware",
+          "ReleaseId": "130035",
+          "RemoteId": "lvfs",
+          "Name": "Secure Boot dbx",
+          "NameVariantSuffix": "x64",
+          "Summary": "UEFI Secure Boot Forbidden Signature Database",
+          "Description": "<p>This updates the list of forbidden signatures (the &quot;dbx&quot;) to the latest release from Microsoft.</p><p>Some insecure versions of the IGEL bootloader were added, due to a security vulnerability that allowed an attacker to bypass UEFI Secure Boot.</p>",
+          "Version": "20250902",
+          "Filename": "DBXUpdate-20250902-x64.cab",
+          "Protocol": "org.uefi.dbx2",
+          "Categories": [
+            "X-Configuration",
+            "X-System"
+          ],
+          "Issues": [
+            "CVE-2025-47827"
+          ],
+          "Checksum": [
+            "554bcc51746a5372babea54b3772c855b48c3bd3",
+            "7178302fa23fcb875e7540900e299fb30a76758663efb7e1c56edc25cd3f316a"
+          ],
+          "License": "LicenseRef-proprietary",
+          "Size": 24053,
+          "Created": 1756771200,
+          "Locations": [
+            "https://fwupd.org/downloads/7178302fa23fcb875e7540900e299fb30a76758663efb7e1c56edc25cd3f316a-DBXUpdate-20250902-x64.cab"
+          ],
+          "Homepage": "https://uefi.org/revocationlistfile",
+          "Urgency": "high",
+          "Vendor": "Linux Foundation",
+          "Flags": [
+            "trusted-metadata",
+            "is-upgrade",
+            "trusted-report"
+          ],
+          "InstallDuration": 1
+        },
+        {
+          "AppstreamId": "com.microsoft.dbx.x64.firmware",
+          "ReleaseId": "115586",
+          "RemoteId": "lvfs",
+          "Name": "Secure Boot dbx",
+          "NameVariantSuffix": "x64",
+          "Summary": "UEFI Secure Boot Forbidden Signature Database",
+          "Description": "<p>This updates the list of forbidden signatures (the &quot;dbx&quot;) to the latest release from Microsoft.</p><p>Some insecure versions of BiosFlashShell and Dtbios by DT Research Inc were added, due to a security vulnerability that allowed an attacker to bypass UEFI Secure Boot.</p>",
+          "Version": "20250507",
+          "Filename": "DBXUpdate-20250507-x64.cab",
+          "Protocol": "org.uefi.dbx2",
+          "Categories": [
+            "X-Configuration",
+            "X-System"
+          ],
+          "Issues": [
+            "806555",
+            "CVE-2025-3052"
+          ],
+          "Checksum": [
+            "ba051e72126cffa054a9dca6f935c3d9d943dff5",
+            "40d3a4630619b83026f66bc64d97a582bbd9223ad53aa3f519ff5e2121d11ca6"
+          ],
+          "License": "LicenseRef-proprietary",
+          "Size": 24005,
+          "Created": 1737072000,
+          "Locations": [
+            "https://fwupd.org/downloads/40d3a4630619b83026f66bc64d97a582bbd9223ad53aa3f519ff5e2121d11ca6-DBXUpdate-20250507-x64.cab"
+          ],
+          "Homepage": "https://uefi.org/revocationlistfile",
+          "Urgency": "high",
+          "Vendor": "Linux Foundation",
+          "Flags": [
+            "trusted-metadata",
+            "is-upgrade",
+            "trusted-report"
+          ],
+          "InstallDuration": 1
+        },
+        {
+          "AppstreamId": "com.microsoft.dbx.x64.firmware",
+          "ReleaseId": "105821",
+          "RemoteId": "lvfs",
+          "Name": "Secure Boot dbx",
+          "NameVariantSuffix": "x64",
+          "Summary": "UEFI Secure Boot Forbidden Signature Database",
+          "Description": "<p>This updates the list of forbidden signatures (the &quot;dbx&quot;) to the latest release from Microsoft.</p><p>An insecure version of Howyar's SysReturn software was added, due to a security vulnerability that allowed an attacker to bypass UEFI Secure Boot.</p>",
+          "Version": "20241101",
+          "Filename": "DBXUpdate-20241101-x64.cab",
+          "Protocol": "org.uefi.dbx2",
+          "Categories": [
+            "X-Configuration",
+            "X-System"
+          ],
+          "Issues": [
+            "529659",
+            "CVE-2024-7344"
+          ],
+          "Checksum": [
+            "78b4e7cc928e9f7a3052d4c9103e4141f96fcf56",
+            "093e6913dfecefbdaa9374a2e1caee7bf7e74c7eda847624e456e344884ba5f6"
+          ],
+          "License": "LicenseRef-proprietary",
+          "Size": 15125,
+          "Created": 1737072000,
+          "Locations": [
+            "https://fwupd.org/downloads/093e6913dfecefbdaa9374a2e1caee7bf7e74c7eda847624e456e344884ba5f6-DBXUpdate-20241101-x64.cab"
+          ],
+          "Homepage": "https://uefi.org/revocationlistfile",
+          "Urgency": "high",
+          "Vendor": "Linux Foundation",
+          "Flags": [
+            "trusted-metadata",
+            "is-upgrade"
+          ],
+          "InstallDuration": 1
+        }
+      ]
+    }
+  ]
+}

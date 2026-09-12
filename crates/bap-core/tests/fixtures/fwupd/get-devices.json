@@ -1,0 +1,84 @@
+{
+  "Devices": [
+    {
+      "DeviceId": "4a4907dbb1b96c6a1177dfd1b95eb41c781d1265",
+      "InstanceIds": [
+        "GPIO\\ID_INT3450:00"
+      ],
+      "Guid": [
+        "1199a818-4c52-5137-b536-d59e2e2cada9"
+      ],
+      "Plugin": "gpio",
+      "Flags": [
+        "can-emulation-tag"
+      ],
+      "Created": 1788992244
+    },
+    {
+      "Name": "Core™ i7-9750H CPU @ 2.60GHz",
+      "DeviceId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+      "InstanceIds": [
+        "CPUID\\PRO_0&FAM_06&MOD_9E",
+        "CPUID\\PRO_0&FAM_06&MOD_9E&STP_A"
+      ],
+      "Guid": [
+        "809a0b93-8a12-5338-a571-ad5583acf896",
+        "72ec2ff3-49ff-5ec2-bdbb-525badd47543"
+      ],
+      "Plugin": "cpu",
+      "Flags": [
+        "internal"
+      ],
+      "Vendor": "Intel",
+      "Version": "0x000000fa",
+      "VersionFormat": "hex",
+      "VersionRaw": 250,
+      "Icons": [
+        "computer"
+      ],
+      "Created": 1788992244
+    },
+    {
+      "Name": "System Firmware",
+      "DeviceId": "adf9b09c46cea62d1b16348b52885bd168430bcc",
+      "Guid": [
+        "c418661e-707a-57de-ac46-511a5d080b34"
+      ],
+      "Summary": "UEFI System Resource Table device (updated via NVRAM)",
+      "Plugin": "uefi_capsule",
+      "Protocols": [
+        "org.uefi.capsule"
+      ],
+      "Flags": [
+        "internal",
+        "updatable",
+        "require-ac",
+        "needs-reboot",
+        "can-verify",
+        "usable-during-update"
+      ],
+      "RequestFlags": [
+        "allow-generic-message"
+      ],
+      "Checksums": [
+        "4281ec08583237845b7a6d42ee2ab455b4a18dee",
+        "edf80dc02c8669772c18c3893181aec86b09287a7ba75a4e35ba6a41ee304170"
+      ],
+      "Vendor": "Intel(R) Client Systems",
+      "VendorIds": [
+        "DMI:Intel Corp."
+      ],
+      "Version": "158",
+      "VersionLowest": "158",
+      "VersionFormat": "number",
+      "VersionRaw": 158,
+      "VersionLowestRaw": 158,
+      "Icons": [
+        "computer"
+      ],
+      "Created": 1788992244,
+      "UpdateState": 3,
+      "UpdateError": "failed to update to 0: error-unsuccessful"
+    }
+  ]
+}
