@@ -506,7 +506,9 @@ fn each_installation_gets_the_rule_the_style_guide_settles() {
         Remedy::UpdatesPage {
             source: SourceKind::Aur,
             package: "bap-store".into(),
-            sentence: "BAP Store 0.2.0 is in the AUR; it is in your Updates.".into(),
+            sentence: "BAP Store 0.2.0 is published. This copy updates through the AUR package \
+                       bap-store, which appears in Updates once the AUR has it."
+                .into(),
         }
     );
     // On any architecture, and with no assets: the AUR builds from source.
@@ -952,7 +954,7 @@ fn the_flatpak_bundle_installer_plans_as_the_user_if_ever_used() {
 fn live_latest_release_is_none_or_a_version() {
     let dir = tempfile::tempdir().expect("a temporary directory");
     let client = bap_core::http::Client::new(dir.path().to_path_buf());
-    match release::latest(&client) {
+    match release::latest(&client, false) {
         Ok(None) => eprintln!("no release yet: Ok(None)"),
         Ok(Some(r)) => {
             eprintln!("newest release: {} ({} assets)", r.version, r.assets.len());

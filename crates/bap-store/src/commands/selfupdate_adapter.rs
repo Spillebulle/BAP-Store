@@ -28,12 +28,14 @@ pub fn unchecked() -> SelfUpdate {
 }
 
 /// Ask whether a newer BAP Store exists and how this copy would get it.
-/// Infallible: a failed request is reported inside the value (`error`), so
-/// the page can say why.
-pub fn check() -> Result<SelfUpdate, String> {
+/// `fresh` goes past the six-hour disk cache, for a check the user asked
+/// for by name. Infallible: a failed request is reported inside the value
+/// (`error`), so the page can say why.
+pub fn check(fresh: bool) -> Result<SelfUpdate, String> {
     Ok(bap_core::selfupdate::check(
         &Client::shared(),
         &Probe::current(),
+        fresh,
     ))
 }
 

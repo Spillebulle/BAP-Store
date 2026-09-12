@@ -141,8 +141,7 @@ impl Probe {
         }
     }
 
-    /// A probe over fixed readings, for tests and for the text mode's
-    /// `--as` rehearsal.
+    /// A probe over fixed readings, for tests.
     pub fn fixed(exe: &str, env: &[(&str, &str)], present: &[&str]) -> Probe {
         let present: Vec<PathBuf> = present.iter().map(PathBuf::from).collect();
         Probe {

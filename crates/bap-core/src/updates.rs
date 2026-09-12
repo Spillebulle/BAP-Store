@@ -73,8 +73,10 @@ pub fn collect(store: &Store) -> UpdateList {
 }
 
 /// [`collect`], optionally asking each source to refresh its index first
-/// (`Source::refresh_index`, root-free). A refresh that fails is logged and
-/// the source answers from what it has: an older answer beats none.
+/// (`Source::refresh_index`, root-free). A refresh that fails is a line in
+/// `failed` saying the list is what was known before, and the source still
+/// answers from what it has: an older answer beats none, but never passes
+/// as a fresh one.
 pub fn collect_with(store: &Store, refresh: bool) -> UpdateList {
     let sources: Vec<&dyn Source> = store
         .sources
@@ -82,29 +84,57 @@ pub fn collect_with(store: &Store, refresh: bool) -> UpdateList {
         .map(|s| s.as_ref())
         .filter(|s| s.status().available)
         .collect();
-    let results: Vec<(SourceKind, Result<Vec<Update>>)> = std::thread::scope(|scope| {
-        let handles: Vec<_> = sources
-            .iter()
-            .map(|s| {
-                let kind = s.kind();
-                scope.spawn(move || {
-                    if refresh && let Err(e) = s.refresh_index() {
-                        log::warn!(
-                            "{} could not refresh its index: {}",
-                            kind.label(),
-                            e.message
-                        );
-                    }
-                    (kind, s.updates())
+    let results: Vec<(SourceKind, Option<String>, Result<Vec<Update>>)> =
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = sources
+                .iter()
+                .map(|s| {
+                    let kind = s.kind();
+                    scope.spawn(move || {
+                        let stale = if refresh {
+                            s.refresh_index().err().map(|e| e.message)
+                        } else {
+                            None
+                        };
+                        (kind, stale, s.updates())
+                    })
                 })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().expect("a source panicked"))
-            .collect()
-    });
-    merge(results)
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("a source panicked"))
+                .collect()
+        });
+    let mut stale = Vec::new();
+    let mut answers = Vec::new();
+    for (kind, refresh_error, updates) in results {
+        if let Some(message) = refresh_error {
+            log::warn!("{} could not refresh its index: {message}", kind.label());
+            stale.push((kind, stale_sentence(kind, &message)));
+        }
+        answers.push((kind, updates));
+    }
+    let mut list = merge(answers);
+    list.failed.extend(stale);
+    list.failed.sort_by_key(|(kind, _)| *kind);
+    list
+}
+
+/// The line for a source whose index could not be refreshed: what it
+/// means for the list, then the source's own reason as a sentence.
+fn stale_sentence(kind: SourceKind, reason: &str) -> String {
+    let reason = reason.trim();
+    let reason = if reason.is_empty() {
+        "The source did not say why.".to_string()
+    } else if reason.ends_with(['.', '!', '?']) {
+        reason.to_string()
+    } else {
+        format!("{reason}.")
+    };
+    format!(
+        "{}: package lists could not be refreshed, so this list is what was known before. {reason}",
+        kind.label()
+    )
 }
 
 /// The pure half of [`collect`]: record failures, drop a duplicate
@@ -173,9 +203,17 @@ mod tests {
         available: bool,
         updates: Vec<Update>,
         fail: Option<String>,
+        /// What `refresh_index` fails with, when it fails.
+        refresh_fail: Option<String>,
     }
 
     impl Source for Fake {
+        fn refresh_index(&self) -> Result<()> {
+            match &self.refresh_fail {
+                Some(message) => Err(Error::from_source(self.kind, message.clone())),
+                None => Ok(()),
+            }
+        }
         fn kind(&self) -> SourceKind {
             self.kind
         }
@@ -258,12 +296,14 @@ mod tests {
                     Some(100),
                 )],
                 fail: None,
+                refresh_fail: None,
             },
             Fake {
                 kind: SourceKind::Aur,
                 available: true,
                 updates: Vec::new(),
                 fail: Some("aur.archlinux.org did not answer in time".to_string()),
+                refresh_fail: None,
             },
             Fake {
                 kind: SourceKind::Flatpak,
@@ -276,6 +316,7 @@ mod tests {
                     None,
                 )],
                 fail: None,
+                refresh_fail: None,
             },
         ]);
         let list = collect(&store);
@@ -289,6 +330,80 @@ mod tests {
             )]
         );
         assert!(list.checked_at > 0);
+    }
+
+    #[test]
+    fn a_failed_refresh_is_a_line_in_failed_and_the_old_list_still_answers() {
+        let zlib = update(
+            SourceKind::Pacman,
+            "zlib",
+            "zlib",
+            PackageKind::Package,
+            Some(100),
+        );
+        let stale = store(vec![
+            Fake {
+                kind: SourceKind::Pacman,
+                available: true,
+                updates: vec![zlib.clone()],
+                fail: None,
+                refresh_fail: Some("every mirror of core answered 404".to_string()),
+            },
+            Fake {
+                kind: SourceKind::Flatpak,
+                available: true,
+                updates: Vec::new(),
+                fail: None,
+                refresh_fail: None,
+            },
+        ]);
+        let list = collect_with(&stale, true);
+        assert_eq!(
+            list.updates,
+            vec![zlib],
+            "what was known before still answers"
+        );
+        assert_eq!(
+            list.failed,
+            vec![(
+                SourceKind::Pacman,
+                "pacman: package lists could not be refreshed, so this list is what was known before. \
+                 every mirror of core answered 404."
+                    .to_string()
+            )],
+            "and the page is told it is not fresh"
+        );
+        // Without a refresh the same store has nothing to report.
+        assert!(collect_with(&stale, false).failed.is_empty());
+        // A refresh failure and an updates failure are two lines, in
+        // interface order with the rest.
+        let two = store(vec![
+            Fake {
+                kind: SourceKind::Snap,
+                available: true,
+                updates: Vec::new(),
+                fail: Some("snapd is not running.".to_string()),
+                refresh_fail: None,
+            },
+            Fake {
+                kind: SourceKind::Pacman,
+                available: true,
+                updates: Vec::new(),
+                fail: Some("The database is locked.".to_string()),
+                refresh_fail: Some("could not reach mirror.example.org".to_string()),
+            },
+        ]);
+        let list = collect_with(&two, true);
+        let kinds: Vec<SourceKind> = list.failed.iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            kinds,
+            vec![SourceKind::Pacman, SourceKind::Pacman, SourceKind::Snap]
+        );
+        assert!(
+            list.failed.iter().all(|(_, s)| s.ends_with('.')),
+            "{:?}",
+            list.failed
+        );
     }
 
     #[test]

@@ -8,8 +8,12 @@
 //! every remedy here is one of four shapes, chosen from the
 //! [`Installation`] and never from a guess:
 //!
-//! * [`Remedy::UpdatesPage`]: the package manager already has it (the AUR,
-//!   or the Spillebulle archive), so it is a row on the Updates page.
+//! * [`Remedy::UpdatesPage`]: the package manager is where this copy came
+//!   from (the AUR, or the Spillebulle archive), so the release reaches the
+//!   Updates page once that manager has it. The sentence promises no more
+//!   than that: GitHub having the release says nothing about whether the
+//!   AUR package or the archive has caught up, or whether apt's lists have
+//!   been refreshed since.
 //! * [`Remedy::InstallAsset`]: the manager has never heard of it, so the
 //!   exact release asset is downloaded and handed to the manager through
 //!   the helper.
@@ -84,7 +88,8 @@ pub enum Format {
     PacmanPackage,
     /// `BAP-Store-<v>-x86_64.AppImage`, `BAP-Store-<v>-aarch64.AppImage`
     AppImage,
-    /// `bap-store-<v>-x86_64.flatpak`
+    /// `bap-store-<v>-x86_64.flatpak`. Not built yet; the name is reserved
+    /// so a bundle, when it ships, is found without a code change.
     Flatpak,
 }
 
@@ -163,7 +168,8 @@ pub enum Installer {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Remedy {
-    /// The manager already has it: it is a row on the Updates page.
+    /// This copy updates through its package manager, so the release is a
+    /// row on the Updates page once that manager has it.
     UpdatesPage {
         source: SourceKind,
         package: String,
@@ -233,7 +239,10 @@ pub fn remedy(
             Remedy::UpdatesPage {
                 source: SourceKind::Aur,
                 package: package.clone(),
-                sentence: format!("BAP Store {latest} is in the AUR; it is in your Updates."),
+                sentence: format!(
+                    "BAP Store {latest} is published. This copy updates through the AUR package \
+                     bap-store, which appears in Updates once the AUR has it."
+                ),
             }
         }
 
@@ -256,9 +265,7 @@ pub fn remedy(
         Installation::Dpkg { archive: true } => Remedy::UpdatesPage {
             source: SourceKind::Apt,
             package: ARCHIVE_PACKAGE.to_string(),
-            sentence: format!(
-                "BAP Store {latest} is in the Spillebulle archive; it is in your Updates."
-            ),
+            sentence: archive_sentence(latest),
         },
 
         Installation::Dpkg { archive: false } => match asset(Format::Deb) {
@@ -281,9 +288,7 @@ pub fn remedy(
         Installation::Rpm { archive: true } => Remedy::UpdatesPage {
             source: SourceKind::Dnf,
             package: ARCHIVE_PACKAGE.to_string(),
-            sentence: format!(
-                "BAP Store {latest} is in the Spillebulle archive; it is in your Updates."
-            ),
+            sentence: archive_sentence(latest),
         },
 
         Installation::Rpm { archive: false } => match asset(Format::Rpm) {
@@ -362,6 +367,17 @@ pub fn remedy(
                 .to_string(),
         },
     }
+}
+
+/// The sentence for a copy the Spillebulle archive keeps up to date. It
+/// says when the row appears, not that it has: the archive is rebuilt after
+/// the release exists, and apt and dnf only know once their lists are
+/// refreshed.
+fn archive_sentence(latest: &Version) -> String {
+    format!(
+        "BAP Store {latest} is published. This copy updates through the Spillebulle archive \
+         and appears in Updates after the next refresh of the package lists."
+    )
 }
 
 /// The sentence for a format the release does not carry for this
