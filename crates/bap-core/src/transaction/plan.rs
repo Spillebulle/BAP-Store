@@ -15,8 +15,11 @@
 use crate::model::*;
 use crate::{Result, Store};
 
-/// The sentence the Updates page shows beside a partial pacman update.
-pub const PARTIAL_UPGRADE_NOTICE: &str = "Arch does not support partial upgrades. Updating only some packages can break others; Update all is the safe choice.";
+/// The sentence the Updates page shows beside a pacman update that is not
+/// "Update all". A pacman install or update is `pacman -Syu` with names, so
+/// ticking one package brings every package up to date; the sentence says
+/// so rather than pretending the subset is what runs.
+pub const PARTIAL_UPGRADE_NOTICE: &str = "Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.";
 
 /// Build the plan for `ops`: ask each source for its steps, order them into
 /// lanes, batch what can be batched.
@@ -49,12 +52,16 @@ pub fn build(store: &Store, ops: &[Op]) -> Result<Plan> {
 
 /// What the page should say beside a plan before it runs. Today that is one
 /// sentence: a pacman update that leaves other pending pacman updates out is
-/// a partial upgrade, which Arch does not support. The sentence is shown
-/// whenever the plan updates some pacman packages but not all of them, and
-/// also when the pending list cannot be read, because then nobody can say
-/// the update is complete.
+/// a partial upgrade, which Arch does not support, so what runs is an update
+/// of everything. The sentence is shown whenever the plan updates some pacman
+/// packages but not all of them, when the pending list cannot be read
+/// (because then nobody can say the update is complete), and whenever a
+/// pacman refresh is planned beside a pacman install or update without an
+/// "Update all", because a refresh followed by an install is that same
+/// partial upgrade in two steps.
 pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
     let mut notices = Vec::new();
+    let is_pacman = |package: &PackageRef| package.source == SourceKind::Pacman;
     let updates_all = ops.iter().any(|op| {
         matches!(
             op,
@@ -63,16 +70,32 @@ pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
             }
         )
     });
+    let refreshes = ops.iter().any(|op| {
+        matches!(
+            op,
+            Op::Refresh {
+                source: SourceKind::Pacman
+            }
+        )
+    });
+    let installs = ops
+        .iter()
+        .any(|op| matches!(op, Op::Install { package } if is_pacman(package)));
     let chosen: Vec<&str> = ops
         .iter()
         .filter_map(|op| match op {
-            Op::Update { package } if package.source == SourceKind::Pacman => {
-                Some(package.id.as_str())
-            }
+            Op::Update { package } if is_pacman(package) => Some(package.id.as_str()),
             _ => None,
         })
         .collect();
-    if !chosen.is_empty() && !updates_all {
+    if updates_all {
+        return notices;
+    }
+    if refreshes && (installs || !chosen.is_empty()) {
+        notices.push(PARTIAL_UPGRADE_NOTICE.to_string());
+        return notices;
+    }
+    if !chosen.is_empty() {
         let pending = store
             .source(SourceKind::Pacman)
             .and_then(|s| s.updates().ok());
@@ -187,16 +210,13 @@ pub struct BatchRule {
 }
 
 /// Every command shape the planner may batch. A program not in this table is
-/// never joined with another step, whatever its arguments.
+/// never joined with another step, whatever its arguments. A pacman verb is
+/// listed here only if `allow.rs` accepts it, so a batch the planner builds
+/// is never one the helper refuses after the password prompt.
 pub const BATCHABLE: &[BatchRule] = &[
     BatchRule {
         program: "pacman",
         verb: "-S",
-        head_positionals: 0,
-    },
-    BatchRule {
-        program: "pacman",
-        verb: "-Sy",
         head_positionals: 0,
     },
     BatchRule {
@@ -206,17 +226,7 @@ pub const BATCHABLE: &[BatchRule] = &[
     },
     BatchRule {
         program: "pacman",
-        verb: "-R",
-        head_positionals: 0,
-    },
-    BatchRule {
-        program: "pacman",
         verb: "-Rs",
-        head_positionals: 0,
-    },
-    BatchRule {
-        program: "pacman",
-        verb: "-Rns",
         head_positionals: 0,
     },
     BatchRule {
@@ -372,6 +382,9 @@ fn batch(ordered: Vec<Gathered>, ops: &[Op]) -> Vec<Step> {
     out.into_iter().map(|p| p.step).collect()
 }
 
+/// A command without names means "everything" (`flatpak update`,
+/// `pacman -Syu`); joining it with a named one would narrow it to the names,
+/// so such a step is never joined in either direction.
 fn joinable(a: &Step, b: &Step, ka: &BatchKey, kb: &BatchKey) -> bool {
     a.source == b.source
         && a.needs_root == b.needs_root
@@ -379,6 +392,8 @@ fn joinable(a: &Step, b: &Step, ka: &BatchKey, kb: &BatchKey) -> bool {
         && a.command.cwd == b.command.cwd
         && ka.program == kb.program
         && ka.head == kb.head
+        && !ka.names.is_empty()
+        && !kb.names.is_empty()
 }
 
 /// "Installing 3 packages", from what the ops that fed the batch asked for.
@@ -501,7 +516,7 @@ mod tests {
                 SourceKind::Pacman,
                 &format!("Installing {id}"),
                 "pacman",
-                &["-S", "--noconfirm", "--needed", &id],
+                &["-Syu", "--noconfirm", "--needed", &id],
                 true,
             )],
             Op::Remove { .. } => vec![step(
@@ -518,6 +533,9 @@ mod tests {
                 &["-Syu", "--noconfirm"],
                 true,
             )],
+            // The real pacman source plans no refresh step any more (it
+            // refreshes its own copy of the databases without root); the
+            // fake keeps one so the refresh lane is exercised.
             Op::Refresh { .. } => vec![step(
                 SourceKind::Pacman,
                 "Refreshing",
@@ -526,6 +544,23 @@ mod tests {
                 true,
             )],
         }
+    }
+
+    /// The shapes `sources/flatpak.rs` builds: an update of everything has
+    /// no ref, an update of one has its ref.
+    fn flatpak_update_steps(op: &Op) -> Vec<Step> {
+        let id = id_of(op);
+        let mut args = vec!["update", "-y", "--noninteractive"];
+        if !matches!(op, Op::UpdateAll { .. }) {
+            args.push(&id);
+        }
+        vec![step(
+            SourceKind::Flatpak,
+            &format!("Updating {id}"),
+            "flatpak",
+            &args,
+            false,
+        )]
     }
 
     fn flatpak_steps(op: &Op) -> Vec<Step> {
@@ -643,7 +678,7 @@ mod tests {
         let s = &plan.steps[0];
         assert_eq!(
             args(s),
-            ["-S", "--noconfirm", "--needed", "steam", "lutris", "wine"]
+            ["-Syu", "--noconfirm", "--needed", "steam", "lutris", "wine"]
         );
         assert_eq!(s.title, "Installing 3 packages");
         assert!(s.needs_root);
@@ -696,8 +731,69 @@ mod tests {
             install(SourceKind::Pacman, "a"),
         ];
         let plan = build(&store, &ops).unwrap();
-        assert_eq!(args(&plan.steps[0]), ["-S", "--noconfirm", "--needed", "a"]);
+        assert_eq!(
+            args(&plan.steps[0]),
+            ["-Syu", "--noconfirm", "--needed", "a"]
+        );
         assert_eq!(plan.steps[0].title, "Installing a");
+    }
+
+    #[test]
+    fn an_update_all_is_never_joined_with_a_named_update() {
+        let store = store(vec![fake(SourceKind::Flatpak, flatpak_update_steps)]);
+        for ops in [
+            vec![
+                Op::UpdateAll {
+                    source: SourceKind::Flatpak,
+                },
+                update(SourceKind::Flatpak, "app/org.x/x86_64/stable"),
+            ],
+            vec![
+                update(SourceKind::Flatpak, "app/org.x/x86_64/stable"),
+                Op::UpdateAll {
+                    source: SourceKind::Flatpak,
+                },
+            ],
+        ] {
+            let plan = build(&store, &ops).unwrap();
+            assert_eq!(plan.steps.len(), 2, "{:?}", plan.steps);
+            let everything = plan
+                .steps
+                .iter()
+                .find(|s| s.command.args == ["update", "-y", "--noninteractive"])
+                .expect("the update of everything keeps its empty tail");
+            assert_eq!(everything.title, "Updating all");
+        }
+        let plan = build(
+            &store,
+            &[
+                update(SourceKind::Flatpak, "app/org.x/x86_64/stable"),
+                update(SourceKind::Flatpak, "app/org.y/x86_64/stable"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(plan.steps.len(), 1, "named updates still join");
+        assert_eq!(plan.steps[0].title, "Updating 2 packages");
+    }
+
+    #[test]
+    fn the_batch_table_names_only_pacman_verbs_the_helper_allows() {
+        use crate::transaction::allow::{Allowed, check_step};
+        for rule in BATCHABLE.iter().filter(|r| r.program == "pacman") {
+            let s = step(
+                SourceKind::Pacman,
+                "t",
+                "pacman",
+                &[rule.verb, "--noconfirm", "foo"],
+                true,
+            );
+            assert_eq!(
+                check_step(&s, &Allowed::system()),
+                Ok(()),
+                "pacman {} is batchable but the helper refuses it",
+                rule.verb
+            );
+        }
     }
 
     #[test]
@@ -756,7 +852,7 @@ mod tests {
         assert_eq!(plan.steps[1].source, SourceKind::Pacman);
         assert_eq!(
             args(&plan.steps[1]),
-            ["-S", "--noconfirm", "--needed", "a", "b"]
+            ["-Syu", "--noconfirm", "--needed", "a", "b"]
         );
     }
 
@@ -947,6 +1043,77 @@ mod tests {
             Vec::<String>::new()
         );
         assert!(!PARTIAL_UPGRADE_NOTICE.contains('\u{2014}'));
+        assert!(PARTIAL_UPGRADE_NOTICE.ends_with('.'));
+        assert!(
+            PARTIAL_UPGRADE_NOTICE.contains("Update all is what runs."),
+            "the notice says what happens, not what to prefer"
+        );
+    }
+
+    #[test]
+    fn a_pacman_refresh_beside_an_install_or_update_carries_the_notice() {
+        let pacman = Box::new(Fake {
+            kind: SourceKind::Pacman,
+            steps: pacman_steps,
+            pending: vec!["a"],
+        });
+        let store = store(vec![pacman]);
+        let refresh = || Op::Refresh {
+            source: SourceKind::Pacman,
+        };
+        assert_eq!(
+            notices(&store, &[refresh(), install(SourceKind::Pacman, "x")]),
+            [PARTIAL_UPGRADE_NOTICE.to_string()]
+        );
+        assert_eq!(
+            notices(&store, &[update(SourceKind::Pacman, "a"), refresh()]),
+            [PARTIAL_UPGRADE_NOTICE.to_string()],
+            "every pending update ticked is still a refresh then an install"
+        );
+        assert_eq!(
+            notices(
+                &store,
+                &[
+                    refresh(),
+                    install(SourceKind::Pacman, "x"),
+                    update(SourceKind::Pacman, "a")
+                ]
+            )
+            .len(),
+            1,
+            "one notice, not one per reason"
+        );
+        assert_eq!(
+            notices(&store, &[refresh()]),
+            Vec::<String>::new(),
+            "a refresh alone installs nothing"
+        );
+        assert_eq!(
+            notices(
+                &store,
+                &[
+                    refresh(),
+                    install(SourceKind::Pacman, "x"),
+                    Op::UpdateAll {
+                        source: SourceKind::Pacman
+                    }
+                ]
+            ),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            notices(
+                &store,
+                &[
+                    Op::Refresh {
+                        source: SourceKind::Flatpak
+                    },
+                    install(SourceKind::Pacman, "x")
+                ]
+            ),
+            Vec::<String>::new(),
+            "another source's refresh is not pacman's"
+        );
     }
 
     #[test]

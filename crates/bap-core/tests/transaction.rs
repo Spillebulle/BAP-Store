@@ -121,9 +121,29 @@ fn shapes(events: &[Event]) -> Vec<String> {
     events.iter().map(shape).collect()
 }
 
+/// Put a script in place through a child process rather than by writing it
+/// here: a file this process holds open for writing while another test's
+/// spawn forks is inherited by that child, and executing it then fails with
+/// "Text file busy". The staging copy is never executed, so it may be
+/// written directly.
 fn write_executable(path: &Path, text: &str) {
-    std::fs::write(path, text).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let staging = path.with_extension("txt");
+    std::fs::write(&staging, text).unwrap();
+    let status = Process::new("install")
+        .args(["-m", "755"])
+        .arg(&staging)
+        .arg(path)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "install could not place {}",
+        path.display()
+    );
+    assert_eq!(
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+        0o755
+    );
 }
 
 /// A helper stand-in. The prelude reads the plan line unbuffered (so a later
@@ -485,9 +505,21 @@ fn pkexec_exit_codes_become_sentences() {
     let dir = tempfile::tempdir().unwrap();
     let helper = dir.path().join("bap-helper");
     write_executable(&helper, "#!/bin/sh\nexit 0\n");
-    for (code, sentence) in [(126, runner::AUTH_CANCELLED), (127, runner::NOT_AUTHORISED)] {
-        let pkexec = dir.path().join(format!("pkexec-{code}"));
-        write_executable(&pkexec, &format!("#!/bin/sh\nexit {code}\n"));
+    let no_agent = format!("{} No authentication agent found.", runner::NOT_AUTHORISED);
+    for (code, said, sentence) in [
+        (126, "", runner::AUTH_CANCELLED),
+        (127, "", runner::NOT_AUTHORISED),
+        // pkexec's own line for a desktop without a polkit agent, or a
+        // helper it could not execute, is appended so the user reads why.
+        (127, "No authentication agent found.", no_agent.as_str()),
+    ] {
+        let pkexec = dir.path().join(format!("pkexec-{code}-{}", said.len()));
+        let print = if said.is_empty() {
+            String::new()
+        } else {
+            format!("echo '{said}' >&2\n")
+        };
+        write_executable(&pkexec, &format!("#!/bin/sh\n{print}exit {code}\n"));
         let runner = Runner::new()
             .with_helper(Some(helper.clone()))
             .with_wrapper(vec![pkexec.to_str().unwrap().to_string()]);
@@ -499,6 +531,7 @@ fn pkexec_exit_codes_become_sentences() {
         let (outcome, events) = run_collect(&runner, &plan);
         assert!(!outcome.ok);
         assert_eq!(outcome.message, sentence);
+        assert!(outcome.message.ends_with('.'));
         assert!(
             events
                 .iter()
@@ -533,10 +566,23 @@ fn cancelling_a_session_step_kills_its_whole_process_group() {
     assert!(!outcome.ok);
     assert_eq!(outcome.message, runner::CANCELLED);
     assert_eq!(starts(&events), [0]);
-    assert!(events.iter().any(|e| matches!(
-        e,
-        Event::StepFinished { step: 0, ok: false, message: Some(m), .. } if m == runner::CANCELLED
-    )));
+    let cancelling = events
+        .iter()
+        .position(|e| {
+            matches!(
+                e,
+                Event::Progress { step: 0, message: Some(m), .. } if m == runner::CANCELLING_SESSION
+            )
+        })
+        .expect("the page is told the step is being stopped before it is killed");
+    let finished = events
+        .iter()
+        .position(|e| matches!(
+            e,
+            Event::StepFinished { step: 0, ok: false, message: Some(m), .. } if m == runner::CANCELLED
+        ))
+        .expect("the step reports cancelled");
+    assert!(cancelling < finished, "{:?}", shapes(&events));
     let pid: u32 = std::fs::read_to_string(&pidfile)
         .unwrap()
         .trim()
@@ -650,6 +696,33 @@ fn fixture_plans_deserialise_and_validate_as_expected() {
         ),
         "the first bad step is the one named: {err}"
     );
+
+    // A local bundle or a .flatpakref would install anything as root.
+    let flatpak_path: Plan = serde_json::from_str(
+        &std::fs::read_to_string(fixture("plan-refused-flatpak-path.json")).unwrap(),
+    )
+    .unwrap();
+    for step in &flatpak_path.steps {
+        let one = Plan {
+            id: flatpak_path.id.clone(),
+            ops: Vec::new(),
+            steps: vec![step.clone()],
+        };
+        let err = allow::validate(&one).unwrap_err();
+        assert!(
+            err.ends_with(allow::FLATPAK_NOT_A_FILE),
+            "{:?}: {err}",
+            step.command.args
+        );
+    }
+
+    // debconf evaluates DEBIAN_FRONTEND as Perl, as root.
+    let injection: Plan = serde_json::from_str(
+        &std::fs::read_to_string(fixture("plan-refused-env-injection.json")).unwrap(),
+    )
+    .unwrap();
+    let err = allow::validate(&injection).unwrap_err();
+    assert!(err.contains("The value of DEBIAN_FRONTEND"), "{err}");
 }
 
 fn readings(program: &str, transcript: &str) -> Vec<Reading> {
@@ -776,6 +849,22 @@ fn the_built_helper_checks_plans_and_refuses_to_run_as_a_user() {
         String::from_utf8_lossy(&refused.stderr)
             .starts_with("The helper refused a step it does not allow: pacman -S --config")
     );
+    for (name, reason) in [
+        ("plan-refused-flatpak-path.json", allow::FLATPAK_NOT_A_FILE),
+        (
+            "plan-refused-env-injection.json",
+            "The value of DEBIAN_FRONTEND is not a shape the helper passes on.",
+        ),
+    ] {
+        let refused = check(name);
+        assert_eq!(refused.status.code(), Some(3), "{name}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.starts_with("The helper refused a step it does not allow: "),
+            "{stderr}"
+        );
+        assert!(stderr.contains(reason), "{name}: {stderr}");
+    }
 
     let uid = std::os::unix::fs::MetadataExt::uid(&std::fs::metadata("/proc/self").unwrap());
     if uid == 0 {

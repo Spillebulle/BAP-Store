@@ -70,21 +70,32 @@ pub fn run(program: &str, args: &[&str]) -> crate::Result<String> {
         .args(args)
         .env("LC_ALL", "C.UTF-8")
         .output()
-        .map_err(|e| crate::Error::new(format!("could not run {program}: {e}")))?;
+        .map_err(|e| crate::Error::new(format!("Could not run {program}: {e}.")))?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let first = err.lines().next().unwrap_or("").trim();
-        return Err(crate::Error::new(format!(
-            "{program} {} failed{}",
+        return Err(crate::Error::new(run_failure(
+            program,
             args.first().copied().unwrap_or(""),
-            if first.is_empty() {
-                String::new()
-            } else {
-                format!(": {first}")
-            }
+            &String::from_utf8_lossy(&out.stderr),
         )));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The sentence for a tool that exited with an error: the program, its
+/// verb and the first line it printed. A full sentence, because three
+/// callers show it to the user as it is.
+fn run_failure(program: &str, verb: &str, stderr: &str) -> String {
+    let first = stderr.lines().next().unwrap_or("").trim();
+    let verb = if verb.is_empty() {
+        String::new()
+    } else {
+        format!(" {verb}")
+    };
+    if first.is_empty() {
+        format!("{program}{verb} failed.")
+    } else {
+        format!("{program}{verb} failed: {}.", first.trim_end_matches('.'))
+    }
 }
 
 /// An NVIDIA GPU is present, judged from sysfs vendor ids (0x10de) so no
@@ -103,28 +114,45 @@ pub fn has_nvidia() -> bool {
 
 /// Where BAP Store keeps its own files.
 pub struct Dirs {
+    /// Always `$HOME/.cache/bap-store`, never `XDG_CACHE_HOME`: see
+    /// [`cache_dir_for`].
     pub cache: PathBuf,
     pub config: PathBuf,
     pub data: PathBuf,
 }
 
+/// The store's cache directory for a home: `<home>/.cache/bap-store`.
+///
+/// This is fixed rather than read from `XDG_CACHE_HOME` because the helper
+/// installs a downloaded package file only from the directories in
+/// `transaction::allow::Allowed::for_home`, which names exactly this path
+/// under the invoking user's passwd home. The helper runs under pkexec with
+/// the user's environment scrubbed, so it cannot follow `XDG_CACHE_HOME`;
+/// if the store did, a download would land where the helper refuses to
+/// install from.
+pub fn cache_dir_for(home: &Path) -> PathBuf {
+    home.join(".cache").join("bap-store")
+}
+
 impl Dirs {
     pub fn new() -> Dirs {
+        let home = std::env::var_os("HOME")
+            .filter(|h| !h.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/tmp"));
+        let cache = cache_dir_for(&home);
         let base = directories::ProjectDirs::from("io.github", "spillebulle", "bap-store");
         match base {
             Some(d) => Dirs {
-                cache: d.cache_dir().to_path_buf(),
+                cache,
                 config: d.config_dir().to_path_buf(),
                 data: d.data_dir().to_path_buf(),
             },
-            None => {
-                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-                Dirs {
-                    cache: PathBuf::from(&home).join(".cache/bap-store"),
-                    config: PathBuf::from(&home).join(".config/bap-store"),
-                    data: PathBuf::from(&home).join(".local/share/bap-store"),
-                }
-            }
+            None => Dirs {
+                cache,
+                config: home.join(".config/bap-store"),
+                data: home.join(".local/share/bap-store"),
+            },
         }
     }
 }
@@ -163,5 +191,42 @@ mod tests {
         let s = from_os_release("");
         assert_eq!(s.distro_id, "linux");
         assert_eq!(s.pretty_name, "linux");
+    }
+
+    #[test]
+    fn the_cache_is_where_the_helper_allows_package_files_from() {
+        let home = Path::new("/home/me");
+        assert_eq!(
+            cache_dir_for(home),
+            PathBuf::from("/home/me/.cache/bap-store")
+        );
+        let allowed = crate::transaction::Allowed::for_home(Some(home));
+        assert!(
+            allowed.package_dirs.contains(&cache_dir_for(home)),
+            "the store's cache and the helper's list name the same directory"
+        );
+        assert_eq!(
+            cache_dir_for(Path::new("/")),
+            PathBuf::from("/.cache/bap-store")
+        );
+    }
+
+    #[test]
+    fn run_failures_are_sentences() {
+        assert_eq!(
+            run_failure(
+                "fwupdmgr",
+                "get-devices",
+                "error: failed to connect to daemon\nmore\n"
+            ),
+            "fwupdmgr get-devices failed: error: failed to connect to daemon."
+        );
+        assert_eq!(
+            run_failure("flatpak", "remotes", "error: Unable to load summary.\n"),
+            "flatpak remotes failed: error: Unable to load summary.",
+            "one full stop, not two"
+        );
+        assert_eq!(run_failure("chwd", "-i", "\n"), "chwd -i failed.");
+        assert_eq!(run_failure("chwd", "", ""), "chwd failed.");
     }
 }
