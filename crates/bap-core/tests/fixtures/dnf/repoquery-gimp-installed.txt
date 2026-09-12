@@ -1,0 +1,2 @@
+gimp	2.10.36-4.fc40	@System	GNU Image Manipulation Program	https://www.gimp.org/	GPL-3.0-or-later AND LGPL-3.0-or-later	0	123456789	1712000000
+gimp-libs	2.10.36-4.fc40	@System	GIMP libraries	https://www.gimp.org/	LGPL-3.0-or-later	0	3300000	1712000000

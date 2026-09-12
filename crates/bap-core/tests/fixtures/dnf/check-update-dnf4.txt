@@ -1,0 +1,12 @@
+Last metadata expiration check: 0:12:34 ago on Thu 10 Sep 2026 10:00:00 BST.
+
+a-very-long-package-name-that-overflows-the-column.noarch
+                                                        1.2.3-1.fc40                    updates
+bap-store.x86_64                                        0.2.0-1.fc40                    bap
+gimp.x86_64                                             2.10.38-1.fc40                  updates
+gimp-libs.x86_64                                        2.10.38-1.fc40                  updates
+kernel.x86_64                                           6.9.7-200.fc40                  updates
+vim-enhanced.x86_64                                     2:9.1.496-1.fc40                updates
+Obsoleting Packages
+new-thing.x86_64                                        1.0-1.fc40                      updates
+    old-thing.x86_64                                    0.9-1.fc40                      @System

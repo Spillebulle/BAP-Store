@@ -1,0 +1,7 @@
+gimp	2.10.36-4.fc40	fedora	GNU Image Manipulation Program	https://www.gimp.org/	GPL-3.0-or-later AND LGPL-3.0-or-later	23001100	123456789	1712000000
+gimp	2.10.38-1.fc40	updates	GNU Image Manipulation Program	https://www.gimp.org/	GPL-3.0-or-later AND LGPL-3.0-or-later	23100200	123999999	1718000000
+gimp-data-extras	2.0.2-25.fc40	fedora	Extra files for GIMP		GPL-2.0-or-later	1800000	4000000	1706000000
+gimp-devel	2.10.38-1.fc40	updates	GIMP plugin and extension development kit	https://www.gimp.org/	LGPL-3.0-or-later	400000	2000000	1718000000
+gimp-libs	2.10.36-4.fc40	fedora	GIMP libraries	https://www.gimp.org/	LGPL-3.0-or-later	1100000	3300000	1712000000
+gimp-libs	2.10.38-1.fc40	updates	GIMP libraries	https://www.gimp.org/	LGPL-3.0-or-later	1100500	3300500	1718000000
+gmic-gimp	3.4.1-1.fc40	updates	G'MIC plugin for GIMP	https://gmic.eu/	CECILL-2.1	9000000	30000000	1719000000

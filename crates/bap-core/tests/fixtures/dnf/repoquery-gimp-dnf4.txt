@@ -1,0 +1,6 @@
+gimp	2.10.36-4.fc39	fedora	GNU Image Manipulation Program	https://www.gimp.org/	GPLv3+ and LGPLv3+	23001100	123456789	2024-04-01 20:26
+
+gimp-data-extras	2.0.2-24.fc39	fedora	Extra files for GIMP	(none)	GPLv2+	1800000	4000000	2024-01-23 09:33
+
+gimp-libs	2.10.36-4.fc39	@System	GIMP libraries	https://www.gimp.org/	LGPLv3+	0	3300000	2024-04-01 20:26
+
