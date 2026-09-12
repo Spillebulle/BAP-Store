@@ -1,0 +1,27 @@
+{
+  "id": "fixture-refused",
+  "ops": [],
+  "steps": [
+    {
+      "source": "pacman",
+      "title": "Installing steam",
+      "command": {"program": "pacman", "args": ["-S", "--noconfirm", "--needed", "steam"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "pacman",
+      "title": "Installing foo",
+      "command": {"program": "pacman", "args": ["-S", "--config", "/tmp/evil.conf", "foo"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 3
+    },
+    {
+      "source": "pacman",
+      "title": "Cleaning up",
+      "command": {"program": "sh", "args": ["-c", "rm -rf /"], "env": [], "cwd": null},
+      "needs_root": true,
+      "weight": 1
+    }
+  ]
+}
