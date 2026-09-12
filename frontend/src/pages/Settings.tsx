@@ -1,12 +1,369 @@
-import { Settings } from "lucide-react";
-import { EmptyState } from "../components/EmptyState";
-import { ICON_EMPTY } from "../components/icons";
+// Settings in the §9 shape: groups of rows under eyebrows, every change
+// saved as it is made through the shell store, Restore all at the foot and
+// no Save button anywhere. The About block asks the self-updater once for
+// the version and how this copy was installed.
 
-/** Placeholder. The next phase puts the theme cards, the sources and the update checks here. */
-export function SettingsPage() {
+import { Bug, Code, RefreshCw } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import pkg from "../../../package.json";
+import * as api from "../api";
+import { Button, Dropdown, Figure, Notice, Segmented, Skeleton, Toggle, toast, type DropdownOption } from "../components";
+import { ICON } from "../components/icons";
+import { useShell } from "../shell/store";
+import { SOURCE_KINDS, sourceLabel, type AurHelper, type SelfUpdate, type Settings, type SourceKind, type Theme } from "../types";
+import { ThemeCard } from "./system/ThemeCard";
+import "./system/system.css";
+
+const REPO_URL = "https://github.com/Spillebulle/BAP-Store";
+const ISSUES_URL = `${REPO_URL}/issues`;
+
+/** What Restore all settings puts back. */
+const DEFAULTS: Settings = {
+  theme: "system",
+  enabled_sources: [...SOURCE_KINDS],
+  show_packages: false,
+  aur_helper: "auto",
+  flatpak_scope: "system",
+  check_updates_on_start: true,
+  self_update_check: true,
+  update_check_minutes: 60,
+  split: [],
+};
+
+const THEMES: { theme: Theme; name: string }[] = [
+  { theme: "dark", name: "Dark" },
+  { theme: "light", name: "Light" },
+  { theme: "system", name: "System" },
+];
+
+const AUR_HELPERS: DropdownOption<AurHelper>[] = [
+  { value: "auto", label: "Automatic" },
+  { value: "paru", label: "paru" },
+  { value: "yay", label: "yay" },
+  { value: "builtin", label: "Built-in makepkg" },
+];
+
+const INTERVALS = [15, 30, 60, 180];
+
+function minutesLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} minutes`;
+  const hours = minutes / 60;
+  if (Number.isInteger(hours)) return hours === 1 ? "1 hour" : `${hours} hours`;
+  return `${minutes} minutes`;
+}
+
+/** The four choices, plus whatever the file holds if it is none of them, so the control never shows nothing. */
+function intervalOptions(current: number): DropdownOption[] {
+  const values = INTERVALS.includes(current) ? INTERVALS : [current, ...INTERVALS].sort((a, b) => a - b);
+  return values.map((m) => ({ value: String(m), label: minutesLabel(m) }));
+}
+
+function message(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** One sentence for the toast after a check (§12: say what happened). */
+function checkSentence(result: SelfUpdate): string {
+  if (result.latest && result.latest.version !== result.current) {
+    return result.remedy?.sentence ?? `BAP Store ${result.latest.version} is available. This copy is ${result.current}.`;
+  }
+  return `BAP Store ${result.current} is the newest version.`;
+}
+
+function Group({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
   return (
-    <EmptyState fill icon={<Settings {...ICON_EMPTY} aria-hidden="true" />}>
-      Settings is not built yet. Theme, sources and update checks will be set here.
-    </EmptyState>
+    <section className="bs-settings-group" aria-label={eyebrow}>
+      <div className="bs-eyebrow">{eyebrow}</div>
+      {children}
+    </section>
+  );
+}
+
+function Setting({ label, note, control }: { label: ReactNode; note?: ReactNode; control?: ReactNode }) {
+  return (
+    <div className="bs-setting">
+      <div className="bs-setting-text">
+        <span className="bs-setting-label">{label}</span>
+        {note ? <span className="bs-setting-note">{note}</span> : null}
+      </div>
+      {control ? <div className="bs-setting-control">{control}</div> : null}
+    </div>
+  );
+}
+
+/** Rows with the geometry of a setting while the settings file is read. */
+function SkeletonSettings() {
+  return (
+    <div className="bs-settings sy-settings" aria-hidden="true">
+      {[3, 4, 2].map((rows, g) => (
+        <div key={g} className="bs-settings-group">
+          <Skeleton width="64px" className="bs-skel--text" />
+          {Array.from({ length: rows }, (_, i) => (
+            <div key={i} className="bs-setting">
+              <div className="sy-skel-lines">
+                <Skeleton width={`${24 + ((i * 11 + g * 7) % 20)}%`} />
+              </div>
+              <Skeleton className="sy-skel-control" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SettingsPage() {
+  const settings = useShell((s) => s.settings);
+  const sources = useShell((s) => s.sources);
+  const loadError = useShell((s) => s.loadError);
+  const load = useShell((s) => s.load);
+  const saveSettings = useShell((s) => s.saveSettings);
+
+  const [self, setSelf] = useState<SelfUpdate | null>(null);
+  const [selfError, setSelfError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .self_update_check(false)
+      .then((r) => {
+        if (alive) setSelf(r);
+      })
+      .catch((e) => {
+        if (alive) setSelfError(message(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const save = async (patch: Partial<Settings>) => {
+    try {
+      await saveSettings(patch);
+    } catch (e) {
+      toast(message(e), "error");
+    }
+  };
+
+  const check = async () => {
+    setChecking(true);
+    try {
+      const result = await api.self_update_check(true);
+      setSelf(result);
+      setSelfError(null);
+      toast(checkSentence(result), "good");
+    } catch (e) {
+      setSelfError(message(e));
+      toast(message(e), "error");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const restore = async () => {
+    await save(DEFAULTS);
+    toast("Every setting is back to its default.", "good");
+  };
+
+  const forgetSplit = async () => {
+    await save({ split: [] });
+    toast("Split editions are grouped again.", "good");
+  };
+
+  const setSource = (kind: SourceKind, on: boolean) => {
+    if (!settings) return;
+    const next = SOURCE_KINDS.filter((k) => (k === kind ? on : settings.enabled_sources.includes(k)));
+    void save({ enabled_sources: next });
+  };
+
+  const version = self?.current ?? pkg.version;
+
+  return (
+    <div className="bs-page">
+      <div className="bs-page-head">
+        <h1 className="bs-page-title">Settings</h1>
+        <p className="bs-page-sub">The interface should disappear behind your work. Changes save as you make them.</p>
+      </div>
+
+      {loadError ? (
+        <Notice
+          actions={
+            <Button kind="ghost" onClick={() => void load()}>
+              Try again
+            </Button>
+          }
+        >
+          {loadError}
+        </Notice>
+      ) : null}
+
+      {!settings && !loadError ? <SkeletonSettings /> : null}
+
+      {settings ? (
+        <div className="bs-settings sy-settings">
+          <Group eyebrow="Appearance">
+            <div className="bs-theme-cards">
+              {THEMES.map((t) => (
+                <ThemeCard key={t.theme} theme={t.theme} name={t.name} on={settings.theme === t.theme} onPick={() => void save({ theme: t.theme })} />
+              ))}
+            </div>
+          </Group>
+
+          <Group eyebrow="Sources">
+            {SOURCE_KINDS.map((kind) => {
+              const status = sources.find((s) => s.kind === kind);
+              const label = sourceLabel(kind);
+              const on = settings.enabled_sources.includes(kind);
+              if (!status) {
+                return (
+                  <Setting
+                    key={kind}
+                    label={label}
+                    note="BAP Store has not heard from this source yet."
+                    control={<Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason="BAP Store has not heard from this source yet." />}
+                  />
+                );
+              }
+              if (!status.available) {
+                const reason = status.reason ?? `${label} is not available on this machine.`;
+                return <Setting key={kind} label={label} note={reason} control={<Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason={reason} />} />;
+              }
+              return <Setting key={kind} label={label} note={status.detail ?? undefined} control={<Toggle label={label} on={on} onChange={(v) => setSource(kind, v)} />} />;
+            })}
+            <Setting
+              label="AUR helper"
+              note="Automatic uses paru or yay when one is installed, else the built-in makepkg."
+              control={<Dropdown name="AUR helper" alone form options={AUR_HELPERS} value={settings.aur_helper} onChange={(v) => void save({ aur_helper: v })} />}
+            />
+            <Setting
+              label="Flatpak installation"
+              note="System asks for your password; User installs into your home."
+              control={
+                <Segmented
+                  name="Flatpak installation"
+                  value={settings.flatpak_scope}
+                  onChange={(v) => void save({ flatpak_scope: v })}
+                  options={[
+                    { value: "system", label: "System" },
+                    { value: "user", label: "User" },
+                  ]}
+                />
+              }
+            />
+          </Group>
+
+          <Group eyebrow="Search">
+            <Setting
+              label="Show packages, not only applications"
+              note="Libraries, tools and fonts appear in results beside applications."
+              control={<Toggle label="Show packages, not only applications" on={settings.show_packages} onChange={(v) => void save({ show_packages: v })} />}
+            />
+          </Group>
+
+          <Group eyebrow="Updates">
+            <Setting
+              label="Check for updates when the window opens"
+              control={<Toggle label="Check for updates when the window opens" on={settings.check_updates_on_start} onChange={(v) => void save({ check_updates_on_start: v })} />}
+            />
+            <Setting
+              label="Tell me about new versions of BAP Store"
+              note="Asks GitHub for the newest release. Nothing is sent but the version."
+              control={<Toggle label="Tell me about new versions of BAP Store" on={settings.self_update_check} onChange={(v) => void save({ self_update_check: v })} />}
+            />
+            <Setting
+              label="Check again every"
+              control={
+                <Dropdown
+                  name="Check again every"
+                  alone
+                  form
+                  options={intervalOptions(settings.update_check_minutes)}
+                  value={String(settings.update_check_minutes)}
+                  onChange={(v) => void save({ update_check_minutes: Number(v) })}
+                />
+              }
+            />
+          </Group>
+
+          <Group eyebrow="About">
+            <Setting
+              label={
+                <>
+                  BAP Store <Figure>{version}</Figure>
+                </>
+              }
+              note={
+                self ? (
+                  self.latest && self.latest.version !== self.current ? (
+                    <>
+                      <Figure>{self.latest.version}</Figure> is available. {self.remedy?.sentence ?? ""}
+                    </>
+                  ) : (
+                    "This is the newest version."
+                  )
+                ) : selfError ? (
+                  selfError
+                ) : (
+                  "Asking GitHub for the newest release…"
+                )
+              }
+              control={
+                checking ? (
+                  <Button icon={<RefreshCw {...ICON} aria-hidden="true" />} disabled disabledReason="A check is already running.">
+                    Checking…
+                  </Button>
+                ) : (
+                  <Button icon={<RefreshCw {...ICON} aria-hidden="true" />} title="Ask GitHub for the newest release now." onClick={() => void check()}>
+                    Check for a new version
+                  </Button>
+                )
+              }
+            />
+            {self ? (
+              <Setting label={`${self.installation.label}.`} />
+            ) : selfError ? (
+              <Setting label="How this copy was installed is not known until the check answers." />
+            ) : (
+              <div className="bs-setting" aria-hidden="true">
+                <div className="sy-skel-lines">
+                  <Skeleton width="40%" />
+                </div>
+              </div>
+            )}
+            <div className="sy-links">
+              <Button kind="ghost" icon={<Code {...ICON} aria-hidden="true" />} title={`Open ${REPO_URL} in the browser.`} onClick={() => void api.openUrl(REPO_URL)}>
+                Source code
+              </Button>
+              <Button kind="ghost" icon={<Bug {...ICON} aria-hidden="true" />} title={`Open ${ISSUES_URL} in the browser.`} onClick={() => void api.openUrl(ISSUES_URL)}>
+                Report a problem
+              </Button>
+            </div>
+            <p className="sy-licence">GPL-3.0-or-later. Archivo is bundled under the SIL Open Font Licence; icons are Lucide, ISC.</p>
+          </Group>
+
+          {settings.split.length > 0 ? (
+            <Group eyebrow="Danger">
+              <Setting
+                label="Editions you split from their rows are grouped again."
+                note={settings.split.length === 1 ? "One row is split." : `${settings.split.length} rows are split.`}
+                control={
+                  <Button kind="danger" title="Forget every split and group the editions again." onClick={() => void forgetSplit()}>
+                    Forget split rows
+                  </Button>
+                }
+              />
+            </Group>
+          ) : null}
+
+          <div className="bs-settings-foot">
+            <span>Changes save as you make them.</span>
+            <Button kind="outline" title="Put every setting back to its default." onClick={() => void restore()}>
+              Restore all settings
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
