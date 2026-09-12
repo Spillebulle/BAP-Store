@@ -1,0 +1,215 @@
+/*
+ * The list pages (Installed, Updates): the geometry that is theirs alone. Every
+ * control is app.css's; this file only places them. Tokens throughout, never a
+ * value. Class names are prefixed bl- (bap lists) so they cannot be confused
+ * with a component.
+ */
+
+/* ═══ the page: toolbar strip, body, foot ═════════════════════════════════ */
+
+.bl-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+/* The strip stays put while a long list scrolls under it (§7.2). */
+.bl-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.bl-toolbar > .bs-seg,
+.bl-toolbar > .bs-dd {
+  flex: none;
+}
+
+.bl-body {
+  flex: 1 0 auto;
+}
+
+/* The one place to act on the list: chrome, a hairline above, kept in view. */
+.bl-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  flex: none;
+  margin-top: auto;
+  padding: var(--s2) var(--pad-strip);
+  background: var(--chrome);
+  border-top: var(--hairline) solid var(--line);
+}
+
+.bl-foot-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--h-button);
+}
+
+.bl-foot-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: var(--text-small);
+}
+
+.bl-foot-row > .bs-btn-group {
+  margin-left: auto;
+}
+
+/* ═══ the installed rows ═══════════════════════════════════════════════════ */
+
+/* The remove picker for an application with several installed editions sits
+   in the action slot beside plain buttons, so it takes their height and a
+   line edge; the list still opens exactly under it. Its label is a command,
+   not a caption, so it reads in text rather than muted. */
+.bl-dd-action {
+  height: var(--h-button);
+  padding: 0 var(--s2);
+  border-color: var(--line);
+  font-size: var(--text-control);
+}
+
+.bl-dd-action:hover,
+.bl-dd-action.open {
+  background: transparent;
+  border-color: var(--line-dashed);
+}
+
+.bl-dd-action .bs-dd-value.empty {
+  color: var(--text);
+}
+
+/* ═══ the updates table (§7.16: a list with columns) ═══════════════════════ */
+
+.bl-well {
+  padding: 0 var(--s3);
+}
+
+.bl-table td {
+  padding: calc(var(--s3) / 2) var(--s3) calc(var(--s3) / 2) 0;
+  vertical-align: middle;
+}
+
+.bl-table th {
+  padding-right: var(--s3);
+}
+
+.bl-table tr > :last-child {
+  padding-right: 0;
+}
+
+/* Inside a well the well's own edge closes the list. */
+.bl-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* A row is ticked by clicking it; the box is the state and the row keeps its plain look. */
+.bl-table tbody tr {
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease);
+}
+
+.bl-table tbody tr:hover {
+  background: color-mix(in oklab, var(--control-hover) 50%, transparent);
+}
+
+.bl-table tbody tr[aria-busy="true"] {
+  cursor: default;
+}
+
+.bl-table tbody tr[aria-busy="true"]:hover {
+  background: transparent;
+}
+
+/* Narrow columns shrink to what they hold; the name takes the rest and
+   truncates rather than growing the table. */
+.bl-c-narrow {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.bl-c-name {
+  width: 100%;
+  max-width: 0;
+}
+
+.bl-c-arrow {
+  color: var(--text-dim);
+}
+
+.bl-c-arrow > svg {
+  display: block;
+}
+
+/* Figures are right-aligned, and so is their header (app.css's th rule outranks a bare class). */
+.bl-table th.bl-c-size,
+.bl-table td.bl-c-size {
+  text-align: right;
+}
+
+.bl-name {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--text-control);
+}
+
+.bl-name-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bl-figure {
+  color: var(--text-strong);
+}
+
+.bl-unknown {
+  color: var(--text-dim);
+  font-family: var(--font-figure);
+  font-size: var(--text-tiny);
+}
+
+/* Skeleton rows keep the table's geometry: a box, an icon, two lines, a badge, figures. */
+.bl-skel-box {
+  width: var(--icon);
+  height: var(--icon);
+  border-radius: var(--r-tight);
+}
+
+.bl-skel-badge {
+  width: calc(var(--s5) * 2);
+  height: var(--s4);
+  border-radius: var(--r-tight);
+}
+
+.bl-skel-figure {
+  width: calc(var(--s6) * 2);
+  height: var(--s2);
+}
+
+.bl-skel-lines {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--s3) / 2);
+}
+
+/* A skeleton is an inline span; in a cell it needs a box to have a size at all. */
+.bl-table td > .bs-skel,
+.bl-table th > .bs-skel,
+.bl-skel-lines > .bs-skel {
+  display: block;
+}
