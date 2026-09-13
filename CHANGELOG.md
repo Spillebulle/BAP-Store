@@ -12,5 +12,7 @@ Newest first. Each section is the release's notes, published verbatim.
 - Flathub and the Snap Store are searched before Flatpak or snapd is installed. Installing from them sets the tool up first, and Settings has a button to set either up on its own.
 - The Flatpak installation and AUR helper settings now take effect.
 - The confirm step says how many times you may be asked for your password, and marks the steps that ask.
+- Open an installed application from BAP Store: from the toast when an install finishes, on its page, and on the Installed list.
+- After Flatpak or snapd is set up, BAP Store says that the launcher lists their applications only after you log out and back in once.
 - Drivers through chwd on CachyOS and firmware through fwupd.
 - BAP Store checks for its own new versions and installs them the way this copy was installed.

@@ -125,6 +125,13 @@ const SOURCES: SourceStatus[] = [
   { kind: "chwd", available: true, reason: null, detail: "chwd", searchable: false, setup: null },
 ];
 
+/** Formats set up while this mock "session" runs; ?notice=flatpak starts with one. */
+const setUpThisSession = new Set<SourceKind>(
+  (PARAMS.get("notice") ?? "")
+    .split(",")
+    .filter((k): k is SourceKind => k === "flatpak" || k === "snap"),
+);
+
 function available(kind: SourceKind): boolean {
   return SOURCES.some((s) => s.kind === kind && s.available);
 }
@@ -138,6 +145,8 @@ function searchable(kind: SourceKind): boolean {
 function markAvailable(kind: SourceKind) {
   const status = SOURCES.find((s) => s.kind === kind);
   if (!status) return;
+  // Set up during this session, so a real desktop would not list its applications until the next login.
+  if (kind === "flatpak" || kind === "snap") setUpThisSession.add(kind);
   status.available = true;
   status.reason = null;
   status.detail = kind === "flatpak" ? "flathub" : kind === "snap" ? "snapd 2.72" : status.detail;
@@ -1030,7 +1039,12 @@ export async function plan(ops: Op[]): Promise<PlanPreview> {
     notices.push("Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.");
   }
   for (const op of ops) {
-    if (op.op === "setup") notices.push(setupNotice(op.source, ops));
+    if (op.op === "setup") {
+      notices.push(setupNotice(op.source, ops));
+      if ((op.source === "flatpak" || op.source === "snap") && !available(op.source)) {
+        notices.push(`Your launcher lists ${sourceLabel(op.source)} applications only after you log out and back in once. Until then, open them from BAP Store.`);
+      }
+    }
   }
   if (built.steps.some((s) => s.command.program === "paru" && s.title.startsWith("Building"))) {
     notices.push("AUR packages are built on this machine as your user. A large build can take several minutes.");
@@ -1389,6 +1403,31 @@ export async function settings_get(): Promise<Settings> {
 export async function settings_set(next: Settings): Promise<Settings> {
   settings = { ...next, enabled_sources: [...next.enabled_sources], split: [...next.split] };
   return settings_get();
+}
+
+export async function launch_targets(refs: PackageRef[]): Promise<(string | null)[]> {
+  await delay(60);
+  return refs.map((ref) => {
+    const p = findPackage(ref);
+    if (!p || !p.installed || p.kind !== "app") return null;
+    if (p.source === "flatpak") return `${p.appstream_id ?? p.name}.desktop`;
+    if (p.source === "snap") return `${p.id}_${p.id}.desktop`;
+    return `${p.id}.desktop`;
+  });
+}
+
+export async function open_app(pkg: PackageRef): Promise<void> {
+  await delay(150);
+  const target = (await launch_targets([pkg]))[0];
+  if (!target) throw new Error(`${pkg.id} is not something BAP Store can open. It may not be installed, or it has no application to start.`);
+}
+
+export async function launcher_notices(): Promise<[SourceKind, string][]> {
+  await delay(40);
+  return [...setUpThisSession].map((kind) => {
+    const label = sourceLabel(kind);
+    return [kind, `${label} applications are installed but this desktop session started before ${label} was set up, so your launcher does not list them yet. Log out and back in once to see them there; until then, open them from BAP Store.`];
+  });
 }
 
 export async function group_split(pkg: PackageRef): Promise<Settings> {

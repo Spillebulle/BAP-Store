@@ -949,6 +949,25 @@ impl Source for Pacman {
     /// from being reinstalled. A refresh plans nothing, because
     /// [`refresh_index`](Source::refresh_index) does it without root and a
     /// bare `-Sy` would set up the partial upgrade the design refuses.
+    /// The desktop entry among the files pacman recorded for the package,
+    /// preferring one named after the package or after its AppStream id.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let files = super::alpmdb::local_files(&self.paths.local_dir, id)?;
+        let component_id = self.catalogue.by_pkgname(id).map(|c| c.id.clone());
+        let last_segment = component_id
+            .as_deref()
+            .and_then(|c| c.rsplit('.').next())
+            .map(str::to_string);
+        let mut preferred: Vec<&str> = vec![id];
+        if let Some(c) = component_id.as_deref() {
+            preferred.push(c);
+        }
+        if let Some(l) = last_segment.as_deref() {
+            preferred.push(l);
+        }
+        crate::launch::from_files(files.iter().map(String::as_str), Path::new("/"), &preferred)
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         let step = match op {
             Op::Install { package } => {
@@ -1015,6 +1034,10 @@ impl Source for Arc<Pacman> {
     }
     fn refresh_index(&self) -> Result<()> {
         Source::refresh_index(self.as_ref())
+    }
+
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        Source::launcher(self.as_ref(), id)
     }
 
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {

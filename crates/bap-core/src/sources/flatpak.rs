@@ -1132,6 +1132,37 @@ impl Source for Flatpak {
         Ok(p)
     }
 
+    /// The exported desktop entry for an installed application, which opens
+    /// whether or not the session lists the export directory yet. An
+    /// application installed without one is run with `flatpak run`.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let flatpak_ref = FlatpakRef::parse(id).ok()?;
+        if flatpak_ref.kind != "app" {
+            return None;
+        }
+        let entry = format!("{}.desktop", flatpak_ref.app_id);
+        if let Some(path) = export_dirs()
+            .into_iter()
+            .map(|d| d.join(&entry))
+            .find(|p| p.is_file())
+        {
+            return Some(crate::launch::Launch::Entry(path));
+        }
+        let installed = installation_roots()
+            .iter()
+            .any(|root| root.join("app").join(&flatpak_ref.app_id).is_dir());
+        (installed && self.is_installed()).then(|| {
+            crate::launch::Launch::Command(crate::launch::command(
+                "flatpak",
+                &["run", &flatpak_ref.app_id],
+            ))
+        })
+    }
+
+    fn launcher_notice(&self) -> Option<String> {
+        crate::launch::notice_for("Flatpak", &export_dirs(), &crate::launch::this_session())
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         match op {
             Op::Install { package } if package.source == SourceKind::Flatpak => {
@@ -1244,6 +1275,29 @@ impl Source for Flatpak {
             _ => None,
         }
     }
+}
+
+/// The two installations' roots: the system one shared by every user, and
+/// the user's own.
+pub fn installation_roots() -> Vec<PathBuf> {
+    let mut roots = vec![PathBuf::from("/var/lib/flatpak")];
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")));
+    if let Some(home) = data_home {
+        roots.push(home.join("flatpak"));
+    }
+    roots
+}
+
+/// Where each installation exports its applications' desktop entries; the
+/// directories flatpak's profile script adds to `XDG_DATA_DIRS`.
+pub fn export_dirs() -> Vec<PathBuf> {
+    installation_roots()
+        .into_iter()
+        .map(|r| r.join("exports/share/applications"))
+        .collect()
 }
 
 /// Flatpak's name for the architecture Rust reports.

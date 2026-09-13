@@ -977,6 +977,21 @@ impl Source for Github {
         Ok(p)
     }
 
+    /// Only an AppImage this source placed is opened from here: a package
+    /// it installed through pacman, apt or dnf belongs to that source's
+    /// record, under a name the release does not state.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let record = self.records().into_iter().find(|r| r.repo == id)?;
+        if record.kind != AssetKind::AppImage {
+            return None;
+        }
+        let home = std::env::var_os("HOME").map(PathBuf::from)?;
+        let path = appimage_path(&home, &record.name);
+        path.is_file().then(|| {
+            crate::launch::Launch::Command(crate::launch::command(path.display().to_string(), &[]))
+        })
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         match op {
             Op::Install { package } | Op::Update { package } => {

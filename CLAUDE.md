@@ -115,6 +115,14 @@ These were decided before the first line and are not re-litigated in a fix:
   else. Never a `pkexec` call site outside `transaction/runner.rs`.
 - **A source never runs anything.** `Source::plan` returns steps; the Runner
   runs them. This is what makes every source testable with fixtures.
+- **Opening an installed application is the one process started outside the
+  Runner.** It changes nothing and never runs as root, so it is not a plan:
+  `Source::launcher` finds the desktop entry in the package's own file list
+  (or answers `flatpak run` / `snap run` / an AppImage), and
+  `commands::logic::start` hands an entry to `gio launch`. Never parse `Exec`
+  here. `crates/bap-core/src/launch.rs` explains why, and why a session that
+  started before Flatpak or snapd was installed cannot list their
+  applications until the user logs in again.
 - **Grouping is a pure function** of `Vec<Package>` (`group.rs`). Adding a
   heuristic means adding a fixture where it fires and one where it must not.
 - **No partial upgrade on Arch presented as safe.** See `docs/architecture.md`.

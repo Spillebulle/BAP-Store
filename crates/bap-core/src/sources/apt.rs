@@ -425,6 +425,20 @@ impl Source for Apt {
         })
     }
 
+    /// dpkg records a package's files in `info/<name>.list`, or
+    /// `info/<name>:<arch>.list` for a multi-arch package, beside `status`.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let info = self.status_path.parent()?.join("info");
+        let candidates = [
+            info.join(format!("{id}.list")),
+            info.join(format!("{id}:{}.list", self.arch)),
+        ];
+        let text = candidates
+            .iter()
+            .find_map(|p| std::fs::read_to_string(p).ok())?;
+        crate::launch::from_files(text.lines(), std::path::Path::new("/"), &[id])
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         if let Some(reason) = self.unavailable_reason() {
             return Err(Error::from_source(SourceKind::Apt, reason));

@@ -3,9 +3,10 @@
 // way to remove one edition. The list is asked for on every visit and kept
 // for the session, so coming back shows it at once.
 
-import { ArrowUpDown, HardDrive, Layers, RefreshCw } from "lucide-react";
+import { ArrowUpDown, HardDrive, Layers, Play, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { startOps } from "../activity/flow";
+import { launchKey, openPackage, useLaunchTargets } from "../activity/launch";
 import { AppRow, Button, Count, Dropdown, EmptyState, Figure, ICON, ICON_EMPTY, MultiSelect, Notice, SearchField, Segmented, Skeleton, SkeletonAppRows } from "../components";
 import type { DropdownOption } from "../components";
 import { useShell } from "../shell/store";
@@ -89,7 +90,7 @@ function HeadLine({ apps, loading }: { apps: App[] | null; loading: boolean }) {
   );
 }
 
-function InstalledRow({ app, onOpen }: { app: App; onOpen: (app: App) => void }) {
+function InstalledRow({ app, onOpen, targets }: { app: App; onOpen: (app: App) => void; targets: Record<string, string | null> }) {
   const installed = installedEditions(app);
   // The row's badges are the installed editions; the detail page gets the whole application.
   const view = installed.length === app.editions.length ? app : { ...app, editions: installed };
@@ -104,6 +105,14 @@ function InstalledRow({ app, onOpen }: { app: App; onOpen: (app: App) => void })
     const { source, id } = e.package;
     void startOps([{ op: "remove", package: { source, id } }], installed.length > 1 ? `Remove ${app.name} (${sourceLabel(source)})` : `Remove ${app.name}`);
   };
+
+  // The first installed edition that has something to open; most applications have one.
+  const openable = installed.find((e) => targets[launchKey(e.package)]);
+  const open = openable ? (
+    <Button kind="ghost" icon={<Play {...ICON} aria-hidden="true" />} title={`Opens ${targets[launchKey(openable.package)]}.`} onClick={() => void openPackage(openable.package, app.name)}>
+      Open
+    </Button>
+  ) : null;
 
   let action: ReactNode = null;
   if (installed.length === 1) {
@@ -133,7 +142,23 @@ function InstalledRow({ app, onOpen }: { app: App; onOpen: (app: App) => void })
     );
   }
 
-  return <AppRow app={view} onOpen={() => onOpen(app)} figure={figure} action={action} />;
+  return (
+    <AppRow
+      app={view}
+      onOpen={() => onOpen(app)}
+      figure={figure}
+      action={
+        open ? (
+          <span className="bs-inline">
+            {open}
+            {action}
+          </span>
+        ) : (
+          action
+        )
+      }
+    />
+  );
 }
 
 export function InstalledPage() {
@@ -175,6 +200,13 @@ export function InstalledPage() {
     openApp(app.key);
   };
 
+  // Only applications have something to open, so only their editions are asked about.
+  const openRefs = useMemo(
+    () => shown.filter((a) => a.kind === "app").flatMap((a) => installedEditions(a).map((e) => ({ source: e.package.source, id: e.package.id }))),
+    [shown],
+  );
+  const targets = useLaunchTargets(openRefs);
+
   const filtered = query.trim() !== "" || sources !== null || scope !== null;
   const clearFilter = () => {
     setQuery("");
@@ -210,7 +242,7 @@ export function InstalledPage() {
       <div className="bs-well">
         <div className="bs-list">
           {shown.map((app) => (
-            <InstalledRow key={app.key} app={app} onOpen={open} />
+            <InstalledRow key={app.key} app={app} onOpen={open} targets={targets} />
           ))}
         </div>
       </div>

@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { onTransactionEvent } from "../api";
+import { namesItsOwnOutcome } from "./launch";
 import { toast } from "../components/toastStore";
 import type { Event, PlanState, PlanStatus } from "../types";
 
@@ -106,7 +107,10 @@ export const useActivity = create<ActivityState>((set, get) => ({
     });
     if (ended && event.event === "plan_finished") {
       // A failure stays on screen until it is looked at; anything else leaves with its toast.
-      toast(event.message, next.state === "done" ? "good" : next.state === "failed" ? "error" : "neutral");
+      // A plan that installed something is named in its own toast, with an Open action (launch.ts).
+      if (!(next.state === "done" && namesItsOwnOutcome(next))) {
+        toast(event.message, next.state === "done" ? "good" : next.state === "failed" ? "error" : "neutral");
+      }
       if (next.state !== "failed") {
         window.setTimeout(() => {
           const now = get().plans[event.plan];

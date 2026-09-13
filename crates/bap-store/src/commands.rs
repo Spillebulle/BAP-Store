@@ -59,6 +59,9 @@ pub fn handler() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync + 'static 
         self_update_check,
         self_update_apply,
         group_split,
+        launch_targets,
+        open_app,
+        launcher_notices,
     ]
 }
 
@@ -112,6 +115,35 @@ async fn search(state: tauri::State<'_, AppState>, query: Query) -> Result<Searc
 async fn installed(state: tauri::State<'_, AppState>) -> Result<SearchResult, String> {
     let state = state.inner().clone();
     blocking(move || Ok(logic::installed(&state))).await
+}
+
+/// For each reference, what opening it would open (an entry's file name or a
+/// command line), or `null` when there is nothing to open. The page draws an
+/// Open button only where this is not `null`.
+#[tauri::command]
+async fn launch_targets(
+    state: tauri::State<'_, AppState>,
+    refs: Vec<PackageRef>,
+) -> Result<Vec<Option<String>>, String> {
+    let state = state.inner().clone();
+    blocking(move || Ok(logic::launch_targets(&state, &refs))).await
+}
+
+/// Open an installed package in the user's session.
+#[tauri::command]
+async fn open_app(state: tauri::State<'_, AppState>, package: PackageRef) -> Result<(), String> {
+    let state = state.inner().clone();
+    blocking(move || logic::open_app(&state, &package)).await
+}
+
+/// The sources whose applications the running session cannot list yet, each
+/// with the sentence that says so.
+#[tauri::command]
+async fn launcher_notices(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<(bap_core::SourceKind, String)>, String> {
+    let state = state.inner().clone();
+    blocking(move || Ok(state.store().launcher_notices())).await
 }
 
 #[tauri::command]
@@ -342,6 +374,93 @@ pub mod logic {
 
     pub fn drivers(state: &AppState) -> DriversReport {
         bap_core::drivers::report(&state.store())
+    }
+
+    pub fn launch_targets(state: &AppState, refs: &[PackageRef]) -> Vec<Option<String>> {
+        let store = state.store();
+        refs.iter()
+            .map(|r| store.launcher(r).map(|l| l.describe()))
+            .collect()
+    }
+
+    /// Opening an application is not a transaction, so it does not go
+    /// through a Plan: nothing changes on the machine and nothing runs as
+    /// root. `gio launch` returns once the application is started, so its
+    /// answer is waited for and a failure is a sentence; a command that runs
+    /// for the application's lifetime (`flatpak run`) is started in a
+    /// process group of its own and left to run, with a thread reaping it.
+    pub fn open_app(state: &AppState, package: &PackageRef) -> Result<(), String> {
+        let store = state.store();
+        let Some(launch) = store.launcher(package) else {
+            return Err(format!(
+                "{} is not something BAP Store can open. It may not be installed, or it has no application to start.",
+                package.id
+            ));
+        };
+        start(&launch)
+    }
+
+    /// Start what a [`bap_core::launch::Launch`] describes, detached from
+    /// the store's own process.
+    pub fn start(launch: &bap_core::launch::Launch) -> Result<(), String> {
+        use std::os::unix::process::CommandExt;
+        let spec = launch.command();
+        let mut command = std::process::Command::new(&spec.program);
+        command
+            .args(&spec.args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .process_group(0);
+        let program = spec.program.clone();
+        let not_started = |e: std::io::Error| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "{program} is not installed, so BAP Store cannot open applications. Install glib2 (it provides gio) and try again."
+                )
+            } else {
+                format!("Could not start {program}: {e}.")
+            }
+        };
+        if launch.returns_at_once() {
+            // Not a pipe: the application gio starts inherits gio's stderr,
+            // and a pipe would stay open for the application's lifetime, so
+            // waiting for it to close would wait for the application to be
+            // quit. A file closes nothing and still keeps gio's own words.
+            let log = bap_core::system::Dirs::new()
+                .cache
+                .join(format!("open-{}.log", std::process::id()));
+            if let Some(dir) = log.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let stderr = std::fs::File::create(&log)
+                .map(std::process::Stdio::from)
+                .unwrap_or_else(|_| std::process::Stdio::null());
+            let status = command.stderr(stderr).status().map_err(not_started)?;
+            let err = std::fs::read_to_string(&log).unwrap_or_default();
+            let _ = std::fs::remove_file(&log);
+            if status.success() {
+                return Ok(());
+            }
+            let first = err
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_end_matches('.');
+            return Err(if first.is_empty() {
+                format!("{} did not open.", launch.describe())
+            } else {
+                format!("{} did not open: {first}.", launch.describe())
+            });
+        }
+        let mut child = command
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(not_started)?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(())
     }
 
     /// A dry run for the confirm step.

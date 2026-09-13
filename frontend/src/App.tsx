@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import { ActivityPanel } from "./activity/ActivityPanel";
 import { startOps, trackPlan } from "./activity/flow";
 import { FlowDialog } from "./activity/FlowDialog";
+import { afterPlan, useLaunch } from "./activity/launch";
 import { onPlanDone, subscribeActivity, useActivity } from "./activity/store";
 import * as api from "./api";
 import { Toasts } from "./components/Toast";
@@ -11,12 +12,33 @@ import { useShortcuts } from "./shell/keys";
 import { Shell } from "./shell/Shell";
 import { useShell } from "./shell/store";
 import { applyTheme } from "./shell/theme";
+import { useSearch } from "./pages/search/store";
 import { refreshUpdateCount, startUpdateTimer } from "./shell/updates";
-import { SOURCE_KINDS, sourceLabel, type Op, type SourceKind } from "./types";
+import { SOURCE_KINDS, sourceLabel, type Op, type PackageRef, type SourceKind } from "./types";
 
 // The component sheet is a development aid for a browser only; the window
 // never loads it, so it is split out of the bundle it would otherwise weigh on.
 const Gallery = lazy(() => import("./dev/Gallery").then((m) => ({ default: m.Gallery })));
+
+/**
+ * What the page calls a package: its application's name where search has seen
+ * it, else the name its source gives in its details, else the id's last part.
+ */
+async function packageName(ref: PackageRef): Promise<string> {
+  const { results, remembered } = useSearch.getState();
+  const apps = [...(results?.apps ?? []), ...Object.values(remembered)];
+  const edition = apps.flatMap((a) => a.editions.map((e) => ({ app: a, e }))).find(({ e }) => e.package.source === ref.source && e.package.id === ref.id);
+  if (edition) return edition.app.name;
+  try {
+    const [details] = await api.app_details([ref]);
+    if (details?.name) return details.name;
+  } catch {
+    // The id is the name of last resort.
+  }
+  const parts = ref.id.split("/").filter(Boolean);
+  if (ref.source === "flatpak" && parts.length >= 5) return parts[2].split(".").pop() ?? parts[2];
+  return parts[parts.length - 1] ?? ref.id;
+}
 
 function Page() {
   const view = useShell((s) => s.view);
@@ -140,6 +162,9 @@ export default function App() {
   useEffect(() => onPlanDone(() => void refreshUpdateCount()), []);
   // The application re-detects its sources after a plan (a setup brings a tool); the page asks again so Settings and the status bar follow.
   useEffect(() => onPlanDone(() => void loadSources()), [loadSources]);
+  // Name what a plan installed, offer to open it, and say when the launcher cannot list it yet.
+  useEffect(() => onPlanDone((status) => void afterPlan(status, packageName)), []);
+  useEffect(() => void useLaunch.getState().loadNotices(), []);
   useEffect(() => startUpdateTimer(checkMinutes ?? 0), [checkMinutes]);
 
   useEffect(() => {

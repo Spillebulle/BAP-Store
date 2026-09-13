@@ -20,6 +20,7 @@ import type {
   SearchResult,
   SelfUpdate,
   Settings,
+  SourceKind,
   SourceStatus,
   SystemInfo,
   UpdateList,
@@ -134,6 +135,21 @@ export function self_update_check(force: boolean): Promise<SelfUpdate> {
 
 export function self_update_apply(): Promise<PlanStatus> {
   return inTauri ? call("self_update_apply") : mock().then((m) => m.self_update_apply());
+}
+
+/** For each reference, what Open would open (an entry's file name or a command line), or null when there is nothing to open. */
+export function launch_targets(refs: PackageRef[]): Promise<(string | null)[]> {
+  return inTauri ? call("launch_targets", { refs }) : mock().then((m) => m.launch_targets(refs));
+}
+
+/** Open an installed package in the user's session. */
+export function open_app(pkg: PackageRef): Promise<void> {
+  return inTauri ? call("open_app", { package: pkg }) : mock().then((m) => m.open_app(pkg));
+}
+
+/** Sources whose installed applications the running desktop session cannot list yet, with the sentence that says so. */
+export function launcher_notices(): Promise<[SourceKind, string][]> {
+  return inTauri ? call("launcher_notices") : mock().then((m) => m.launcher_notices());
 }
 
 export function group_split(pkg: PackageRef): Promise<Settings> {

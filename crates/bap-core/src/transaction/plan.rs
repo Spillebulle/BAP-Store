@@ -125,15 +125,46 @@ impl Gatherer<'_> {
 /// a pacman refresh is planned beside a pacman install or update without
 /// an "Update all", because a refresh followed by an install is that same
 /// partial upgrade in two steps.
+///
+/// A setup that installs Flatpak or snapd also says that the launcher lists
+/// the new applications only after the user logs out and back in, unless the
+/// running session already reads that format's export directory (see
+/// [`crate::launch`]).
 pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
-    let mut notices = setup_notices(store, ops);
+    notices_in(store, ops, &crate::launch::this_session())
+}
+
+/// [`notices`], for a session reading desktop entries from `session`.
+pub fn notices_in(store: &Store, ops: &[Op], session: &[std::path::PathBuf]) -> Vec<String> {
+    let mut notices = setup_notices(store, ops, session);
     if let Some(partial) = partial_upgrade_notice(store, ops) {
         notices.push(partial);
     }
     notices
 }
 
-fn setup_notices(store: &Store, ops: &[Op]) -> Vec<String> {
+/// The sentence after a setup that installs a format's tool, when the
+/// session cannot yet list that format's applications.
+pub fn log_out_notice(kind: SourceKind, session: &[std::path::PathBuf]) -> Option<String> {
+    let (label, dirs) = match kind {
+        SourceKind::Flatpak => ("Flatpak", crate::sources::flatpak::export_dirs()),
+        SourceKind::Snap => (
+            "Snap",
+            vec![std::path::PathBuf::from(
+                crate::sources::snap::SNAP_DESKTOP_DIR,
+            )],
+        ),
+        _ => return None,
+    };
+    if dirs.iter().any(|d| crate::launch::sees(session, d)) {
+        return None;
+    }
+    Some(format!(
+        "Your launcher lists {label} applications only after you log out and back in once. Until then, open them from BAP Store."
+    ))
+}
+
+fn setup_notices(store: &Store, ops: &[Op], session: &[std::path::PathBuf]) -> Vec<String> {
     let mut notices: Vec<String> = Vec::new();
     let mut said: Vec<SourceKind> = Vec::new();
     for (i, op) in ops.iter().enumerate() {
@@ -156,6 +187,13 @@ fn setup_notices(store: &Store, ops: &[Op]) -> Vec<String> {
             None => setup.notice.clone(),
         };
         notices.push(sentence);
+        // Only a setup that installs the tool changes what the session can
+        // see; adding a remote or starting a service does not.
+        if !setup.ops.is_empty()
+            && let Some(log_out) = log_out_notice(*kind, session)
+        {
+            notices.push(log_out);
+        }
     }
     notices
 }
@@ -499,6 +537,30 @@ fn batched_title(op_indexes: &[usize], ops: &[Op], count: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The notices for a session that already lists every format's
+    /// applications, so the tests below do not depend on how the machine
+    /// running them was logged in.
+    fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
+        let mut seen: Vec<std::path::PathBuf> = crate::sources::flatpak::export_dirs();
+        seen.push(std::path::PathBuf::from(
+            crate::sources::snap::SNAP_DESKTOP_DIR,
+        ));
+        notices_in(store, ops, &seen)
+    }
+
+    #[test]
+    fn installing_flatpak_says_the_launcher_needs_a_new_session() {
+        let blind = crate::launch::session_dirs(Some("/usr/share"), None);
+        let sentence = log_out_notice(SourceKind::Flatpak, &blind)
+            .expect("a session without Flatpak's exports");
+        assert!(sentence.contains("log out and back in once"), "{sentence}");
+        assert!(log_out_notice(SourceKind::Snap, &blind).is_some());
+        assert_eq!(log_out_notice(SourceKind::Pacman, &blind), None);
+        let seeing =
+            crate::launch::session_dirs(Some("/var/lib/flatpak/exports/share:/usr/share"), None);
+        assert_eq!(log_out_notice(SourceKind::Flatpak, &seeing), None);
+    }
     use crate::{Query, Setup, Source};
 
     /// A source that answers `plan` from a table, so the planner is tested

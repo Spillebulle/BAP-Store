@@ -1005,6 +1005,20 @@ impl Source for Aur {
         Ok(pkg)
     }
 
+    /// An AUR package is installed by pacman, so its desktop entry is in
+    /// pacman's record of its files, found the same way the pacman source
+    /// finds one. The name without its -bin, -git or -appimage suffix is
+    /// also tried, since that is what upstream names the entry.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let files = super::alpmdb::local_files(&self.paths.local_db, id)?;
+        let base = base_name(id);
+        crate::launch::from_files(
+            files.iter().map(String::as_str),
+            std::path::Path::new("/"),
+            &[id, base],
+        )
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         match op {
             Op::Install { package } | Op::Update { package } => {

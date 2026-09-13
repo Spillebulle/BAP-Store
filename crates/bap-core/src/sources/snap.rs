@@ -50,6 +50,10 @@ use std::time::Duration;
 /// Where snapd listens on every distribution that ships it.
 pub const SOCKET_PATH: &str = "/run/snapd.socket";
 
+/// Where snapd writes installed snaps' desktop entries, the directory its
+/// profile script adds to `XDG_DATA_DIRS` (as `/var/lib/snapd/desktop`).
+pub const SNAP_DESKTOP_DIR: &str = "/var/lib/snapd/desktop/applications";
+
 /// Where snaps are mounted: `/snap` on Ubuntu and Debian, the second on
 /// Arch and Fedora, which do not put a directory in `/`.
 const MOUNT_DIRS: [&str; 2] = ["/snap", "/var/lib/snapd/snap"];
@@ -1355,6 +1359,46 @@ impl Source for Snap {
             ))),
             (None, Err(e)) => Err(e),
         }
+    }
+
+    /// snapd writes an installed snap's desktop entries as
+    /// `<snap>_<app>.desktop` in its own directory; the one named after the
+    /// snap is preferred. A snap without one is run with `snap run`.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        if !super::alpmdb::is_package_name(id) {
+            return None;
+        }
+        let dir = Path::new(SNAP_DESKTOP_DIR);
+        let prefix = format!("{id}_");
+        let entries: Vec<PathBuf> = std::fs::read_dir(dir)
+            .map(|it| {
+                it.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| {
+                        p.file_name()
+                            .is_some_and(|n| n.to_string_lossy().starts_with(&prefix))
+                            && p.extension().is_some_and(|x| x == "desktop")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let same = format!("{id}_{id}");
+        if let Some(path) = crate::launch::choose_entry(entries, &[&same]) {
+            return Some(crate::launch::Launch::Entry(path));
+        }
+        let installed = ["/snap/bin", "/var/lib/snapd/snap/bin"]
+            .iter()
+            .any(|bin| Path::new(bin).join(id).exists());
+        installed
+            .then(|| crate::launch::Launch::Command(crate::launch::command("snap", &["run", id])))
+    }
+
+    fn launcher_notice(&self) -> Option<String> {
+        crate::launch::notice_for(
+            "Snap",
+            &[PathBuf::from(SNAP_DESKTOP_DIR)],
+            &crate::launch::this_session(),
+        )
     }
 
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {

@@ -9,6 +9,8 @@ export interface Toast {
   tone: ToastTone;
   /** At most one action. */
   action?: { label: string; onClick: () => void };
+  /** Stays until dismissed, like an error: a sentence the user has to act on later. */
+  stays?: boolean;
 }
 
 interface ToastState {
@@ -26,7 +28,7 @@ export const useToasts = create<ToastState>((set) => ({
   show: (toast) => {
     const id = nextId++;
     set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }));
-    if (toast.tone !== "error") {
+    if (toast.tone !== "error" && !toast.stays) {
       window.setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), LIFETIME_MS);
     }
     return id;
@@ -34,6 +36,6 @@ export const useToasts = create<ToastState>((set) => ({
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
-export function toast(text: string, tone: ToastTone = "neutral", action?: Toast["action"]): number {
-  return useToasts.getState().show({ text, tone, action });
+export function toast(text: string, tone: ToastTone = "neutral", action?: Toast["action"], stays = false): number {
+  return useToasts.getState().show({ text, tone, action, stays });
 }

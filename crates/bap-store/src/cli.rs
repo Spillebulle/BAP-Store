@@ -32,6 +32,9 @@ Commands:
       The steps a transaction would run. Nothing is executed.
   drivers
       Devices, the driver profiles offered for them, and firmware.
+  open <source>:<id> [--dry-run]
+      Open an installed application the way the window's Open button does.
+      --dry-run says what would be opened and opens nothing.
   self-update
       Whether a newer BAP Store exists and how this copy would get it.
   help
@@ -67,7 +70,56 @@ pub fn run(args: &[String]) -> i32 {
         "plan" => plan(rest),
         "drivers" => drivers(rest),
         "self-update" => self_update(rest),
+        "open" => open(rest),
         other => usage_error(&format!("{other} is not a command.")),
+    }
+}
+
+/// `open <source>:<id>`: what the window's Open button does, and what it
+/// would open, so a launcher problem can be looked at from a terminal.
+fn open(args: &[String]) -> i32 {
+    let dry_run = args.iter().any(|a| a == "--dry-run");
+    let rest: Vec<&String> = args.iter().filter(|a| *a != "--dry-run").collect();
+    let [reference] = rest.as_slice() else {
+        return usage_error(
+            "open takes one package reference, for example open flatpak:flathub/app/com.notepadqq.Notepadqq/x86_64/stable.",
+        );
+    };
+    let package = match parse_ref(reference) {
+        Ok(p) => p,
+        Err(e) => return usage_error(&e),
+    };
+    let store = bap_core::Store::detect();
+    let Some(launch) = store.launcher(&package) else {
+        eprintln!(
+            "{} is not something BAP Store can open. It may not be installed, or it has no application to start.",
+            package.id
+        );
+        return 1;
+    };
+    if dry_run {
+        println!("Would open {}, with: {}.", launch.describe(), {
+            let c = launch.command();
+            std::iter::once(c.program)
+                .chain(c.args)
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+    } else {
+        println!("Opening {}.", launch.describe());
+    }
+    for (_, notice) in store.launcher_notices() {
+        println!("{notice}");
+    }
+    if dry_run {
+        return 0;
+    }
+    match logic::start(&launch) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("{e}");
+            1
+        }
     }
 }
 

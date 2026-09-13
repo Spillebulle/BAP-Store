@@ -1,6 +1,7 @@
-import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, Package, Trash } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, ExternalLink, Package, Play, Trash } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { startOps } from "../activity/flow";
+import { openPackage, useLaunch, useLaunchTarget } from "../activity/launch";
 import { useActivity } from "../activity/store";
 import * as api from "../api";
 import {
@@ -180,6 +181,8 @@ function Detail({ app }: { app: App }) {
   const homepage = pkg.homepage ?? editions.find((e) => e.package.homepage)?.package.homepage ?? null;
   const busyOp = busy.get(editionKey(chosen)) ?? null;
   const setupSentence = setupNote(pkg.source, statuses);
+  const openTarget = useLaunchTarget(pkg.installed ? refOf(chosen) : null);
+  const launcherNotice = useLaunch((s) => s.notices[pkg.source]);
 
   const editionOptions: DropdownOption[] = editions.map((e) => ({
     value: editionKey(e),
@@ -270,6 +273,11 @@ function Detail({ app }: { app: App }) {
                 <Dropdown name="Edition" alone form className="bs-appdetail-edition" options={editionOptions} value={editionKey(chosen)} onChange={setChosenKey} />
                 {pkg.installed ? (
                   <>
+                    {openTarget ? (
+                      <Button kind="primary" icon={<Play {...ICON} aria-hidden="true" />} onClick={() => void openPackage(refOf(chosen), app.name)} title={`Opens ${openTarget}.`}>
+                        Open
+                      </Button>
+                    ) : null}
                     <Badge tone="good" icon={<Check {...ICON_MARK} aria-hidden="true" />} title={pkg.installed_version ? `Version ${pkg.installed_version} is on this machine.` : "This edition is on this machine."}>
                       Installed
                     </Badge>
@@ -298,6 +306,11 @@ function Detail({ app }: { app: App }) {
                   </Button>
                 ) : null}
               </div>
+              {pkg.installed && launcherNotice ? (
+                <div className="bs-appdetail-note">
+                  <span className="bs-hero-note">Your launcher does not list it until you log out and back in once. Open works now.</span>
+                </div>
+              ) : null}
               {setupSentence && !pkg.installed ? (
                 <div className="bs-appdetail-note">
                   <span className="bs-hero-note">{setupSentence}</span>

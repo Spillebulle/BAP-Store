@@ -95,6 +95,32 @@ impl LocalDb {
     }
 }
 
+/// The files pacman recorded for one installed package, as written in its
+/// `files` entry (`usr/bin/steam`, no leading slash). The directory is found
+/// by the name in `desc`, not by splitting the directory name, because a
+/// package name may itself contain hyphens and digits (`lib32-gcc-libs`).
+/// `None` when the package is not installed.
+pub fn local_files(local_dir: &Path, name: &str) -> Option<Vec<String>> {
+    let prefix = format!("{name}-");
+    let entries = std::fs::read_dir(local_dir).ok()?;
+    for entry in entries.flatten() {
+        let dir_name = entry.file_name();
+        if !dir_name.to_string_lossy().starts_with(&prefix) {
+            continue;
+        }
+        let dir = entry.path();
+        let Ok(desc) = std::fs::read_to_string(dir.join("desc")) else {
+            continue;
+        };
+        if Desc::parse(&desc).name() != name {
+            continue;
+        }
+        let text = std::fs::read_to_string(dir.join("files")).unwrap_or_default();
+        return Some(Desc::parse(&text).all("FILES").to_vec());
+    }
+    None
+}
+
 /// One repository's sync database.
 #[derive(Clone, Debug, Default)]
 pub struct SyncDb {
@@ -387,5 +413,47 @@ mod tests {
                 assert!(!db.packages.is_empty(), "{repo} is empty");
             }
         }
+    }
+    #[test]
+    fn a_package_s_files_are_found_by_its_recorded_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |sub: &str, file: &str, text: &str| {
+            std::fs::create_dir_all(dir.path().join(sub)).unwrap();
+            std::fs::write(dir.path().join(sub).join(file), text).unwrap();
+        };
+        write(
+            "notepadqq-2.0.0-1",
+            "desc",
+            "%NAME%\nnotepadqq\n\n%VERSION%\n2.0.0-1\n",
+        );
+        write(
+            "notepadqq-2.0.0-1",
+            "files",
+            "%FILES%\nusr/\nusr/bin/notepadqq\nusr/share/applications/notepadqq.desktop\n\n%BACKUP%\n",
+        );
+        write(
+            "notepadqq-plugins-1.0-1",
+            "desc",
+            "%NAME%\nnotepadqq-plugins\n",
+        );
+        write(
+            "notepadqq-plugins-1.0-1",
+            "files",
+            "%FILES%\nusr/lib/x.so\n",
+        );
+        let files = local_files(dir.path(), "notepadqq").unwrap();
+        assert_eq!(
+            files,
+            [
+                "usr/",
+                "usr/bin/notepadqq",
+                "usr/share/applications/notepadqq.desktop"
+            ]
+        );
+        assert_eq!(
+            local_files(dir.path(), "notepadqq-plugins").unwrap(),
+            ["usr/lib/x.so"]
+        );
+        assert_eq!(local_files(dir.path(), "steam"), None);
     }
 }

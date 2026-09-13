@@ -13,6 +13,7 @@ pub mod appstream;
 pub mod drivers;
 pub mod group;
 pub mod http;
+pub mod launch;
 pub mod model;
 pub mod selfupdate;
 pub mod sources;
@@ -156,6 +157,22 @@ pub trait Source: Send + Sync {
     fn setup(&self) -> Option<Setup> {
         None
     }
+
+    /// How to open an installed package: its desktop entry, or a command
+    /// for a format with its own way to run what it installed. `None` when
+    /// the package is not installed through this source or has nothing a
+    /// person opens (a library, a font, a command-line tool). Never runs
+    /// anything; see [`launch`].
+    fn launcher(&self, _id: &str) -> Option<launch::Launch> {
+        None
+    }
+
+    /// A sentence when this source's applications are installed but the
+    /// running desktop session cannot list them (Flatpak or snapd set up
+    /// after the session started). `None` when there is nothing to say.
+    fn launcher_notice(&self) -> Option<String> {
+        None
+    }
 }
 
 /// What setting a source up takes. See [`Source::setup`].
@@ -204,6 +221,19 @@ impl Store {
         let catalogue = appstream::Catalogue::load_system(&system);
         let sources = sources::all(&system, client, catalogue, preferences);
         Store { system, sources }
+    }
+
+    /// How to open an installed package, asked of its own source.
+    pub fn launcher(&self, package: &PackageRef) -> Option<launch::Launch> {
+        self.source(package.source)?.launcher(&package.id)
+    }
+
+    /// Every source's launcher notice, in interface order.
+    pub fn launcher_notices(&self) -> Vec<(SourceKind, String)> {
+        self.sources
+            .iter()
+            .filter_map(|s| s.launcher_notice().map(|n| (s.kind(), n)))
+            .collect()
     }
 
     pub fn statuses(&self) -> Vec<SourceStatus> {

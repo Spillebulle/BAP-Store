@@ -485,6 +485,19 @@ impl Source for Dnf {
     /// dnf plans are unconditional: checking whether a package is already
     /// installed would cost a second of dnf start-up per plan, and dnf
     /// itself answers "Nothing to do." and exits cleanly in that case.
+    /// rpm lists an installed package's files; a package that is not
+    /// installed makes it exit non-zero, which is `None` here.
+    fn launcher(&self, id: &str) -> Option<crate::launch::Launch> {
+        let out = self
+            .runner
+            .run("rpm", &["-ql".to_string(), id.to_string()])
+            .ok()?;
+        if out.code != Some(0) {
+            return None;
+        }
+        crate::launch::from_files(out.stdout.lines(), std::path::Path::new("/"), &[id])
+    }
+
     fn plan(&self, op: &Op) -> Result<Vec<Step>> {
         if let Some(reason) = self.unavailable_reason() {
             return Err(Error::from_source(SourceKind::Dnf, reason));
