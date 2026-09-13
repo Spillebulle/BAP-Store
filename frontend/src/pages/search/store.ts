@@ -120,7 +120,8 @@ export const useSearch = create<SearchState>((set, get) => {
 
     init: (settings, statuses) => {
       if (get().initialised) return;
-      const sources = settings.enabled_sources.filter((k) => statuses.some((s) => s.kind === k && s.available));
+      // A source searches when its tool is here, or when its public store answers without it.
+      const sources = settings.enabled_sources.filter((k) => statuses.some((s) => s.kind === k && (s.available || s.searchable)));
       set({ sources, kind: settings.show_packages ? "all" : "app", initialised: true });
       // Text that was seeded (?q=) was not typed: nothing to wait for.
       if (!tooShort(get().text)) void run();
@@ -159,7 +160,7 @@ function patchPackage(p: Package, ops: Op[]): Package {
       if (op.source === p.source && p.installed) next = { ...next, installed_version: next.version };
       continue;
     }
-    if (op.op === "refresh" || op.package.source !== p.source || op.package.id !== p.id) continue;
+    if (!("package" in op) || op.package.source !== p.source || op.package.id !== p.id) continue;
     if (op.op === "install") next = { ...next, installed: true, installed_version: next.version };
     else if (op.op === "remove") next = { ...next, installed: false, installed_version: null };
     else if (op.op === "update") next = { ...next, installed_version: next.version };

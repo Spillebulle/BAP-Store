@@ -1,5 +1,5 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import type { App, Edition } from "../types";
+import type { App, Edition, SourceKind } from "../types";
 import { AppIcon } from "./AppIcon";
 import { SourceBadge } from "./SourceBadge";
 
@@ -71,17 +71,19 @@ interface AppRowProps {
   action?: ReactNode;
   /** A second line instead of the summary. */
   sub?: ReactNode;
+  /** A sentence for a source badge's tooltip instead of its own (the tool is missing and an install sets it up); null keeps the badge's. */
+  sourceHint?: (source: SourceKind) => string | null;
 }
 
 /** One badge per source; the installed edition's badge carries the check. */
-function editionBadges(editions: Edition[]) {
+function editionBadges(editions: Edition[], sourceHint?: (source: SourceKind) => string | null) {
   const seen = new Map<string, Edition>();
   for (const e of editions) {
     const prior = seen.get(e.package.source);
     if (!prior || (!prior.package.installed && e.package.installed)) seen.set(e.package.source, e);
   }
   return [...seen.values()].map((e) => (
-    <SourceBadge key={e.package.source} source={e.package.source} installed={e.package.installed} repo={e.package.repo} />
+    <SourceBadge key={e.package.source} source={e.package.source} installed={e.package.installed} repo={e.package.repo} hint={sourceHint?.(e.package.source)} />
   ));
 }
 
@@ -89,7 +91,7 @@ function editionBadges(editions: Edition[]) {
  * The application row: 44 px, sized by --app-icon-row plus 12. Two text
  * lines, a badge per source, a trailing figure and one action.
  */
-export function AppRow({ app, onOpen, selected, check, figure, action, sub }: AppRowProps) {
+export function AppRow({ app, onOpen, selected, check, figure, action, sub, sourceHint }: AppRowProps) {
   const open = onOpen ? () => onOpen(app) : undefined;
   const stop = (e: MouseEvent) => e.stopPropagation();
   const classes = ["bs-row", "bs-row--app", open ? "clickable" : "", selected ? "sel" : ""].filter(Boolean).join(" ");
@@ -110,7 +112,7 @@ export function AppRow({ app, onOpen, selected, check, figure, action, sub }: Ap
       <div className="bs-row-text">
         <div className="bs-row-name">
           <span className="bs-row-label">{app.name}</span>
-          <span className="bs-row-badges">{editionBadges(app.editions)}</span>
+          <span className="bs-row-badges">{editionBadges(app.editions, sourceHint)}</span>
         </div>
         <div className="bs-row-sub">{sub ?? app.summary ?? app.developer ?? ""}</div>
       </div>

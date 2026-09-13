@@ -1,8 +1,10 @@
 // A believable machine for the page to run against in a plain browser: the
-// development machine itself (CachyOS, pacman, paru, Flatpak, no snapd), thirty
-// applications with editions across sources, fourteen updates, a plan runner
+// development machine itself (CachyOS, pacman, paru, no Flatpak, no snapd),
+// thirty applications with editions across sources, updates, a plan runner
 // that talks the way the real one does. Icons and screenshots are the real
-// Flathub URLs so screenshots of the page show real pictures.
+// Flathub URLs so screenshots of the page show real pictures. Flatpak and Snap
+// are searchable through their public stores and carry a setup, so a search
+// lists their editions and an install sets the tool up first.
 //
 // Nothing here is reachable inside the window: api.ts only imports this module
 // when `__TAURI_INTERNALS__` is absent.
@@ -78,34 +80,68 @@ const SYSTEM: SystemInfo = {
 };
 
 const SOURCES: SourceStatus[] = [
-  { kind: "pacman", available: true, reason: null, detail: "core, extra, multilib, cachyos" },
-  { kind: "aur", available: true, reason: null, detail: "paru 2.1.0" },
-  { kind: "flatpak", available: true, reason: null, detail: "flathub" },
+  { kind: "pacman", available: true, reason: null, detail: "core, extra, multilib, cachyos", searchable: true, setup: null },
+  { kind: "aur", available: true, reason: null, detail: "paru 2.1.0", searchable: true, setup: null },
+  {
+    kind: "flatpak",
+    available: false,
+    reason: "Flatpak is not installed. Its applications are listed in search, and installing one sets Flatpak up first.",
+    detail: null,
+    searchable: true,
+    setup: {
+      label: "Install Flatpak",
+      sentence: "Installs Flatpak and adds Flathub, then Flatpak applications can be installed and updated here.",
+    },
+  },
   {
     kind: "snap",
     available: false,
-    reason: "snapd is not installed. Install the snapd package to search the Snap Store.",
+    reason: "snapd is not installed. Snap applications are listed in search, and installing one sets snapd up first.",
     detail: null,
+    searchable: true,
+    setup: {
+      label: "Install snapd",
+      sentence: "Installs snapd and starts its service, then Snap applications can be installed and updated here. snapd comes from the AUR.",
+    },
   },
   {
     kind: "apt",
     available: false,
     reason: "apt is for Debian-based systems; this is CachyOS.",
     detail: null,
+    searchable: false,
+    setup: null,
   },
   {
     kind: "dnf",
     available: false,
     reason: "dnf is for Fedora-based systems; this is CachyOS.",
     detail: null,
+    searchable: false,
+    setup: null,
   },
-  { kind: "github", available: true, reason: null, detail: "releases" },
-  { kind: "fwupd", available: true, reason: null, detail: "fwupdmgr 2.1.7" },
-  { kind: "chwd", available: true, reason: null, detail: "chwd" },
+  { kind: "github", available: true, reason: null, detail: "releases", searchable: true, setup: null },
+  { kind: "fwupd", available: true, reason: null, detail: "fwupdmgr 2.1.7", searchable: false, setup: null },
+  { kind: "chwd", available: true, reason: null, detail: "chwd", searchable: false, setup: null },
 ];
 
 function available(kind: SourceKind): boolean {
   return SOURCES.some((s) => s.kind === kind && s.available);
+}
+
+/** Answers a search: the tool is here, or the source's public store answers without it. */
+function searchable(kind: SourceKind): boolean {
+  return SOURCES.some((s) => s.kind === kind && (s.available || s.searchable));
+}
+
+/** What a finished setup makes of the source: the tool is here and the setup is spent. */
+function markAvailable(kind: SourceKind) {
+  const status = SOURCES.find((s) => s.kind === kind);
+  if (!status) return;
+  status.available = true;
+  status.reason = null;
+  status.detail = kind === "flatpak" ? "flathub" : kind === "snap" ? "snapd 2.72" : status.detail;
+  status.setup = null;
 }
 
 // ── The applications ────────────────────────────────────────────────────────
@@ -580,9 +616,11 @@ function buildApp(spec: AppSpec): App {
   if (spec.flatpak) {
     const f = spec.flatpak;
     const pkg = basePackage("flatpak", `flathub/app/${spec.key}/x86_64/stable`, entry);
+    // A machine without Flatpak has no Flatpak application on it, whatever the fixture says.
+    const on = Boolean(f.installed) && available("flatpak");
     pkg.version = f.update ?? entry.version;
-    pkg.installed = Boolean(f.installed);
-    pkg.installed_version = f.installed ? entry.version : null;
+    pkg.installed = on;
+    pkg.installed_version = on ? entry.version : null;
     pkg.repo = "flathub";
     pkg.updated = updated;
     pkg.download_size = f.download;
@@ -784,7 +822,7 @@ export async function sources(): Promise<SourceStatus[]> {
 
 export async function search(query: Query): Promise<SearchResult> {
   await delay(180);
-  const wanted = (query.sources ?? SOURCES.map((s) => s.kind)).filter(available);
+  const wanted = (query.sources ?? SOURCES.map((s) => s.kind)).filter(searchable);
   const apps = APPS.map((a) => restrict(a, wanted))
     .filter((a): a is App => a !== null)
     .map((a) => ({ ...a, relevance: score(a, query.text) }))
@@ -919,7 +957,54 @@ function stepsFor(op: Op): Step[] {
       // nothing here, as the real source does.
       if (op.source === "pacman") return [];
       return [{ source: op.source, title: `Refreshing ${sourceLabel(op.source)}`, command: cmd(op.source, "update"), needs_root: false, weight: 1 }];
+    case "setup":
+      // The tool from the distribution first, then what makes it usable; the
+      // steps carry the source they set up so the dialog groups them with it.
+      switch (op.source) {
+        case "flatpak":
+          return [
+            { source: "flatpak", title: "Installing Flatpak", command: cmd("pacman", "-Syu", "--noconfirm", "--needed", "flatpak"), needs_root: true, weight: 3 },
+            { source: "flatpak", title: "Adding Flathub", command: cmd("flatpak", "remote-add", "--if-not-exists", "--system", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"), needs_root: true, weight: 1 },
+          ];
+        case "snap":
+          return [
+            { source: "snap", title: "Building snapd from the AUR", command: cmd("paru", "-S", "--noconfirm", "--needed", "--sudo", "pkexec", "--skipreview", "snapd"), needs_root: false, weight: 5 },
+            { source: "snap", title: "Starting the snapd service", command: cmd("systemctl", "enable", "--now", "snapd.socket"), needs_root: true, weight: 1 },
+            { source: "snap", title: "Linking /snap", command: cmd("ln", "-sfn", "/var/lib/snapd/snap", "/snap"), needs_root: true, weight: 1 },
+          ];
+        default:
+          return [];
+      }
   }
+}
+
+/** "It is installed and Flathub is added first": what a setup does, as the middle of a sentence. */
+function setupDoes(kind: SourceKind): string {
+  switch (kind) {
+    case "flatpak":
+      return "It is installed and Flathub is added";
+    case "snap":
+      return "It is installed and its service is started";
+    default:
+      return "It is installed";
+  }
+}
+
+/** The tool a setup brings: "Flatpak" for Flatpak, "snapd" for Snap. */
+function toolName(kind: SourceKind): string {
+  return kind === "snap" ? "snapd" : sourceLabel(kind);
+}
+
+/** "Flatpak is not installed. It is installed and Flathub is added first, then GNU Image Manipulation Program is installed from it." */
+function setupNotice(kind: SourceKind, ops: Op[]): string {
+  const names = ops.flatMap((o) => (o.op === "install" && o.package.source === kind ? [nameOf(o.package)] : []));
+  const tool = toolName(kind);
+  if (names.length === 0) {
+    const status = SOURCES.find((s) => s.kind === kind);
+    return status?.setup?.sentence ?? `${tool} is not installed. ${setupDoes(kind)}.`;
+  }
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${tool} is not installed. ${setupDoes(kind)} first, then ${list} ${names.length === 1 ? "is" : "are"} installed from it.`;
 }
 
 function buildPlan(ops: Op[]): Plan {
@@ -944,7 +1029,10 @@ export async function plan(ops: Op[]): Promise<PlanPreview> {
   if (partial && !whole) {
     notices.push("Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.");
   }
-  if (built.steps.some((s) => s.source === "aur" && s.title.startsWith("Building"))) {
+  for (const op of ops) {
+    if (op.op === "setup") notices.push(setupNotice(op.source, ops));
+  }
+  if (built.steps.some((s) => s.command.program === "paru" && s.title.startsWith("Building"))) {
     notices.push("AUR packages are built on this machine as your user. A large build can take several minutes.");
   }
   return { plan: built, notices };
@@ -1000,17 +1088,29 @@ function applyOp(op: Op) {
       break;
     case "refresh":
       break;
+    case "setup":
+      markAvailable(op.source);
+      if (!settings.enabled_sources.includes(op.source)) settings.enabled_sources.push(op.source);
+      break;
   }
   for (const app of APPS) app.installed = app.editions.some((e) => e.package.installed);
 }
 
 function summary(ops: Op[], ok: boolean, failed?: Step): string {
-  const count = ops.length;
-  const kinds = new Set(ops.map((o) => o.op));
+  const setups = ops.flatMap((o) => (o.op === "setup" ? [toolName(o.source)] : []));
+  const rest = ops.filter((o) => o.op !== "setup");
+  const count = rest.length;
+  const kinds = new Set(rest.map((o) => o.op));
   const noun = count === 1 ? "package" : "packages";
   if (!ok) {
     const what = failed ? failed.title.charAt(0).toLowerCase() + failed.title.slice(1) : "the transaction";
     return `${what.charAt(0).toUpperCase() + what.slice(1)} did not finish. ${failed?.command.program ?? "pacman"} said what went wrong in the log. Nothing was changed.`;
+  }
+  if (setups.length > 0) {
+    const tools = setups.join(" and ");
+    if (count === 0) return `Set up ${tools}.`;
+    if (kinds.size === 1 && kinds.has("install")) return `Set up ${tools} and installed ${count} ${noun}.`;
+    return `Set up ${tools} and finished ${count} ${count === 1 ? "operation" : "operations"}.`;
   }
   if (kinds.size === 1 && kinds.has("install")) return `Installed ${count} ${noun}.`;
   if (kinds.size === 1 && kinds.has("remove")) return `Removed ${count} ${noun}.`;
@@ -1021,7 +1121,11 @@ function summary(ops: Op[], ok: boolean, failed?: Step): string {
 
 function logLines(step: Step): string[] {
   const id = step.command.args[step.command.args.length - 1] ?? "";
-  switch (step.source) {
+  // A setup step speaks as the program it runs, not as the source it sets up.
+  const program = step.command.program;
+  const voice: SourceKind | "other" =
+    program === "pacman" ? "pacman" : program === "paru" ? "aur" : program === "flatpak" ? (step.command.args[0] === "remote-add" ? "other" : "flatpak") : "other";
+  switch (voice) {
     case "pacman":
       return [
         ":: Synchronising package databases...",
@@ -1088,7 +1192,7 @@ async function run(status: PlanStatus) {
     running.set(id, step);
     emit({ event: "step_started", plan: id, step: i, title: step.title });
     const lines = logLines(step);
-    const known = step.source !== "aur";
+    const known = step.command.program !== "paru";
     const failing = fails(step);
     const stopAt = failing ? Math.min(lines.length, 4) : lines.length;
     for (let n = 0; n < stopAt; n += 1) {
@@ -1267,7 +1371,8 @@ export async function drivers(): Promise<DriversReport> {
 
 let settings: Settings = {
   theme: "dark",
-  enabled_sources: SOURCES.filter((s) => s.available).map((s) => s.kind),
+  // A searchable source is wanted even before its tool is here: the search lists it and an install sets it up.
+  enabled_sources: SOURCES.filter((s) => s.available || s.searchable).map((s) => s.kind),
   show_packages: false,
   aur_helper: "paru",
   flatpak_scope: "system",

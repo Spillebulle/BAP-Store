@@ -118,9 +118,10 @@ export function startOps(ops: Op[], title: string): Promise<string | null> {
 
 // ── Words for the dialog ────────────────────────────────────────────────────
 
-/** The primary button's word: what the operations do. */
+/** The primary button's word: what the operations do. A setup is an install of the tool, so it never changes the word. */
 export function verbFor(ops: Op[]): Verb {
-  const kinds = new Set(ops.map((o) => o.op));
+  const kinds = new Set(ops.filter((o) => o.op !== "setup").map((o) => o.op));
+  if (kinds.size === 0) return "Install";
   if (kinds.size === 1 && kinds.has("install")) return "Install";
   if (kinds.size === 1 && kinds.has("remove")) return "Remove";
   if ([...kinds].every((k) => k === "update" || k === "updateall" || k === "refresh")) return "Update";
@@ -145,14 +146,16 @@ export function fromSource(kind: SourceKind): string {
   }
 }
 
-/** "1 package from pacman, 1 from the AUR." */
+/** "1 package from pacman, 1 from the AUR.", or "Sets up Flatpak, then 1 package from Flathub." when a tool comes first. */
 export function summarise(ops: Op[]): string {
   const perSource = new Map<SourceKind, number>();
   const whole: SourceKind[] = [];
   const refreshed: SourceKind[] = [];
+  const setups: SourceKind[] = [];
   for (const op of ops) {
     if (op.op === "updateall") whole.push(op.source);
     else if (op.op === "refresh") refreshed.push(op.source);
+    else if (op.op === "setup") setups.push(op.source);
     else perSource.set(op.package.source, (perSource.get(op.package.source) ?? 0) + 1);
   }
   const parts: string[] = [];
@@ -164,6 +167,11 @@ export function summarise(ops: Op[]): string {
   }
   for (const source of whole) parts.push(`everything from ${fromSource(source)}`);
   for (const source of refreshed) parts.push(`the ${fromSource(source)} index`);
+  if (setups.length > 0) {
+    const tools = setups.map(sourceLabel);
+    const setsUp = `Sets up ${tools.length === 1 ? tools[0] : `${tools.slice(0, -1).join(", ")} and ${tools[tools.length - 1]}`}`;
+    return parts.length === 0 ? `${setsUp}.` : `${setsUp}, then ${parts.join(", ")}.`;
+  }
   if (parts.length === 0) return "";
   return `${parts.join(", ")}.`;
 }

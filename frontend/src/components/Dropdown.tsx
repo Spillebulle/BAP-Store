@@ -21,6 +21,8 @@ export interface DropdownOption<T extends string = string> {
   label: string;
   /** A count or a version, in mono at the right of the row. */
   figure?: string;
+  /** A word or two in dim after the label ("not installed"): a state the row is in, not a reason it is off. */
+  hint?: string;
   icon?: ReactNode;
   disabled?: boolean;
   /** Shown in the row's tooltip: why it cannot be chosen ("snapd is not installed."). */
@@ -33,9 +35,9 @@ interface Common<T extends string> {
   /** The control's own name: the trigger's label when nothing is chosen, and the accessible name. */
   name: string;
   options: DropdownOption<T>[];
-  /** Stands alone on a line: takes a border so it reads as a control, and a list of exactly its width. */
+  /** Stands alone on a line: takes a border so it reads as a control. Its list is at least its width, and wider when its rows need it. */
   alone?: boolean;
-  /** In a form or settings row: 26 px tall at control size. */
+  /** In a form or settings row: 26 px tall at control size, with a list of exactly its width. */
   form?: boolean;
   /** Fill the container. */
   full?: boolean;
@@ -167,7 +169,9 @@ function Picker<T extends string>(props: PickerProps<T>) {
   const typed = useRef({ text: "", at: 0 });
   const id = useId();
 
-  const exact = Boolean(alone || full || form);
+  // A form or full-width control's list matches it exactly; any other trigger,
+  // bordered or not, can be a short word ("All") over rows that are not.
+  const exact = Boolean(full || form);
   const placed = usePlacement(open, triggerRef, menuRef, exact, align);
 
   const visible = useMemo(() => {
@@ -395,6 +399,7 @@ function Picker<T extends string>(props: PickerProps<T>) {
                         {multi ? <CheckMark checked={current} /> : null}
                         {o.icon ? <span className="bs-menu-item-icon bs-inline">{o.icon}</span> : null}
                         <span className="bs-menu-item-label">{o.label}</span>
+                        {o.hint ? <span className="bs-menu-item-hint">{o.hint}</span> : null}
                         {o.figure ? <Figure className="bs-menu-item-figure">{o.figure}</Figure> : null}
                         {!multi && current ? <Check className="bs-menu-item-check" {...ICON_SM} aria-hidden="true" /> : null}
                       </div>

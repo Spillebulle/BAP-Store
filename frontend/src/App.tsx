@@ -12,7 +12,7 @@ import { Shell } from "./shell/Shell";
 import { useShell } from "./shell/store";
 import { applyTheme } from "./shell/theme";
 import { refreshUpdateCount, startUpdateTimer } from "./shell/updates";
-import { SOURCE_KINDS, type Op, type SourceKind } from "./types";
+import { SOURCE_KINDS, sourceLabel, type Op, type SourceKind } from "./types";
 
 // The component sheet is a development aid for a browser only; the window
 // never loads it, so it is split out of the bundle it would otherwise weigh on.
@@ -61,7 +61,8 @@ async function checkUpdatesOnStart() {
 //   ?run=install:pacman:gimp,install:aur:spotify       starts the plan at once
 //   &log                                                with the log open
 //
-// An operation is op:source:id (install, remove, update) or updateall:source.
+// An operation is op:source:id (install, remove, update), updateall:source,
+// refresh:source or setup:source (the source's tool first, then the rest).
 
 function parseOps(text: string): Op[] {
   const ops: Op[] = [];
@@ -70,10 +71,21 @@ function parseOps(text: string): Op[] {
     const id = rest.join(":");
     if (!SOURCE_KINDS.includes(source as SourceKind)) continue;
     const kind = source as SourceKind;
-    if (op === "updateall" || op === "refresh") ops.push({ op, source: kind });
+    if (op === "updateall" || op === "refresh" || op === "setup") ops.push({ op, source: kind });
     else if ((op === "install" || op === "remove" || op === "update") && id) ops.push({ op, package: { source: kind, id } });
   }
   return ops;
+}
+
+/** A title for the switch's dialog, in the words a page would use: "Set up Flatpak and install org.gimp.GIMP". */
+function switchTitle(ops: Op[]): string {
+  const setups = ops.flatMap((o) => (o.op === "setup" ? [sourceLabel(o.source)] : []));
+  const rest = ops.filter((o) => o.op !== "setup");
+  const verb = rest[0]?.op === "remove" ? "Remove" : "Install";
+  const what = rest.length === 1 && "package" in rest[0] ? rest[0].package.id.split("/").find((s) => s.includes(".")) ?? rest[0].package.id : rest.length === 0 ? "" : "software";
+  if (setups.length === 0) return `${verb} ${what}`;
+  const tools = setups.join(" and ");
+  return what ? `Set up ${tools} and ${verb.toLowerCase()} ${what}` : `Install ${tools}`;
 }
 
 function browserSwitches(): { confirm: Op[]; run: Op[]; log: boolean; gallery: boolean } {
@@ -89,6 +101,7 @@ function browserSwitches(): { confirm: Op[]; run: Op[]; log: boolean; gallery: b
 
 export default function App() {
   const load = useShell((s) => s.load);
+  const loadSources = useShell((s) => s.loadSources);
   const theme = useShell((s) => s.settings?.theme);
   const checkOnStart = useShell((s) => s.settings?.check_updates_on_start);
   const selfCheck = useShell((s) => s.settings?.self_update_check);
@@ -125,6 +138,8 @@ export default function App() {
 
   // The Updates count stays true: after a plan ends well, and on the timer.
   useEffect(() => onPlanDone(() => void refreshUpdateCount()), []);
+  // The application re-detects its sources after a plan (a setup brings a tool); the page asks again so Settings and the status bar follow.
+  useEffect(() => onPlanDone(() => void loadSources()), [loadSources]);
   useEffect(() => startUpdateTimer(checkMinutes ?? 0), [checkMinutes]);
 
   useEffect(() => {
@@ -133,7 +148,7 @@ export default function App() {
     const s = browserSwitches();
     if (s.log) useActivity.setState({ showLog: true });
     if (s.run.length > 0) void api.run_plan(s.run).then(trackPlan);
-    if (s.confirm.length > 0) void startOps(s.confirm, `${s.confirm[0].op === "remove" ? "Remove" : "Install"} ${s.confirm.length === 1 && "package" in s.confirm[0] ? s.confirm[0].package.id : "software"}`);
+    if (s.confirm.length > 0) void startOps(s.confirm, switchTitle(s.confirm));
   }, []);
 
   const gallery = browserSwitches().gallery;

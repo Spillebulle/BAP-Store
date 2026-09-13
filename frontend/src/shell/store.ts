@@ -54,6 +54,8 @@ interface ShellState extends Location {
   hideSelfUpdate: () => void;
 
   load: () => Promise<void>;
+  /** Ask the application which sources it has again (after a plan: a setup may have brought a tool). A failure keeps what was known. */
+  loadSources: () => Promise<void>;
   /** Settings apply live: the patch is saved and the store takes what came back. */
   saveSettings: (patch: Partial<Settings>) => Promise<void>;
 }
@@ -113,6 +115,14 @@ export const useShell = create<ShellState>((set, get) => ({
       set({ system, sources, settings, loadError: null });
     } catch (e) {
       set({ loadError: message(e) });
+    }
+  },
+
+  loadSources: async () => {
+    try {
+      set({ sources: await api.sources() });
+    } catch {
+      // What was known stays; the next full load reports the failure.
     }
   },
 

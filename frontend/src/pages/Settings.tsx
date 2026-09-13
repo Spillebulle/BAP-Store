@@ -3,14 +3,16 @@
 // no Save button anywhere. The About block asks the self-updater once for
 // the version and how this copy was installed.
 
-import { Bug, Code, RefreshCw } from "lucide-react";
+import { Bug, Code, Download, RefreshCw } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import pkg from "../../../package.json";
+import { startOps } from "../activity/flow";
 import * as api from "../api";
 import { Button, Dropdown, Figure, Notice, Segmented, Skeleton, Toggle, toast, type DropdownOption } from "../components";
 import { ICON } from "../components/icons";
 import { useShell } from "../shell/store";
-import { SOURCE_KINDS, sourceLabel, type AurHelper, type SelfUpdate, type Settings, type SourceKind, type Theme } from "../types";
+import { SOURCE_KINDS, sourceLabel, type AurHelper, type SelfUpdate, type Settings, type SourceKind, type SourceSetup, type Theme } from "../types";
+import { useBusy } from "./system/busy";
 import { ThemeCard } from "./system/ThemeCard";
 import "./system/system.css";
 
@@ -79,6 +81,22 @@ function Group({ eyebrow, children }: { eyebrow: string; children: ReactNode }) 
   );
 }
 
+/** The button beside a source whose tool is missing: it starts the setup plan, and says so while one runs. */
+function SetupButton({ kind, setup, running }: { kind: SourceKind; setup: SourceSetup; running: boolean }) {
+  if (running) {
+    return (
+      <Button icon={<Download {...ICON} aria-hidden="true" />} disabled disabledReason={`${sourceLabel(kind)} is being set up. The activity panel shows progress.`}>
+        Installing…
+      </Button>
+    );
+  }
+  return (
+    <Button icon={<Download {...ICON} aria-hidden="true" />} title={setup.sentence} onClick={() => void startOps([{ op: "setup", source: kind }], setup.label)}>
+      {setup.label}
+    </Button>
+  );
+}
+
 function Setting({ label, note, control }: { label: ReactNode; note?: ReactNode; control?: ReactNode }) {
   return (
     <div className="bs-setting">
@@ -118,6 +136,8 @@ export function SettingsPage() {
   const loadError = useShell((s) => s.loadError);
   const load = useShell((s) => s.load);
   const saveSettings = useShell((s) => s.saveSettings);
+
+  const busy = useBusy();
 
   const [self, setSelf] = useState<SelfUpdate | null>(null);
   const [selfError, setSelfError] = useState<string | null>(null);
@@ -227,7 +247,20 @@ export function SettingsPage() {
               }
               if (!status.available) {
                 const reason = status.reason ?? `${label} is not available on this machine.`;
-                return <Setting key={kind} label={label} note={reason} control={<Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason={reason} />} />;
+                // The toggle stays off-limits with the reason until the tool is here; the button beside it is how it gets here.
+                return (
+                  <Setting
+                    key={kind}
+                    label={label}
+                    note={reason}
+                    control={
+                      <>
+                        {status.setup ? <SetupButton kind={kind} setup={status.setup} running={busy.setups.has(kind)} /> : null}
+                        <Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason={reason} />
+                      </>
+                    }
+                  />
+                );
               }
               return <Setting key={kind} label={label} note={status.detail ?? undefined} control={<Toggle label={label} on={on} onChange={(v) => setSource(kind, v)} />} />;
             })}

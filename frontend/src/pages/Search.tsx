@@ -21,8 +21,8 @@ import {
 } from "../components";
 import { formatCount } from "../format";
 import { useShell } from "../shell/store";
-import { sourceLabel, type App, type Edition, type SourceKind } from "../types";
-import { editionKey, installOptions, joinAnd, primaryEdition, refOf, useBusyRefs } from "./app/editions";
+import { sourceLabel, type App, type Edition, type SourceKind, type SourceStatus } from "../types";
+import { editionKey, installOptions, installTitle, joinAnd, opsToInstall, primaryEdition, setupHint, useBusyRefs } from "./app/editions";
 import { rememberApp, useSearch, type Kind, type Sort } from "./search/store";
 import "./search/search.css";
 
@@ -72,12 +72,13 @@ function sortApps(apps: App[], sort: Sort): App[] {
   }
 }
 
-function install(app: App, edition: Edition) {
-  void startOps([{ op: "install", package: refOf(edition) }], `Install ${app.name}`);
+/** An install sets the edition's tool up first when it is missing; editions.ts decides. */
+function install(app: App, edition: Edition, statuses: SourceStatus[]) {
+  void startOps(opsToInstall(edition, statuses), installTitle(app, edition, statuses));
 }
 
 /** The one action at the right of a row: Install, an edition picker, or the installed mark. */
-function RowAction({ app, busy }: { app: App; busy: Map<string, string> }) {
+function RowAction({ app, busy, statuses }: { app: App; busy: Map<string, string>; statuses: SourceStatus[] }) {
   if (app.installed) {
     return (
       <Badge tone="good" icon={<Check {...ICON_MARK} aria-hidden="true" />} title="An edition of this application is on this machine.">
@@ -93,8 +94,10 @@ function RowAction({ app, busy }: { app: App; busy: Map<string, string> }) {
     );
   }
   if (app.editions.length === 1) {
+    const only = app.editions[0];
+    const hint = setupHint(only.package.source, statuses);
     return (
-      <Button icon={<Download {...ICON} aria-hidden="true" />} onClick={() => install(app, app.editions[0])} title={`Install ${app.name} from ${sourceLabel(app.editions[0].package.source)}.`}>
+      <Button icon={<Download {...ICON} aria-hidden="true" />} onClick={() => install(app, only, statuses)} title={`Install ${app.name} from ${sourceLabel(only.package.source)}.${hint ? ` ${hint}` : ""}`}>
         Install
       </Button>
     );
@@ -107,11 +110,11 @@ function RowAction({ app, busy }: { app: App; busy: Map<string, string> }) {
       form
       align="right"
       className="bs-search-pick"
-      options={installOptions(app)}
+      options={installOptions(app, statuses)}
       value={null}
       onChange={(key) => {
         const edition = app.editions.find((e) => editionKey(e) === key);
-        if (edition) install(app, edition);
+        if (edition) install(app, edition, statuses);
       }}
     />
   );
@@ -162,17 +165,21 @@ export function SearchPage() {
     if (settings && statuses.length > 0) init(settings, statuses);
   }, [settings, statuses, init]);
 
+  // A source whose tool is missing still searches through its public store:
+  // it can be ticked, and reads "not installed" so a result from it is no surprise.
   const sourceOptions = useMemo<DropdownOption<SourceKind>[]>(
     () =>
       statuses.map((s) => ({
         value: s.kind,
         label: sourceLabel(s.kind),
         figure: s.detail ?? undefined,
-        disabled: !s.available,
+        hint: !s.available && s.searchable ? "not installed" : undefined,
+        disabled: !s.available && !s.searchable,
         disabledReason: s.reason ?? undefined,
       })),
     [statuses],
   );
+  const sourceHint = useMemo(() => (source: SourceKind) => setupHint(source, statuses), [statuses]);
 
   // Filtering and sorting are the page's own work on the result set.
   const { visible, hiddenPackages, hiddenNotInstalled } = useMemo(() => {
@@ -243,7 +250,7 @@ export function SearchPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [setSelected, setText]);
 
-  const availableLabels = statuses.filter((s) => s.available).map((s) => sourceLabel(s.kind));
+  const availableLabels = statuses.filter((s) => s.available || s.searchable).map((s) => sourceLabel(s.kind));
   const searchedLabels = (results?.searched ?? []).map(sourceLabel);
   const typed = text.trim().length >= 2;
 
@@ -305,7 +312,8 @@ export function SearchPage() {
               selected={i === selected}
               onOpen={(a) => open(a, i)}
               figure={<RowFigure app={app} />}
-              action={<RowAction app={app} busy={busy} />}
+              action={<RowAction app={app} busy={busy} statuses={statuses} />}
+              sourceHint={sourceHint}
             />
           ))}
         </div>

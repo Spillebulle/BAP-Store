@@ -65,6 +65,21 @@ export const SHOTS = [
     query: "?view=installed&fast&selfupdate=none&confirm=install:pacman:gimp,install:aur:spotify",
     clip: { selector: ".bs-dialog" },
   },
+  // Installing from a source whose tool is missing: the Flatpak edition is
+  // picked from the search row, the plan sets Flatpak up first and the dialog
+  // says so. For the docs, not the README.
+  {
+    name: "confirm-setup",
+    query: "?view=search&q=gimp&fast&selfupdate=none",
+    act: `(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      for (let i = 0; i < 40 && !document.querySelector(".bs-row--app button[aria-haspopup]"); i += 1) await wait(100);
+      document.querySelector(".bs-row--app button[aria-haspopup]").click();
+      await wait(300);
+      [...document.querySelectorAll('[role="option"]')].find((o) => o.textContent.startsWith("Flatpak"))?.click();
+    })()`,
+    clip: { selector: ".bs-dialog" },
+  },
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

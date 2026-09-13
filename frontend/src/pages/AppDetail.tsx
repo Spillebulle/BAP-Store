@@ -27,7 +27,7 @@ import {
 import { formatCount, looksNumeric } from "../format";
 import { useShell } from "../shell/store";
 import type { App, Edition, Package as Pkg, Screenshot } from "../types";
-import { editionKey, editionLabel, refKey, refOf, useBusyRefs } from "./app/editions";
+import { editionKey, editionLabel, installTitle, needsSetup, opsToInstall, refKey, refOf, setupNote, useBusyRefs } from "./app/editions";
 import { findApp, useSearch } from "./search/store";
 import "./app/app.css";
 
@@ -120,6 +120,7 @@ function facts(p: Pkg): Fact[] {
 
 function Detail({ app }: { app: App }) {
   const back = useShell((s) => s.back);
+  const statuses = useShell((s) => s.sources);
   const busy = useBusyRefs();
 
   const refs = useMemo(() => app.editions.map(refOf), [app]);
@@ -178,11 +179,17 @@ function Detail({ app }: { app: App }) {
   const pkgbuild = pkg.facts.find(([k]) => k === "PKGBUILD")?.[1] ?? null;
   const homepage = pkg.homepage ?? editions.find((e) => e.package.homepage)?.package.homepage ?? null;
   const busyOp = busy.get(editionKey(chosen)) ?? null;
+  const setupSentence = setupNote(pkg.source, statuses);
 
-  const editionOptions: DropdownOption[] = editions.map((e) => ({ value: editionKey(e), label: editionLabel(e) }));
+  const editionOptions: DropdownOption[] = editions.map((e) => ({
+    value: editionKey(e),
+    label: editionLabel(e),
+    hint: needsSetup(e, statuses) ? "not installed" : undefined,
+  }));
 
+  // The edition's tool may be missing; editions.ts decides whether a setup comes first.
   const install = () => {
-    void startOps([{ op: "install", package: refOf(chosen) }], `Install ${app.name}`);
+    void startOps(opsToInstall(chosen, statuses), installTitle(app, chosen, statuses));
   };
   const remove = () => {
     void startOps([{ op: "remove", package: refOf(chosen) }], `Remove ${app.name}`);
@@ -281,7 +288,7 @@ function Detail({ app }: { app: App }) {
                     Installing…
                   </Button>
                 ) : (
-                  <Button kind="primary" icon={<Download {...ICON} aria-hidden="true" />} onClick={install} title={`Install ${editionLabel(chosen)}.`}>
+                  <Button kind="primary" icon={<Download {...ICON} aria-hidden="true" />} onClick={install} title={setupSentence ? `Install ${editionLabel(chosen)}. ${setupSentence}` : `Install ${editionLabel(chosen)}.`}>
                     Install
                   </Button>
                 )}
@@ -291,6 +298,11 @@ function Detail({ app }: { app: App }) {
                   </Button>
                 ) : null}
               </div>
+              {setupSentence && !pkg.installed ? (
+                <div className="bs-appdetail-note">
+                  <span className="bs-hero-note">{setupSentence}</span>
+                </div>
+              ) : null}
               {chosen.matched_by === "name" ? (
                 <div className="bs-appdetail-note">
                   <span className="bs-hero-note">Matched by name, not by id.</span>
