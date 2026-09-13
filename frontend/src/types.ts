@@ -145,20 +145,37 @@ export interface Update {
   is_self: boolean;
 }
 
+/** How a source whose tool is missing gets it: the button's word and the sentence behind it. */
+export interface SourceSetup {
+  /** "Install Flatpak", "Install snapd". */
+  label: string;
+  /** "Installs Flatpak and adds Flathub, then Flatpak applications can be installed and updated here." */
+  sentence: string;
+}
+
 export interface SourceStatus {
   kind: SourceKind;
   available: boolean;
   reason: string | null;
   detail: string | null;
+  /** The source answers a search through its public store even when `available` is false. */
+  searchable: boolean;
+  /** How to make the source available (a `setup` op), or null when nothing here can. */
+  setup: SourceSetup | null;
 }
 
-/** `#[serde(tag = "op", rename_all = "lowercase")]`: `UpdateAll` lower-cases to `updateall`. */
+/**
+ * `#[serde(tag = "op", rename_all = "lowercase")]`: `UpdateAll` lower-cases to
+ * `updateall`. `setup` installs the source's tool (Flatpak and Flathub, snapd)
+ * so the installs after it in the same plan can run.
+ */
 export type Op =
   | { op: "install"; package: PackageRef }
   | { op: "remove"; package: PackageRef }
   | { op: "update"; package: PackageRef }
   | { op: "updateall"; source: SourceKind }
-  | { op: "refresh"; source: SourceKind };
+  | { op: "refresh"; source: SourceKind }
+  | { op: "setup"; source: SourceKind };
 
 export interface Command {
   program: string;

@@ -9,14 +9,17 @@ interface Props {
   installed?: boolean;
   /** "extra", "flathub": shown in the tooltip, never in the badge. */
   repo?: string | null;
+  /** Replaces the tooltip: what installing from this source involves when its tool is missing. The badge itself stays neutral. */
+  hint?: string | null;
 }
 
 /** Sources are told apart by a neutral badge. Colour means state, never which source. */
-export function SourceBadge({ source, installed, repo }: Props) {
+export function SourceBadge({ source, installed, repo, hint }: Props) {
   const label = sourceLabel(source);
   const where = repo ? `${label} (${repo})` : label;
+  const title = hint ?? (installed ? `Installed from ${where}.` : `Available from ${where}.`);
   return (
-    <Badge title={installed ? `Installed from ${where}.` : `Available from ${where}.`} icon={installed ? <Check {...ICON_MARK} aria-hidden="true" /> : undefined}>
+    <Badge title={title} icon={installed ? <Check {...ICON_MARK} aria-hidden="true" /> : undefined}>
       {label}
     </Badge>
   );

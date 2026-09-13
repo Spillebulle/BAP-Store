@@ -817,17 +817,32 @@ img {
 }
 
 .bs-menu-item-label {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* A long figure ("core, extra, multilib, cachyos") yields to the label: at most half the row, then an ellipsis. */
 .bs-menu-item-figure {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-figure);
   font-size: var(--text-tiny);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
+}
+
+/* "not installed" after a source's name: a state in dim, never a colour. */
+.bs-menu-item-hint {
+  flex: none;
+  color: var(--text-dim);
+  font-size: var(--text-tiny);
+  white-space: nowrap;
 }
 
 .bs-menu-item-check {
@@ -2176,6 +2191,7 @@ img {
 .bs-setting-control {
   display: inline-flex;
   align-items: center;
+  gap: var(--s3);
   flex: none;
 }
 

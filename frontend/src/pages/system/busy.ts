@@ -13,6 +13,8 @@ export interface Busy {
   refs: Set<string>;
   /** Sources with a live update-all. */
   sources: Set<SourceKind>;
+  /** Sources whose tool a live plan is setting up. */
+  setups: Set<SourceKind>;
 }
 
 export function refKey(ref: PackageRef): string {
@@ -24,15 +26,17 @@ export function useBusy(): Busy {
   return useMemo(() => {
     const refs = new Set<string>();
     const sources = new Set<SourceKind>();
+    const setups = new Set<SourceKind>();
     for (const status of Object.values(plans)) {
       if (!LIVE.has(status.state)) continue;
       for (const op of status.plan.ops) {
         if (op.op === "updateall") sources.add(op.source);
+        else if (op.op === "setup") setups.add(op.source);
         else if (op.op === "refresh") continue;
         else refs.add(refKey(op.package));
       }
     }
-    return { refs, sources };
+    return { refs, sources, setups };
   }, [plans]);
 }
 
