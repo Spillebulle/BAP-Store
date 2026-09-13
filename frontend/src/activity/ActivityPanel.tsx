@@ -135,7 +135,7 @@ function Log({ lines }: { lines: LogLine[] }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines.length]);
   return (
-    <pre ref={box} className="bs-activity-log" aria-label="Log" tabIndex={0}>
+    <pre ref={box} className="bk-activity-log" aria-label="Log" tabIndex={0}>
       {lines.length === 0 ? "Nothing has been written yet." : null}
       {lines.map((l, i) => (
         <span key={i} className={l.stderr ? "err" : undefined}>
@@ -176,7 +176,7 @@ export function ActivityPanel() {
   return (
     <Panel
       float
-      className="bs-activity"
+      className="bk-activity"
       title={title}
       icon={<Activity {...ICON_LG} aria-hidden="true" />}
       count={liveCount > 1 ? liveCount : undefined}
@@ -197,11 +197,11 @@ export function ActivityPanel() {
         </>
       }
     >
-      <div className="bs-activity-body">
+      <div className="bk-activity-body">
         {fraction !== null ? <Progress fraction={fraction} message={line} /> : <Progress fraction={null} message={line ?? "Working."} />}
         {snap.step !== null && snap.steps > 0 ? (
-          <div className="bs-activity-steps">
-            <Figure className="bs-dim">
+          <div className="bk-activity-steps">
+            <Figure className="bk-dim">
               {snap.step} of {snap.steps}
             </Figure>
           </div>

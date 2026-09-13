@@ -1,15 +1,15 @@
 # Maintainer: Spillebulle <spillebulle@gmail.com>
 #
-# The from-source package, and the one published to the AUR as `bap-store`.
+# The from-source package, and the one published to the AUR as `brokey`.
 # Building needs Rust, Node and WebKitGTK's headers; the workflow fills in
 # pkgver and the checksum from the tagged release.
 
-pkgname=bap-store
+pkgname=brokey
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="One store for every way a Linux machine gets software"
 arch=('x86_64' 'aarch64')
-url="https://github.com/Spillebulle/BAP-Store"
+url="https://github.com/Spillebulle/Brokey"
 license=('GPL-3.0-or-later')
 depends=('webkit2gtk-4.1' 'gtk3' 'polkit' 'curl' 'hicolor-icon-theme')
 makedepends=('cargo' 'nodejs' 'npm' 'pkgconf')
@@ -19,37 +19,37 @@ optdepends=('paru: build AUR packages with paru'
             'fwupd: firmware updates'
             'chwd: driver profiles on CachyOS')
 options=('!lto')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Spillebulle/BAP-Store/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Spillebulle/Brokey/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
-    cd "BAP-Store-$pkgver"
+    cd "Brokey-$pkgver"
     npm ci --no-audit --no-fund
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-    cd "BAP-Store-$pkgver"
+    cd "Brokey-$pkgver"
     export CARGO_HOME="$srcdir/cargo-home"
     npm run build
-    cargo build --release --frozen -p bap-store -p bap-helper
+    cargo build --release --frozen -p brokey -p brokey-helper
 }
 
 check() {
-    cd "BAP-Store-$pkgver"
-    cargo test --release --frozen -p bap-core
+    cd "Brokey-$pkgver"
+    cargo test --release --frozen -p brokey-core
 }
 
 package() {
-    cd "BAP-Store-$pkgver"
-    local id=io.github.spillebulle.bapstore
-    install -Dm755 target/release/bap-store "$pkgdir/usr/bin/bap-store"
-    install -Dm755 target/release/bap-helper "$pkgdir/usr/lib/bap-store/bap-helper"
+    cd "Brokey-$pkgver"
+    local id=io.github.spillebulle.brokey
+    install -Dm755 target/release/brokey "$pkgdir/usr/bin/brokey"
+    install -Dm755 target/release/brokey-helper "$pkgdir/usr/lib/brokey/brokey-helper"
     install -Dm644 "packaging/$id.policy" "$pkgdir/usr/share/polkit-1/actions/$id.policy"
     install -Dm644 "packaging/$id.desktop" "$pkgdir/usr/share/applications/$id.desktop"
     install -Dm644 "packaging/$id.metainfo.xml" "$pkgdir/usr/share/metainfo/$id.metainfo.xml"
     for size in 16 32 48 64 128 256; do
-        install -Dm644 "assets/icons/bap-store-$size.png" \
+        install -Dm644 "assets/icons/brokey-$size.png" \
             "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/$id.png"
     done
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

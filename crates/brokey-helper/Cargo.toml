@@ -1,0 +1,13 @@
+[package]
+name = "brokey-helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The one part of Brokey that runs as root. Reads a plan, runs a closed list of commands, streams events."
+
+[dependencies]
+brokey-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

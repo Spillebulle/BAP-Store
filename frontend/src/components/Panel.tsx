@@ -20,19 +20,19 @@ interface Props {
 
 /** A titled region (§7.5): 32 px header that never scrolls away, body with 12 px padding. */
 export function Panel({ title, icon, count, commands, grip, float, flush, children, className }: Props) {
-  const cls = ["bs-panel", float ? "bs-panel--float" : "", className ?? ""].filter(Boolean).join(" ");
+  const cls = ["bk-panel", float ? "bk-panel--float" : "", className ?? ""].filter(Boolean).join(" ");
   return (
     <section className={cls} aria-label={title}>
-      <header className="bs-panel-head">
-        {grip ? <span className="bs-grip" aria-hidden="true" /> : null}
-        <h3 className="bs-panel-title">
+      <header className="bk-panel-head">
+        {grip ? <span className="bk-grip" aria-hidden="true" /> : null}
+        <h3 className="bk-panel-title">
           {icon}
           <span>{title}</span>
-          {count !== undefined ? <span className="bs-count">{formatCount(count)}</span> : null}
+          {count !== undefined ? <span className="bk-count">{formatCount(count)}</span> : null}
         </h3>
-        {commands ? <div className="bs-panel-cmds">{commands}</div> : null}
+        {commands ? <div className="bk-panel-cmds">{commands}</div> : null}
       </header>
-      <div className={flush ? "bs-panel-body bs-panel-body--flush" : "bs-panel-body"}>{children}</div>
+      <div className={flush ? "bk-panel-body bk-panel-body--flush" : "bk-panel-body"}>{children}</div>
     </section>
   );
 }

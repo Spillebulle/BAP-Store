@@ -28,11 +28,11 @@ const MACHINE: NavItem[] = [
 /** Desktop shell (§6.1): 34 px menu bar, 240 px dock sidebar, content over window, 26 px status bar. */
 export function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="bs-app">
+    <div className="bk-app">
       <MenuBar />
-      <div className="bs-body">
+      <div className="bk-body">
         <Sidebar />
-        <main className="bs-content">
+        <main className="bk-content">
           <SelfUpdateNotice />
           {children}
         </main>
@@ -45,10 +45,10 @@ export function Shell({ children }: { children: ReactNode }) {
 function MenuBar() {
   const status = useShell((s) => s.status);
   return (
-    <header className="bs-menubar">
-      <span className="bs-mark" aria-hidden="true" />
-      <span className="bs-appname">BAP Store</span>
-      <span className="bs-menubar-status" role="status" aria-live="polite">
+    <header className="bk-menubar">
+      <span className="bk-mark" aria-hidden="true" />
+      <span className="bk-appname">Brokey</span>
+      <span className="bk-menubar-status" role="status" aria-live="polite">
         {status ?? ""}
       </span>
     </header>
@@ -58,10 +58,10 @@ function MenuBar() {
 function NavRow({ item, on, count }: { item: NavItem; on: boolean; count?: number }) {
   const go = useShell((s) => s.go);
   return (
-    <button type="button" className={on ? "bs-navrow on" : "bs-navrow"} aria-current={on ? "page" : undefined} onClick={() => go(item.view)}>
+    <button type="button" className={on ? "bk-navrow on" : "bk-navrow"} aria-current={on ? "page" : undefined} onClick={() => go(item.view)}>
       {item.icon}
-      <span className="bs-navrow-label">{item.label}</span>
-      {count !== undefined && count > 0 ? <span className="bs-navrow-count">{formatCount(count)}</span> : null}
+      <span className="bk-navrow-label">{item.label}</span>
+      {count !== undefined && count > 0 ? <span className="bk-navrow-count">{formatCount(count)}</span> : null}
     </button>
   );
 }
@@ -70,18 +70,18 @@ function Sidebar() {
   const nav = useShell(selectNav);
   const updateCount = useShell((s) => s.updateCount);
   return (
-    <nav className="bs-sidebar" aria-label="Pages">
-      <div className="bs-nav">
-        <div className="bs-eyebrow bs-nav-eyebrow">Software</div>
+    <nav className="bk-sidebar" aria-label="Pages">
+      <div className="bk-nav">
+        <div className="bk-eyebrow bk-nav-eyebrow">Software</div>
         {SOFTWARE.map((item) => (
           <NavRow key={item.view} item={item} on={nav === item.view} count={item.view === "updates" ? updateCount : undefined} />
         ))}
-        <div className="bs-eyebrow bs-nav-eyebrow">Machine</div>
+        <div className="bk-eyebrow bk-nav-eyebrow">Machine</div>
         {MACHINE.map((item) => (
           <NavRow key={item.view} item={item} on={nav === item.view} />
         ))}
       </div>
-      <div className="bs-sidebar-foot">v{pkg.version} · GPL-3.0</div>
+      <div className="bk-sidebar-foot">v{pkg.version} · GPL-3.0</div>
     </nav>
   );
 }
@@ -112,13 +112,13 @@ function StatusBar() {
   const live = sources.filter((s) => s.available).map((s) => sourceLabel(s.kind));
   const line = planLine(plan, cancelling);
   return (
-    <footer className="bs-status">
-      <div className="bs-status-side">
-        {system ? <span className="bs-status-group">{system.pretty_name}</span> : null}
-        {live.length > 0 ? <span className="bs-status-group">{live.join(", ")}</span> : null}
-        {loadError ? <span className="bs-status-group">{loadError}</span> : null}
+    <footer className="bk-status">
+      <div className="bk-status-side">
+        {system ? <span className="bk-status-group">{system.pretty_name}</span> : null}
+        {live.length > 0 ? <span className="bk-status-group">{live.join(", ")}</span> : null}
+        {loadError ? <span className="bk-status-group">{loadError}</span> : null}
       </div>
-      <div className="bs-status-side bs-status-side--end">{line ? <span className="bs-status-group">{line}</span> : null}</div>
+      <div className="bk-status-side bk-status-side--end">{line ? <span className="bk-status-group">{line}</span> : null}</div>
     </footer>
   );
 }

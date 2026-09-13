@@ -15,12 +15,12 @@ interface Props {
 export function Chip({ label, value, onRemove, children }: Props) {
   const name = label ?? (typeof children === "string" ? children : "this");
   return (
-    <span className="bs-chip">
-      {label ? <span className="bs-chip-label">{label}</span> : null}
-      {value !== undefined ? <span className="bs-chip-value">{value}</span> : null}
+    <span className="bk-chip">
+      {label ? <span className="bk-chip-label">{label}</span> : null}
+      {value !== undefined ? <span className="bk-chip-value">{value}</span> : null}
       {children}
       {onRemove ? (
-        <button type="button" className="bs-chip-x" title={`Remove ${name}`} aria-label={`Remove ${name}`} onClick={onRemove}>
+        <button type="button" className="bk-chip-x" title={`Remove ${name}`} aria-label={`Remove ${name}`} onClick={onRemove}>
           <X {...ICON_SM} aria-hidden="true" />
         </button>
       ) : null}

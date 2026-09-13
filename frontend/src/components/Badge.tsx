@@ -12,7 +12,7 @@ interface Props {
 
 /** 10.5 px on its palette's -bg fill, radius 3 (§7.13). */
 export function Badge({ tone = "neutral", icon, title, children }: Props) {
-  const cls = tone === "neutral" ? "bs-badge" : `bs-badge bs-badge--${tone}`;
+  const cls = tone === "neutral" ? "bk-badge" : `bk-badge bk-badge--${tone}`;
   return (
     <span className={cls} title={title}>
       {icon}

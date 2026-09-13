@@ -1,4 +1,4 @@
-// Updates: every source's updates in one table with tick boxes, BAP Store's
+// Updates: every source's updates in one table with tick boxes, Brokey's
 // own update first, honest sizes, and the Arch partial-upgrade notice drawn
 // the moment a subset of pacman rows is ticked. Update all is the primary
 // action; the activity panel takes over once a plan starts.
@@ -94,7 +94,7 @@ function HeadLine({ list, loading }: { list: UpdateList | null; loading: boolean
   );
 }
 
-/** The notice for a newer BAP Store, saying the one true thing about how to get it (§18.3). */
+/** The notice for a newer Brokey, saying the one true thing about how to get it (§18.3). */
 function SelfUpdateNotice({ self, hasSelfRow }: { self: SelfUpdate; hasSelfRow: boolean }) {
   const [busy, setBusy] = useState(false);
   const latest = self.latest;
@@ -125,7 +125,7 @@ function SelfUpdateNotice({ self, hasSelfRow }: { self: SelfUpdate; hasSelfRow: 
         <>
           {canApply ? (
             <Button kind="ghost" onClick={() => void apply()} {...off(busy, "The update is starting.")}>
-              Update BAP Store
+              Update Brokey
             </Button>
           ) : null}
           <Button kind="ghost" icon={<ExternalLink {...ICON} aria-hidden="true" />} title="Open the release on GitHub." onClick={() => void api.openUrl(latest.url)}>
@@ -134,7 +134,7 @@ function SelfUpdateNotice({ self, hasSelfRow }: { self: SelfUpdate; hasSelfRow: 
         </>
       }
     >
-      BAP Store <Figure className="bl-figure">{latest.version}</Figure> is available. {sentence}
+      Brokey <Figure className="bl-figure">{latest.version}</Figure> is available. {sentence}
     </Notice>
   );
 }
@@ -159,7 +159,7 @@ function Header({ checked, onChange, busy }: { checked: boolean | "mixed"; onCha
 
 function SkeletonRows({ count }: { count: number }) {
   return (
-    <table className="bs-table bl-table" aria-busy="true" aria-label="Loading">
+    <table className="bk-table bl-table" aria-busy="true" aria-label="Loading">
       <Header busy checked={false} onChange={() => {}} />
       <tbody>
         {Array.from({ length: count }, (_, i) => (
@@ -168,12 +168,12 @@ function SkeletonRows({ count }: { count: number }) {
               <Skeleton className="bl-skel-box" />
             </td>
             <td className="bl-c-narrow">
-              <Skeleton className="bs-skel--icon" />
+              <Skeleton className="bk-skel--icon" />
             </td>
             <td className="bl-c-name">
               <div className="bl-skel-lines">
                 <Skeleton width={`${24 + ((i * 17) % 30)}%`} />
-                <Skeleton width={`${40 + ((i * 23) % 40)}%`} className="bs-skel--text" />
+                <Skeleton width={`${40 + ((i * 23) % 40)}%`} className="bk-skel--text" />
               </div>
             </td>
             <td className="bl-c-narrow">
@@ -212,9 +212,9 @@ function UpdateRow({ update, ticked, onToggle }: { update: Update; ticked: boole
       <td className="bl-c-name">
         <div className="bl-name">
           <span className="bl-name-label">{u.name}</span>
-          {u.is_self ? <span className="bs-dot bs-dot--accent" title="This is BAP Store itself." /> : null}
+          {u.is_self ? <span className="bk-dot bk-dot--accent" title="This is Brokey itself." /> : null}
         </div>
-        <div className="bs-row-sub">{u.summary ?? u.package.id}</div>
+        <div className="bk-row-sub">{u.summary ?? u.package.id}</div>
       </td>
       <td className="bl-c-narrow">
         <SourceBadge source={u.package.source} installed />
@@ -312,7 +312,7 @@ export function UpdatesPage() {
   let body: ReactNode;
   if (!updates) {
     body = loading ? (
-      <div className="bs-well bl-well">
+      <div className="bk-well bl-well">
         <SkeletonRows count={6} />
       </div>
     ) : null;
@@ -330,8 +330,8 @@ export function UpdatesPage() {
     );
   } else {
     body = (
-      <div className="bs-well bl-well">
-        <table className="bs-table bl-table">
+      <div className="bk-well bl-well">
+        <table className="bk-table bl-table">
           <Header checked={headerState} onChange={(on) => tick(shownKeys, on)} />
           <tbody>
             {shown.map((u) => {
@@ -346,23 +346,23 @@ export function UpdatesPage() {
 
   return (
     <div className="bl-page">
-      <div className="bs-toolbar bl-toolbar">
+      <div className="bk-toolbar bl-toolbar">
         <SearchField label="Filter updates" value={query} onChange={setQuery} placeholder="Filter by name or summary" width="calc(var(--s6) * 8)" />
         <MultiSelect<SourceKind> name="Sources" icon={<Layers {...ICON} aria-hidden="true" />} options={options} values={chosen} onChange={setSources} />
         <Dropdown<UpdatesSort> name="Sort" icon={<ArrowUpDown {...ICON} aria-hidden="true" />} options={SORTS} value={sort} onChange={setSort} />
-        <div className="bs-toolbar-end">
+        <div className="bk-toolbar-end">
           {updates && updates.length > 0 ? (
-            <span className="bs-small bs-dim">
+            <span className="bk-small bk-dim">
               <Count value={tickedRows.length} /> selected
             </span>
           ) : null}
           {checkButton}
         </div>
       </div>
-      <div className="bs-page bl-body">
-        <div className="bs-page-head">
-          <h1 className="bs-page-title">Updates</h1>
-          <div className="bs-page-sub">
+      <div className="bk-page bl-body">
+        <div className="bk-page-head">
+          <h1 className="bk-page-title">Updates</h1>
+          <div className="bk-page-sub">
             <HeadLine list={list} loading={loading} />
           </div>
         </div>
@@ -396,7 +396,7 @@ export function UpdatesPage() {
                 "Nothing is selected. Update all brings every source up to date in one go."
               )}
             </span>
-            <div className="bs-btn-group">
+            <div className="bk-btn-group">
               <Button onClick={updateSelected} {...off(tickedRows.length === 0, "Tick something to update.")}>
                 Update selected
               </Button>

@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-BAP Store is a desktop application store for Linux: one search across the
+Brokey is a desktop application store for Linux: one search across the
 distribution's repositories, the AUR, Flatpak, Snap and GitHub releases, one
 install flow, one updates page, drivers and firmware, and an application that
-updates itself through the same machinery. `docs/architecture.md` is the design
+updates itself through the same machinery. The name is from brokering: it
+stands between the user and every package manager the machine has.
+`docs/architecture.md` is the design
 document and is where the shape was settled; read it before changing the shape.
 
 **Early and building out.** The first machine is Arch (CachyOS): pacman and the
@@ -32,7 +34,7 @@ Never a raw hex in a component.
 | Icons | Lucide, through `lucide-react`. Nothing hand-drawn; nothing from a CDN |
 | Font | Archivo, bundled from `assets/fonts/` |
 | Databases | Read directly in pure Rust. No libalpm, no libapt |
-| Privilege | `bap-helper` via `pkexec` with a closed list of operations. The window never runs as root |
+| Privilege | `brokey-helper` via `pkexec` with a closed list of operations. The window never runs as root |
 | Targets | Linux x86-64 and ARM64 only |
 
 ## Commands
@@ -43,9 +45,9 @@ cargo build --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets
 cargo fmt --all --check
-cargo run -p bap-store -- search steam        # text mode: exercises the sources without a window
-cargo run -p bap-store -- sources             # which sources this machine has and why not
-cargo run -p bap-store -- updates
+cargo run -p brokey -- search steam        # text mode: exercises the sources without a window
+cargo run -p brokey -- sources             # which sources this machine has and why not
+cargo run -p brokey -- updates
 
 # Frontend (Node is in ~/.local/bin on the development machine)
 cd frontend && npm install && npm run build   # tsc + vite build into frontend/dist
@@ -65,7 +67,7 @@ The development machine has no `webkit2gtk-4.1` installed and `sudo` needs a
 password, so the package and its six missing dependencies were extracted from
 the Arch repositories into `~/.local/opt/webkit` (no root needed) and Node into
 `~/.local/opt/node`. `. tools/dev-env.sh` points pkg-config, the loader and
-WebKit's process path at them; source it before `cargo check -p bap-store` or
+WebKit's process path at them; source it before `cargo check -p brokey` or
 `cargo build`. It is enough to compile and to run every test, but not to open
 the window: WebKitGTK spawns `/usr/lib/webkit2gtk-4.1/WebKitNetworkProcess`
 from a path compiled into the library and ignores `WEBKIT_EXEC_PATH` in a
@@ -78,7 +80,7 @@ and the core through the text mode.
 ## Layout
 
 ```
-crates/bap-core/src/
+crates/brokey-core/src/
   lib.rs            re-exports; the Source trait; Package, App, Update, Plan, Step, Event
   model.rs          the data types, serde-derived, shared with the page as JSON
   sources/          one module per source: pacman.rs, aur.rs, flatpak.rs, snap.rs, apt.rs, dnf.rs, github.rs, fwupd.rs, chwd.rs
@@ -90,8 +92,8 @@ crates/bap-core/src/
   system.rs         distribution detection, which tools exist, paths
   vercmp.rs         pacman version comparison, tested against `vercmp`
   http.rs           one reqwest client with a user agent and a disk cache for icons
-crates/bap-helper/src/main.rs
-crates/bap-store/src/
+crates/brokey-helper/src/main.rs
+crates/brokey/src/
   main.rs           text mode dispatch, then the window
   lib.rs            Tauri builder, plugins, state
   commands.rs       every #[tauri::command], thin
@@ -111,7 +113,7 @@ frontend/src/
 These were decided before the first line and are not re-litigated in a fix:
 
 - **The window has no root.** A privileged operation is an entry in
-  `bap-helper`'s closed list, with a test that the helper refuses anything
+  `brokey-helper`'s closed list, with a test that the helper refuses anything
   else. Never a `pkexec` call site outside `transaction/runner.rs`.
 - **A source never runs anything.** `Source::plan` returns steps; the Runner
   runs them. This is what makes every source testable with fixtures.
@@ -120,7 +122,7 @@ These were decided before the first line and are not re-litigated in a fix:
   `Source::launcher` finds the desktop entry in the package's own file list
   (or answers `flatpak run` / `snap run` / an AppImage), and
   `commands::logic::start` hands an entry to `gio launch`. Never parse `Exec`
-  here. `crates/bap-core/src/launch.rs` explains why, and why a session that
+  here. `crates/brokey-core/src/launch.rs` explains why, and why a session that
   started before Flatpak or snapd was installed cannot list their
   applications until the user logs in again.
 - **Grouping is a pure function** of `Vec<Package>` (`group.rs`). Adding a
@@ -144,7 +146,7 @@ These were decided before the first line and are not re-litigated in a fix:
 - **The self-updater never prints a command that cannot work.** Every
   remedy is chosen by `selfupdate::install::detect`, a pure function of a
   probe, and `selfupdate/tests` assert the forbidden sentences never appear.
-- **CHANGELOG.md is the release notes.** `crates/bap-store/tests/release.rs`
+- **CHANGELOG.md is the release notes.** `crates/brokey/tests/release.rs`
   fails if the section for the current version is missing or is not newest.
 - **`frontend/src/tokens.css` is not edited here.** It is a copy; a change
   goes to Design-Principles first and is copied back.
@@ -166,7 +168,7 @@ These were decided before the first line and are not re-litigated in a fix:
 ## Testing
 
 - `cargo test --workspace` runs everything that needs no network and no root:
-  parsers against fixtures in `crates/bap-core/tests/fixtures/`, grouping,
+  parsers against fixtures in `crates/brokey-core/tests/fixtures/`, grouping,
   vercmp against a table generated from `vercmp`, helper plan validation, the
   self-update remedies, the changelog guard.
 - Tests that need the network are `#[ignore]` and named `live_*`; run them with

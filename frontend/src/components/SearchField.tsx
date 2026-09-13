@@ -40,7 +40,7 @@ export function SearchField({ label, value, onChange, placeholder, onSubmit, ful
       leading={<Search {...ICON} aria-hidden="true" />}
       trailing={
         value ? (
-          <button type="button" className="bs-field-clear" title="Clear" aria-label="Clear" onClick={() => onChange("")}>
+          <button type="button" className="bk-field-clear" title="Clear" aria-label="Clear" onClick={() => onChange("")}>
             <X {...ICON} size={14} aria-hidden="true" />
           </button>
         ) : null

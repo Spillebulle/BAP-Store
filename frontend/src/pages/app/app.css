@@ -4,46 +4,46 @@
  * only; the components are painted in app.css.
  */
 
-.bs-appdetail {
+.bk-appdetail {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
 
-.bs-appdetail-scroll {
+.bk-appdetail-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
 }
 
-.bs-appdetail-body {
+.bk-appdetail-body {
   max-width: 1000px;
   gap: var(--s5);
 }
 
-.bs-appdetail-section {
+.bk-appdetail-section {
   display: flex;
   flex-direction: column;
   gap: var(--s3);
 }
 
-.bs-appdetail-section-head {
+.bk-appdetail-section-head {
   display: flex;
   align-items: center;
   gap: var(--s3);
 }
 
 /* The edition picker: wide enough that its list, exactly its width, holds the longest label. */
-.bs-appdetail-edition {
+.bk-appdetail-edition {
   min-width: calc(var(--s6) * 8);
 }
 
-.bs-appdetail-cats {
+.bk-appdetail-cats {
   gap: var(--s1);
 }
 
-.bs-appdetail-note {
+.bk-appdetail-note {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -51,20 +51,20 @@
 }
 
 /* Skeleton lines standing in for the facts and the description, same rhythm as the rows they replace. */
-.bs-appdetail-skel {
+.bk-appdetail-skel {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
 }
 
-.bs-appdetail-skel-row {
+.bk-appdetail-skel-row {
   display: flex;
   align-items: center;
   gap: var(--s4);
 }
 
 /* A PKGBUILD or any other block of source: the activity log's look. */
-.bs-appdetail-code {
+.bk-appdetail-code {
   max-height: calc(var(--s6) * 12);
   margin: 0;
   padding: var(--s2) var(--s3);
@@ -80,14 +80,14 @@
 }
 
 /* The full screenshot inside the large dialog: contained, never cropped. */
-.bs-appdetail-shot {
+.bk-appdetail-shot {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
 }
 
-.bs-appdetail-shot > img {
+.bk-appdetail-shot > img {
   max-width: 100%;
   max-height: min(70vh, 100%);
   object-fit: contain;

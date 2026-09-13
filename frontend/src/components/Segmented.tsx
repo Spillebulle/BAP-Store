@@ -21,7 +21,7 @@ interface Props<T extends string> {
 /** Two to five exclusive short options (§7.9). Selected is the control fill, never the accent. */
 export function Segmented<T extends string>({ name, options, value, onChange }: Props<T>) {
   return (
-    <div className="bs-seg" role="radiogroup" aria-label={name}>
+    <div className="bk-seg" role="radiogroup" aria-label={name}>
       {options.map((o) => (
         <button
           key={o.value}

@@ -21,7 +21,7 @@ export function AppIcon({ picture, name, size }: Props) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   const initial = (name.trim().charAt(0) || "?").toUpperCase();
-  const cls = `bs-appicon bs-appicon--${size}`;
+  const cls = `bk-appicon bk-appicon--${size}`;
   if (!src || failed) {
     return (
       <span className={cls} role="img" aria-label={name} title={name}>

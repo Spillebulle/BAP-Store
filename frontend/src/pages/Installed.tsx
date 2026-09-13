@@ -149,7 +149,7 @@ function InstalledRow({ app, onOpen, targets }: { app: App; onOpen: (app: App) =
       figure={figure}
       action={
         open ? (
-          <span className="bs-inline">
+          <span className="bk-inline">
             {open}
             {action}
           </span>
@@ -217,12 +217,12 @@ export function InstalledPage() {
   let list: ReactNode;
   if (!apps) {
     list = loading ? (
-      <div className="bs-well">
+      <div className="bk-well">
         <SkeletonAppRows count={8} />
       </div>
     ) : null;
   } else if (apps.length === 0) {
-    list = <EmptyState fill icon={<HardDrive {...ICON_EMPTY} aria-hidden="true" />}>Nothing is installed from the sources BAP Store can read.</EmptyState>;
+    list = <EmptyState fill icon={<HardDrive {...ICON_EMPTY} aria-hidden="true" />}>Nothing is installed from the sources Brokey can read.</EmptyState>;
   } else if (shown.length === 0) {
     list = (
       <EmptyState
@@ -239,8 +239,8 @@ export function InstalledPage() {
     );
   } else {
     list = (
-      <div className="bs-well">
-        <div className="bs-list">
+      <div className="bk-well">
+        <div className="bk-list">
           {shown.map((app) => (
             <InstalledRow key={app.key} app={app} onOpen={open} targets={targets} />
           ))}
@@ -251,14 +251,14 @@ export function InstalledPage() {
 
   return (
     <div className="bl-page">
-      <div className="bs-toolbar bl-toolbar">
+      <div className="bk-toolbar bl-toolbar">
         <SearchField label="Filter installed" value={query} onChange={setQuery} placeholder="Filter by name or summary" width="calc(var(--s6) * 8)" />
         <MultiSelect<SourceKind> name="Sources" icon={<Layers {...ICON} aria-hidden="true" />} options={options} values={chosen} onChange={setSources} />
         <Segmented<Scope> name="Which packages to list" options={SCOPES} value={effectiveScope} onChange={setScope} />
         <Dropdown<InstalledSort> name="Sort" icon={<ArrowUpDown {...ICON} aria-hidden="true" />} options={SORTS} value={sort} onChange={setSort} />
-        <div className="bs-toolbar-end">
+        <div className="bk-toolbar-end">
           {apps ? (
-            <span className="bs-small bs-dim">
+            <span className="bk-small bk-dim">
               <Count value={shown.length} /> shown
             </span>
           ) : null}
@@ -267,10 +267,10 @@ export function InstalledPage() {
           </Button>
         </div>
       </div>
-      <div className="bs-page bl-body">
-        <div className="bs-page-head">
-          <h1 className="bs-page-title">Installed</h1>
-          <div className="bs-page-sub">
+      <div className="bk-page bl-body">
+        <div className="bk-page-head">
+          <h1 className="bk-page-title">Installed</h1>
+          <div className="bk-page-sub">
             <HeadLine apps={apps} loading={loading} />
           </div>
         </div>

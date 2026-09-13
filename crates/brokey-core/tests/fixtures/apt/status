@@ -1,0 +1,123 @@
+Package: gimp
+Status: install ok installed
+Priority: optional
+Section: graphics
+Installed-Size: 20100
+Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Architecture: amd64
+Version: 2.10.34-1+deb12u1
+Depends: gimp-data (>= 2.10.34-1+deb12u1), libgimp2.0 (>= 2.10.34-1+deb12u1), libc6 (>= 2.34)
+Description: GNU Image Manipulation Program
+ GIMP is an advanced picture editor. You can use it to edit, enhance, and
+ retouch photos and scans, create drawings, and make your own images.
+ .
+ It has a large collection of professional-level editing tools and filters,
+ similar to the ones you might find in Photoshop.
+Homepage: https://www.gimp.org/
+
+Package: gimp-data
+Status: install ok installed
+Priority: optional
+Section: graphics
+Installed-Size: 78504
+Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Architecture: all
+Version: 2.10.34-1+deb12u2
+Description: Data files for GIMP
+ This package contains architecture-independent supporting data files for use
+ with GIMP.
+Homepage: https://www.gimp.org/
+
+Package: libgimp2.0
+Status: hold ok installed
+Priority: optional
+Section: libs
+Installed-Size: 3640
+Maintainer: Debian GNOME Maintainers <pkg-gnome-maintainers@lists.alioth.debian.org>
+Architecture: amd64
+Version: 2.10.34-1+deb12u1
+Depends: libc6 (>= 2.34), libglib2.0-0 (>= 2.66)
+Description: Libraries for the GNU Image Manipulation Program
+ This package includes the libgimp libraries, which are necessary to run GIMP
+ and third-party GIMP plugins.
+Homepage: https://www.gimp.org/
+
+Package: fonts-dejavu
+Status: install ok installed
+Priority: optional
+Section: fonts
+Installed-Size: 12
+Maintainer: Debian Fonts Task Force <debian-fonts@lists.debian.org>
+Architecture: all
+Version: 2.37-6
+Depends: fonts-dejavu-core (= 2.37-6), fonts-dejavu-extra (= 2.37-6)
+Description: metapackage to pull in fonts-dejavu-core and fonts-dejavu-extra
+ DejaVu provides an expanded version of the Vera font family aiming for
+ quality and broader coverage of Unicode.
+ .
+ This is a metapackage that pulls in the core and extra fonts.
+Homepage: https://dejavu-fonts.github.io/
+
+Package: firefox-esr
+Status: install ok installed
+Priority: optional
+Section: web
+Installed-Size: 235936
+Maintainer: Maintainers of Mozilla-related packages <team+pkg-mozilla@tracker.debian.org>
+Architecture: amd64
+Version: 115.6.0esr-1~deb12u1
+Depends: libc6 (>= 2.34), libgtk-3-0 (>= 3.14), libnspr4 (>= 2:4.35), libnss3 (>= 2:3.87)
+Description: Mozilla Firefox web browser - Extended Support Release (ESR)
+ Firefox ESR is a powerful, extensible web browser with support for modern
+ web application technologies.
+Homepage: https://www.mozilla.org/firefox/
+
+Package: krita
+Status: deinstall ok config-files
+Priority: optional
+Section: graphics
+Installed-Size: 128932
+Maintainer: Debian Qt/KDE Maintainers <debian-qt-kde@lists.debian.org>
+Architecture: amd64
+Version: 1:5.1.5+dfsg-1
+Conffiles:
+ /etc/xdg/kritarc 9d0bd6f4b2e1c8a7f5d3e2c1b0a9f8e7
+Description: pixel-based image manipulation program
+ Krita is a creative application for raster images.
+Homepage: https://krita.org/
+
+Package: old-tool
+Status: install ok installed
+Priority: optional
+Section: utils
+Installed-Size: 40
+Maintainer: Nobody <nobody@example.org>
+Architecture: amd64
+Version: 1.0-1
+Description: a tool that is no longer in any list
+ It was removed from the archive after this machine installed it.
+
+Package: brokey
+Status: install ok installed
+Priority: optional
+Section: admin
+Installed-Size: 9000
+Maintainer: spillebulle <spillebulle@gmail.com>
+Architecture: amd64
+Version: 0.1.0-1
+Depends: libc6 (>= 2.34), libwebkit2gtk-4.1-0 (>= 2.40), policykit-1
+Description: application store for Linux
+ One search across the distribution's repositories, Flatpak, Snap and
+ GitHub releases, one install flow and one updates page.
+Homepage: https://github.com/spillebulle/brokey
+
+Package: half-thing
+Status: install ok half-installed
+Priority: optional
+Section: misc
+Installed-Size: 8
+Maintainer: Nobody <nobody@example.org>
+Architecture: amd64
+Version: 1.0-1
+Description: an interrupted installation
+ dpkg was interrupted part-way through this one.

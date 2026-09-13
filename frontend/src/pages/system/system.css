@@ -1,7 +1,7 @@
 /*
  * The Drivers and Settings pages: what the components do not already draw.
  * Tokens only, sizes on the 4 px grid; class names are prefixed sy- so they
- * cannot be confused with the component sheet's bs- names.
+ * cannot be confused with the component sheet's bk- names.
  */
 
 /* ═══ drivers: a device panel's figure and its profile rows ═══════════════ */
@@ -18,7 +18,7 @@
   white-space: nowrap;
 }
 
-.sy-panel-fig > .bs-figure {
+.sy-panel-fig > .bk-figure {
   color: var(--text-dim);
 }
 
@@ -62,7 +62,7 @@
 }
 
 /* The name takes its own width so the badges sit beside it, not at the far edge. */
-.sy-profile-name > .bs-row-label {
+.sy-profile-name > .bk-row-label {
   flex: 0 1 auto;
 }
 
@@ -108,7 +108,7 @@
   white-space: nowrap;
 }
 
-.sy-fw-action > .bs-btn {
+.sy-fw-action > .bk-btn {
   display: inline-flex;
 }
 

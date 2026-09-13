@@ -109,7 +109,7 @@ function RowAction({ app, busy, statuses }: { app: App; busy: Map<string, string
       alone
       form
       align="right"
-      className="bs-search-pick"
+      className="bk-search-pick"
       options={installOptions(app, statuses)}
       value={null}
       onChange={(key) => {
@@ -126,9 +126,9 @@ function RowFigure({ app }: { app: App }) {
   const label = app.editions.map((e) => e.package.popularity_label).find((l): l is string => Boolean(l)) ?? null;
   if (!version && !label) return null;
   return (
-    <span className="bs-search-fig">
+    <span className="bk-search-fig">
       {version ? <Figure title={primary?.package.installed_version ? "The installed version." : "The version the source offers."}>{version}</Figure> : null}
-      {label ? <span className="bs-search-fig-label">{label}</span> : null}
+      {label ? <span className="bk-search-fig-label">{label}</span> : null}
     </span>
   );
 }
@@ -213,7 +213,7 @@ export function SearchPage() {
   // focus, Escape clears. Menus and dialogs handle their own keys first.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector(".bs-dimmer, .bs-menu")) return;
+      if (e.defaultPrevented || document.querySelector(".bk-dimmer, .bk-menu")) return;
       const target = e.target as HTMLElement | null;
       const input = inputRef.current;
       const inField = target !== null && target === input;
@@ -263,7 +263,7 @@ export function SearchPage() {
     );
   } else if (loading && !results) {
     body = (
-      <div className="bs-well">
+      <div className="bk-well">
         <SkeletonAppRows count={8} />
       </div>
     );
@@ -303,8 +303,8 @@ export function SearchPage() {
     );
   } else {
     body = (
-      <div className="bs-well">
-        <div className="bs-list" ref={listRef} aria-busy={loading || undefined}>
+      <div className="bk-well">
+        <div className="bk-list" ref={listRef} aria-busy={loading || undefined}>
           {visible.map((app, i) => (
             <AppRow
               key={app.key}
@@ -322,9 +322,9 @@ export function SearchPage() {
   }
 
   return (
-    <div className="bs-search">
-      <div className="bs-toolbar">
-        <span className="bs-toolbar-title">Search</span>
+    <div className="bk-search">
+      <div className="bk-toolbar">
+        <span className="bk-toolbar-title">Search</span>
         <SearchField
           label="Search"
           value={text}
@@ -338,17 +338,17 @@ export function SearchPage() {
         <MultiSelect name="Sources" options={sourceOptions} values={sources} onChange={setSources} alone />
         <Segmented name="Kind" options={KINDS} value={kind} onChange={setKind} />
         <Dropdown name="Sort" icon={<ArrowDownUp {...ICON} aria-hidden="true" />} options={SORTS} value={sort} onChange={setSort} />
-        <div className="bs-toolbar-end">
-          <span className="bs-search-toggle">
+        <div className="bk-toolbar-end">
+          <span className="bk-search-toggle">
             Installed only
             <Toggle label="Installed only" on={installedOnly} onChange={setInstalledOnly} />
           </span>
         </div>
       </div>
-      <div className="bs-search-body">
-        <div className="bs-page">
+      <div className="bk-search-body">
+        <div className="bk-page">
           {error || (results && results.failed.length > 0) ? (
-            <div className="bs-search-notices">
+            <div className="bk-search-notices">
               {error ? <Notice>{error}</Notice> : null}
               {results?.failed.map(([source, sentence]) => (
                 <Notice key={source}>{sentence.toLowerCase().includes(sourceLabel(source).toLowerCase()) ? sentence : `${sourceLabel(source)}: ${sentence}`}</Notice>
@@ -356,7 +356,7 @@ export function SearchPage() {
             </div>
           ) : null}
           {typed && results && visible.length > 0 ? (
-            <div className="bs-search-line" role="status" aria-live="polite">
+            <div className="bk-search-line" role="status" aria-live="polite">
               {loading ? (
                 "Searching…"
               ) : (

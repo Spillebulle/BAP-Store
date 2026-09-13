@@ -23,7 +23,7 @@ export function Art({ picture, alt, size, landscape = true, state, className }: 
   const src = pictureSrc(picture);
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
-  const cls = ["bs-art", `bs-art--${size}`, landscape ? "bs-art--landscape" : "bs-art--portrait", className ?? ""]
+  const cls = ["bk-art", `bk-art--${size}`, landscape ? "bk-art--landscape" : "bk-art--portrait", className ?? ""]
     .filter(Boolean)
     .join(" ");
   return (
@@ -31,11 +31,11 @@ export function Art({ picture, alt, size, landscape = true, state, className }: 
       {src && !failed ? (
         <img src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
-        <span className="bs-art-fallback" role="img" aria-label={alt}>
+        <span className="bk-art-fallback" role="img" aria-label={alt}>
           <Image {...ICON_EMPTY} aria-hidden="true" />
         </span>
       )}
-      {state ? <span className="bs-art-state">{state}</span> : null}
+      {state ? <span className="bk-art-state">{state}</span> : null}
     </span>
   );
 }
@@ -57,7 +57,7 @@ export function ArtCard({ picture, alt, size, landscape, state, title, figure, s
   const src = pictureSrc(picture);
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
-  const cls = ["bs-art", "bs-artcard", `bs-art--${size}`, landscape === false ? "bs-art--portrait" : "bs-art--landscape", selected ? "on" : ""]
+  const cls = ["bk-art", "bk-artcard", `bk-art--${size}`, landscape === false ? "bk-art--portrait" : "bk-art--landscape", selected ? "on" : ""]
     .filter(Boolean)
     .join(" ");
   return (
@@ -65,12 +65,12 @@ export function ArtCard({ picture, alt, size, landscape, state, title, figure, s
       {src && !failed ? (
         <img src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
-        <span className="bs-art-fallback" aria-hidden="true">
+        <span className="bk-art-fallback" aria-hidden="true">
           <Image {...ICON_EMPTY} />
         </span>
       )}
-      {state ? <span className="bs-art-state">{state}</span> : null}
-      <span className="bs-artcard-label">
+      {state ? <span className="bk-art-state">{state}</span> : null}
+      <span className="bk-artcard-label">
         <b>{title}</b>
         {figure ? <span>{figure}</span> : null}
       </span>

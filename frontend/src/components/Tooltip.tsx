@@ -13,7 +13,7 @@ interface Props {
  */
 export function Tooltip({ text, children }: Props) {
   return (
-    <span className="bs-inline" style={{ display: "inline-flex" }} title={text}>
+    <span className="bk-inline" style={{ display: "inline-flex" }} title={text}>
       {children}
     </span>
   );

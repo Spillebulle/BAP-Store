@@ -17,8 +17,8 @@ cd "$root"
 fail() { printf 'packaging: %s\n' "$1" >&2; exit 1; }
 ok()   { printf '  ok  %s\n' "$1"; }
 
-APP_ID=io.github.spillebulle.bapstore
-HELPER=/usr/lib/bap-store/bap-helper
+APP_ID=io.github.spillebulle.brokey
+HELPER=/usr/lib/brokey/brokey-helper
 
 metainfo="packaging/$APP_ID.metainfo.xml"
 desktop="packaging/$APP_ID.desktop"
@@ -42,8 +42,8 @@ icon=$(sed -n 's/^Icon=\(.*\)$/\1/p' "$desktop" | head -1)
 ok "Icon= resolves to the installed icons"
 
 for size in 16 32 48 64 128 256; do
-    [ -f "assets/icons/bap-store-$size.png" ] || \
-        fail "assets/icons/bap-store-$size.png is missing, and every package installs it"
+    [ -f "assets/icons/brokey-$size.png" ] || \
+        fail "assets/icons/brokey-$size.png is missing, and every package installs it"
 done
 ok "all six icon sizes are present"
 
@@ -59,7 +59,7 @@ grep -q "$HELPER" packaging/linux/build-packages.sh || \
     fail "build-packages.sh does not install the helper to $HELPER"
 grep -q "$HELPER" packaging/linux/PKGBUILD || \
     fail "PKGBUILD does not install the helper to $HELPER"
-grep -rq "$HELPER" crates/bap-core/src/transaction/ || \
+grep -rq "$HELPER" crates/brokey-core/src/transaction/ || \
     fail "the runner does not look for the helper at $HELPER"
 ok "packages and the runner agree on the helper path"
 

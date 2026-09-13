@@ -48,7 +48,7 @@ interface Fact {
 function FactList({ items }: { items: Fact[] }) {
   if (items.length === 0) return null;
   return (
-    <dl className="bs-facts">
+    <dl className="bk-facts">
       {items.map((f, i) => (
         <Fragment key={`${f.key}-${i}`}>
           <dt>{f.key}</dt>
@@ -61,11 +61,11 @@ function FactList({ items }: { items: Fact[] }) {
 
 function FactSkeleton() {
   return (
-    <div className="bs-appdetail-skel" aria-busy="true" aria-label="Loading the details">
+    <div className="bk-appdetail-skel" aria-busy="true" aria-label="Loading the details">
       {[34, 52, 28, 46, 40, 58].map((w, i) => (
-        <div key={i} className="bs-appdetail-skel-row">
-          <Skeleton width="12%" className="bs-skel--text" />
-          <Skeleton width={`${w}%`} className="bs-skel--text" />
+        <div key={i} className="bk-appdetail-skel-row">
+          <Skeleton width="12%" className="bk-skel--text" />
+          <Skeleton width={`${w}%`} className="bk-skel--text" />
         </div>
       ))}
     </div>
@@ -74,10 +74,10 @@ function FactSkeleton() {
 
 function DescriptionSkeleton() {
   return (
-    <div className="bs-appdetail-skel" aria-busy="true" aria-label="Loading the description">
-      <Skeleton width="62%" className="bs-skel--text" />
-      <Skeleton width="58%" className="bs-skel--text" />
-      <Skeleton width="44%" className="bs-skel--text" />
+    <div className="bk-appdetail-skel" aria-busy="true" aria-label="Loading the description">
+      <Skeleton width="62%" className="bk-skel--text" />
+      <Skeleton width="58%" className="bk-skel--text" />
+      <Skeleton width="44%" className="bk-skel--text" />
     </div>
   );
 }
@@ -213,7 +213,7 @@ function Detail({ app }: { app: App }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || (e.key !== "Escape" && e.key !== "Backspace")) return;
-      if (document.querySelector(".bs-dimmer, .bs-menu")) return;
+      if (document.querySelector(".bk-dimmer, .bk-menu")) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       e.preventDefault();
@@ -239,38 +239,38 @@ function Detail({ app }: { app: App }) {
   const shotAlt = (s: Screenshot, i: number) => s.caption ?? `${app.name}, screenshot ${formatCount(i + 1)}`;
 
   return (
-    <div className="bs-appdetail">
-      <div className="bs-toolbar">
+    <div className="bk-appdetail">
+      <div className="bk-toolbar">
         <Button kind="ghost" icon={<ChevronLeft {...ICON} aria-hidden="true" />} onClick={back} title="Back to the list. Backspace does the same.">
           Back
         </Button>
       </div>
-      <div className="bs-appdetail-scroll">
-        <div className="bs-detail-head">
+      <div className="bk-appdetail-scroll">
+        <div className="bk-detail-head">
           {backdrop ? (
-            <div className="bs-backdrop">
+            <div className="bk-backdrop">
               <img src={api.pictureSrc(backdrop.image) ?? undefined} alt="" aria-hidden="true" />
-              <div className="bs-backdrop-fade" />
+              <div className="bk-backdrop-fade" />
             </div>
           ) : (
-            <div className="bs-backdrop bs-backdrop--none" />
+            <div className="bk-backdrop bk-backdrop--none" />
           )}
-          <div className={backdrop ? "bs-hero bs-hero--over" : "bs-hero"}>
+          <div className={backdrop ? "bk-hero bk-hero--over" : "bk-hero"}>
             <AppIcon picture={app.icon ?? pkg.icon} name={app.name} size="hero" />
-            <div className="bs-hero-text">
-              <h1 className="bs-hero-title">{app.name}</h1>
+            <div className="bk-hero-text">
+              <h1 className="bk-hero-title">{app.name}</h1>
               {app.developer || app.summary || pkg.summary ? (
-                <div className="bs-hero-sub">{[app.developer ?? pkg.developer, app.summary ?? pkg.summary].filter(Boolean).join(" · ")}</div>
+                <div className="bk-hero-sub">{[app.developer ?? pkg.developer, app.summary ?? pkg.summary].filter(Boolean).join(" · ")}</div>
               ) : null}
               {app.categories.length > 0 ? (
-                <div className="bs-inline bs-wrap bs-appdetail-cats">
+                <div className="bk-inline bk-wrap bk-appdetail-cats">
                   {app.categories.map((c) => (
                     <Badge key={c}>{categoryLabel(c)}</Badge>
                   ))}
                 </div>
               ) : null}
-              <div className="bs-hero-actions">
-                <Dropdown name="Edition" alone form className="bs-appdetail-edition" options={editionOptions} value={editionKey(chosen)} onChange={setChosenKey} />
+              <div className="bk-hero-actions">
+                <Dropdown name="Edition" alone form className="bk-appdetail-edition" options={editionOptions} value={editionKey(chosen)} onChange={setChosenKey} />
                 {pkg.installed ? (
                   <>
                     {openTarget ? (
@@ -307,18 +307,18 @@ function Detail({ app }: { app: App }) {
                 ) : null}
               </div>
               {pkg.installed && launcherNotice ? (
-                <div className="bs-appdetail-note">
-                  <span className="bs-hero-note">Your launcher does not list it until you log out and back in once. Open works now.</span>
+                <div className="bk-appdetail-note">
+                  <span className="bk-hero-note">Your launcher does not list it until you log out and back in once. Open works now.</span>
                 </div>
               ) : null}
               {setupSentence && !pkg.installed ? (
-                <div className="bs-appdetail-note">
-                  <span className="bs-hero-note">{setupSentence}</span>
+                <div className="bk-appdetail-note">
+                  <span className="bk-hero-note">{setupSentence}</span>
                 </div>
               ) : null}
               {chosen.matched_by === "name" ? (
-                <div className="bs-appdetail-note">
-                  <span className="bs-hero-note">Matched by name, not by id.</span>
+                <div className="bk-appdetail-note">
+                  <span className="bk-hero-note">Matched by name, not by id.</span>
                   <Button kind="ghost" onClick={() => void split()} title="Lists this edition on its own from now on.">
                     Not the same application? Split
                   </Button>
@@ -328,29 +328,29 @@ function Detail({ app }: { app: App }) {
           </div>
         </div>
 
-        <div className="bs-page bs-appdetail-body">
+        <div className="bk-page bk-appdetail-body">
           {error ? <Notice>{error}</Notice> : null}
 
-          <section className="bs-appdetail-section" aria-label="Details">
-            <h3 className="bs-section-title">Details</h3>
+          <section className="bk-appdetail-section" aria-label="Details">
+            <h3 className="bk-section-title">Details</h3>
             {loading ? <FactSkeleton /> : <FactList items={facts(pkg)} />}
           </section>
 
           {pkgbuild ? (
-            <section className="bs-appdetail-section" aria-label="PKGBUILD">
-              <div className="bs-appdetail-section-head">
-                <h3 className="bs-section-title">PKGBUILD</h3>
+            <section className="bk-appdetail-section" aria-label="PKGBUILD">
+              <div className="bk-appdetail-section-head">
+                <h3 className="bk-section-title">PKGBUILD</h3>
                 <Button kind="ghost" onClick={() => setShowPkgbuild((v) => !v)}>
                   {showPkgbuild ? "Hide" : "Show"}
                 </Button>
               </div>
-              {showPkgbuild ? <pre className="bs-appdetail-code">{pkgbuild}</pre> : null}
+              {showPkgbuild ? <pre className="bk-appdetail-code">{pkgbuild}</pre> : null}
             </section>
           ) : null}
 
           {loading || description ? (
-            <section className="bs-appdetail-section" aria-label="About">
-              <h3 className="bs-section-title">About</h3>
+            <section className="bk-appdetail-section" aria-label="About">
+              <h3 className="bk-section-title">About</h3>
               {loading && !description ? <DescriptionSkeleton /> : <Description markup={description} />}
             </section>
           ) : null}
@@ -402,7 +402,7 @@ function Detail({ app }: { app: App }) {
         }
       >
         {current && shot !== null ? (
-          <div className="bs-appdetail-shot">
+          <div className="bk-appdetail-shot">
             <img src={api.pictureSrc(current.image) ?? undefined} alt={shotAlt(current, shot)} />
           </div>
         ) : null}
@@ -431,12 +431,12 @@ export function AppDetailPage({ appKey }: { appKey?: string }) {
   if (!app && (searching || (!initialised && seeded))) {
     // A search that may hold this application is still running: the hero's geometry, shimmering.
     return (
-      <div className="bs-page">
-        <div className="bs-appdetail-skel-row" aria-busy="true" aria-label="Loading">
+      <div className="bk-page">
+        <div className="bk-appdetail-skel-row" aria-busy="true" aria-label="Loading">
           <Skeleton width="var(--app-icon-hero)" height="var(--app-icon-hero)" />
-          <div className="bs-appdetail-skel bs-grow">
+          <div className="bk-appdetail-skel bk-grow">
             <Skeleton width="30%" />
-            <Skeleton width="52%" className="bs-skel--text" />
+            <Skeleton width="52%" className="bk-skel--text" />
           </div>
         </div>
       </div>

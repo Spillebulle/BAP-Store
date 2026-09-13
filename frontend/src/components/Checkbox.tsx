@@ -20,7 +20,7 @@ export type CheckboxProps =
 
 /** The painted box alone, for a row that handles its own click. */
 export function CheckMark({ checked }: { checked: Checked }) {
-  const cls = checked === "mixed" ? "bs-cb mixed" : checked ? "bs-cb on" : "bs-cb";
+  const cls = checked === "mixed" ? "bk-cb mixed" : checked ? "bk-cb on" : "bk-cb";
   return <span className={cls} aria-hidden="true" />;
 }
 
@@ -33,7 +33,7 @@ export function Checkbox({ checked, onChange, children, name, hit, className, di
       role="checkbox"
       aria-checked={checked === "mixed" ? "mixed" : checked}
       aria-label={children ? undefined : name}
-      className={["bs-check", className ?? ""].filter(Boolean).join(" ")}
+      className={["bk-check", className ?? ""].filter(Boolean).join(" ")}
       title={disabled ? disabledReason : undefined}
       disabled={disabled}
       onClick={(e) => {
@@ -41,7 +41,7 @@ export function Checkbox({ checked, onChange, children, name, hit, className, di
         onChange(checked !== true);
       }}
     >
-      {hit ? <span className="bs-cb-hit">{mark}</span> : mark}
+      {hit ? <span className="bk-cb-hit">{mark}</span> : mark}
       {children}
     </button>
   );

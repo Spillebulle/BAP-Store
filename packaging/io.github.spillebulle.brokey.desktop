@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Brokey
+GenericName=Software
+Comment=Find and install software from every source this machine has
+Exec=brokey
+Icon=io.github.spillebulle.brokey
+Terminal=false
+Categories=System;PackageManager;
+Keywords=store;software;apps;install;update;packages;flatpak;aur;snap;drivers;
+StartupNotify=true
+StartupWMClass=brokey

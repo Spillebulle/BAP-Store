@@ -13,7 +13,7 @@ interface Props {
 /** Every number that is read as a value: mono, tabular, 10.5 px (§4). */
 export function Figure({ children, title, className }: Props) {
   return (
-    <span className={className ? `bs-figure ${className}` : "bs-figure"} title={title}>
+    <span className={className ? `bk-figure ${className}` : "bk-figure"} title={title}>
       {children}
     </span>
   );

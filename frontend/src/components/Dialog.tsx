@@ -62,22 +62,22 @@ export function Dialog({ open, title, subtitle, size = "small", onClose, note, a
 
   if (!open) return null;
 
-  const cls = size === "small" ? "bs-dialog" : `bs-dialog bs-dialog--${size}`;
+  const cls = size === "small" ? "bk-dialog" : `bk-dialog bk-dialog--${size}`;
   return createPortal(
-    <div className="bs-dimmer" onPointerDown={(e) => e.target === e.currentTarget && tryClose()}>
+    <div className="bk-dimmer" onPointerDown={(e) => e.target === e.currentTarget && tryClose()}>
       <div ref={box} className={cls} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} tabIndex={-1}>
-        <div className="bs-dialog-head">
+        <div className="bk-dialog-head">
           <div>
             <h2 id={`${id}-title`}>{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
           <IconButton label="Close" icon={<X {...ICON} aria-hidden="true" />} onClick={tryClose} />
         </div>
-        <div className="bs-dialog-body">{children}</div>
+        <div className="bk-dialog-body">{children}</div>
         {note !== undefined || actions || refused ? (
-          <div className="bs-dialog-foot">
+          <div className="bk-dialog-foot">
             <span>{refused ?? note}</span>
-            {actions ? <div className="bs-btn-group">{actions}</div> : null}
+            {actions ? <div className="bk-btn-group">{actions}</div> : null}
           </div>
         ) : null}
       </div>

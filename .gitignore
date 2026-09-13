@@ -6,4 +6,5 @@
 /out
 *.log
 .DS_Store
-/crates/bap-store/gen/schemas
+/crates/brokey/gen/schemas
+__pycache__/

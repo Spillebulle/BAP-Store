@@ -3,8 +3,8 @@
 
     python3 tools/make-art.py
 
-Writes assets/icons/bap-store-{16,32,48,64,128,256,512}.png, bap-store.ico,
-the four files crates/bap-store/icons/ that Tauri's bundler names, and, via
+Writes assets/icons/brokey-{16,32,48,64,128,256,512}.png, brokey.ico,
+the four files crates/brokey/icons/ that Tauri's bundler names, and, via
 Design-Principles' banner.py (a copy is in tools/), docs/images/banner.png,
 banner-paper.png and social.png.
 
@@ -79,10 +79,10 @@ def main() -> int:
     sizes = [16, 32, 48, 64, 128, 256, 512]
     images = {s: mark(s, colour) for s in sizes}
     for s, img in images.items():
-        img.save(icons / f"bap-store-{s}.png")
-    images[256].save(icons / "bap-store.ico", sizes=[(s, s) for s in (16, 32, 48, 64, 128, 256)])
+        img.save(icons / f"brokey-{s}.png")
+    images[256].save(icons / "brokey.ico", sizes=[(s, s) for s in (16, 32, 48, 64, 128, 256)])
 
-    tauri = ROOT / "crates/bap-store/icons"
+    tauri = ROOT / "crates/brokey/icons"
     tauri.mkdir(parents=True, exist_ok=True)
     images[32].save(tauri / "32x32.png")
     images[128].save(tauri / "128x128.png")
@@ -94,55 +94,14 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     font = ROOT / "assets/fonts/Archivo.ttf"
     for name, (ground, ink) in banner.GROUNDS.items():
-        img = compose_stacked(images[512], font, ["BAP", "STORE"], ground, ink, banner.WIDTH, banner.HEIGHT)
+        img = banner.compose(images[512], font, "BROKEY", ground, ink, banner.WIDTH, banner.HEIGHT)
         img.save(out / name)
         print(f"wrote {out / name}")
     ground, ink = banner.GROUNDS["banner.png"]
-    compose_stacked(images[512], font, ["BAP", "STORE"], ground, ink, *banner.SOCIAL).save(out / "social.png")
+    banner.compose(images[512], font, "BROKEY", ground, ink, *banner.SOCIAL).save(out / "social.png")
     print(f"wrote {out / 'social.png'}")
     return 0
 
-
-def compose_stacked(mark_src: Image.Image, font_path: Path, lines: list[str],
-                    ground: str, ink: str, width: int, height: int) -> Image.Image:
-    """§17.4 for a name that sets on two lines.
-
-    "BAP STORE" on one line fits only at 0.71 of full size, under the 0.75
-    floor, so the wordmark stacks. The table still holds line by line: the
-    mark is 0.34 of the banner's height and a fifth taller than each line's
-    caps, the gap is 0.46 of the cap, and the pair is capped at 0.70 of the
-    width. What the table does not say is how two lines sit, so: the lines
-    are left-aligned, a fifth of a cap apart, and the mark's centre is the
-    centre of the two-line cap band.
-    """
-    cap = banner.HEIGHT * banner.MARK_PER_HEIGHT / banner.MARK_PER_CAP
-    layers = [banner.word_layer(font_path, text, cap, ink) for text in lines]
-    mark_h = cap * banner.MARK_PER_CAP
-    gap = cap * banner.GAP_PER_CAP
-    line_gap = cap * 0.22
-    widest = max(layer.width for layer, _ in layers)
-    group_w = mark_h + gap + widest
-    scale = min(1.0, banner.WIDTH * banner.GROUP_PER_WIDTH / group_w)
-    if scale < 1.0:
-        cap *= scale
-        layers = [banner.word_layer(font_path, text, cap, ink) for text in lines]
-        mark_h, gap, line_gap = cap * banner.MARK_PER_CAP, cap * banner.GAP_PER_CAP, cap * 0.22
-        widest = max(layer.width for layer, _ in layers)
-        group_w = mark_h + gap + widest
-
-    canvas = Image.new("RGB", (width, height), ground)
-    left = (width - group_w) / 2
-    middle = height / 2
-    mark_px = int(round(mark_h))
-    mark = mark_src.resize((mark_px, mark_px), Image.LANCZOS)
-    canvas.paste(mark, (int(round(left)), int(round(middle - mark_h / 2))), mark)
-
-    x = left + mark_h + gap
-    first_baseline = middle - line_gap / 2
-    for i, (layer, baseline_in_layer) in enumerate(layers):
-        baseline = first_baseline + i * (cap + line_gap)
-        canvas.paste(layer, (int(round(x)), int(round(baseline - baseline_in_layer))), layer)
-    return canvas
 
 
 if __name__ == "__main__":

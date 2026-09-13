@@ -59,28 +59,28 @@ jobs:
         run: |
           set -eu
           npm run app:build -- --bundles appimage
-          cargo build --release -p bap-helper
+          cargo build --release -p brokey-helper
 
       - name: Stage
         run: |
           set -eu
           version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
           echo "VERSION=$version" >> "$GITHUB_ENV"
-          stage="bap-store-${version}-${{ matrix.target }}"
+          stage="brokey-${version}-${{ matrix.target }}"
           mkdir -p "staging/$stage" dist
-          cp target/release/bap-store target/release/bap-helper "staging/$stage/"
+          cp target/release/brokey target/release/brokey-helper "staging/$stage/"
           cp README.md CHANGELOG.md LICENSE "staging/$stage/"
           cp -r packaging "staging/$stage/"
           cp -r assets/icons "staging/$stage/icons"
           tar czf "dist/${stage}.tar.gz" -C staging "$stage"
           # The bundler names the AppImage after productName, with a space;
           # the release asset names are the ones `selfupdate` expects.
-          mv target/release/bundle/appimage/*.AppImage "dist/BAP-Store-${version}-${{ matrix.rpm }}.AppImage"
+          mv target/release/bundle/appimage/*.AppImage "dist/Brokey-${version}-${{ matrix.rpm }}.AppImage"
 
       - name: Build .deb and .rpm
         run: |
           packaging/linux/build-packages.sh "$VERSION" \
-            target/release/bap-store target/release/bap-helper "${{ matrix.arch }}" dist
+            target/release/brokey target/release/brokey-helper "${{ matrix.arch }}" dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -109,7 +109,7 @@ jobs:
           work=/home/builder/build
           install -d -o builder "$work"
           cp packaging/linux/PKGBUILD-bin "$work/PKGBUILD"
-          cp "dist/bap-store-${version}-x86_64-unknown-linux-gnu.tar.gz" "$work/"
+          cp "dist/brokey-${version}-x86_64-unknown-linux-gnu.tar.gz" "$work/"
           sed -i "s/^pkgver=.*/pkgver=${version}/" "$work/PKGBUILD"
           chown -R builder "$work"
           su builder -c "cd $work && makepkg --noconfirm --nodeps"
@@ -171,7 +171,7 @@ jobs:
             -f "client_payload[repository]=$GITHUB_REPOSITORY" \
             -f "client_payload[tag]=$GITHUB_REF_NAME"
 
-      # The AUR package `bap-store` builds from the tagged source. Pushed only
+      # The AUR package `brokey` builds from the tagged source. Pushed only
       # when an SSH key for the AUR account is configured; otherwise the
       # PKGBUILD in packaging/linux/ is what a maintainer pushes by hand.
       - name: Publish to the AUR
@@ -186,7 +186,7 @@ jobs:
           chmod 600 ~/.ssh/aur
           ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur"
-          git clone ssh://aur@aur.archlinux.org/bap-store.git aur
+          git clone ssh://aur@aur.archlinux.org/brokey.git aur
           cp packaging/linux/PKGBUILD aur/PKGBUILD
           sed -i "s/^pkgver=.*/pkgver=${version}/" aur/PKGBUILD
           sum=$(curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/v${version}.tar.gz" | sha256sum | cut -d' ' -f1)

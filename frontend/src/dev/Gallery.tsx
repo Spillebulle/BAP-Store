@@ -50,8 +50,8 @@ import { sourceLabel, type App, type Package, type SourceKind, type Theme } from
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="bs-stack" style={{ gap: "12px" }}>
-      <h3 className="bs-section-title">{title}</h3>
+    <section className="bk-stack" style={{ gap: "12px" }}>
+      <h3 className="bk-section-title">{title}</h3>
       {children}
     </section>
   );
@@ -70,9 +70,9 @@ const CATEGORIES: DropdownOption[] = [
 
 function ThemeCard({ theme, name, on, onPick }: { theme: Theme; name: string; on: boolean; onPick: () => void }) {
   const half = (kind: "dark" | "light") => (
-    <div className={`bs-theme-prev-half bs-theme-prev--${kind}`}>
-      <div className="bs-theme-prev-side" />
-      <div className="bs-theme-prev-rows">
+    <div className={`bk-theme-prev-half bk-theme-prev--${kind}`}>
+      <div className="bk-theme-prev-side" />
+      <div className="bk-theme-prev-rows">
         <i className="mark" />
         <i style={{ width: "70%" }} />
         <i style={{ width: "45%" }} />
@@ -81,9 +81,9 @@ function ThemeCard({ theme, name, on, onPick }: { theme: Theme; name: string; on
     </div>
   );
   return (
-    <button type="button" className={on ? "bs-card on" : "bs-card"} onClick={onPick} aria-pressed={on}>
-      <div className="bs-card-prev">
-        <div className="bs-theme-prev">
+    <button type="button" className={on ? "bk-card on" : "bk-card"} onClick={onPick} aria-pressed={on}>
+      <div className="bk-card-prev">
+        <div className="bk-theme-prev">
           {theme === "system" ? (
             <>
               {half("dark")}
@@ -94,7 +94,7 @@ function ThemeCard({ theme, name, on, onPick }: { theme: Theme; name: string; on
           )}
         </div>
       </div>
-      <div className="bs-card-cap">
+      <div className="bk-card-cap">
         <span>{name}</span>
         {on ? <small>in use</small> : null}
       </div>
@@ -152,8 +152,8 @@ export function Gallery() {
 
   return (
     <>
-      <div className="bs-toolbar">
-        <span className="bs-toolbar-title">Search</span>
+      <div className="bk-toolbar">
+        <span className="bk-toolbar-title">Search</span>
         <SearchField label="Search" value={query} onChange={setQuery} placeholder="Search applications" width="240px" />
         <MultiSelect name="Sources" options={sourceOptions} values={picked} onChange={setPicked} alone />
         <Segmented
@@ -167,26 +167,26 @@ export function Gallery() {
           ]}
         />
         <Dropdown name="Sort" options={SORTS} value={sort} onChange={setSort} />
-        <span className="bs-inline bs-small">
+        <span className="bk-inline bk-small">
           Installed only
           <Toggle label="Installed only" on={installedOnly} onChange={setInstalledOnly} />
         </span>
-        <div className="bs-toolbar-end">
-          <button type="button" className="bs-toolbar-link">
+        <div className="bk-toolbar-end">
+          <button type="button" className="bk-toolbar-link">
             <RefreshCw {...ICON} aria-hidden="true" />
             Refresh
           </button>
         </div>
       </div>
 
-      <div className="bs-page">
-        <div className="bs-page-head">
-          <div className="bs-page-title">Component sheet</div>
-          <div className="bs-page-sub">Every painted control from app.css, drawn against the mock world. Not a page of the application.</div>
+      <div className="bk-page">
+        <div className="bk-page-head">
+          <div className="bk-page-title">Component sheet</div>
+          <div className="bk-page-sub">Every painted control from app.css, drawn against the mock world. Not a page of the application.</div>
         </div>
 
         <Section title="Buttons">
-          <div className="bs-inline bs-wrap">
+          <div className="bk-inline bk-wrap">
             <Button kind="primary" icon={<Download {...ICON} aria-hidden="true" />}>
               Install
             </Button>
@@ -208,29 +208,29 @@ export function Gallery() {
         </Section>
 
         <Section title="Dropdowns, toggle, segments, fields, checkboxes">
-          <div className="bs-inline bs-wrap" style={{ alignItems: "flex-start", gap: "24px" }}>
-            <div className="bs-stack" style={{ width: "260px" }}>
+          <div className="bk-inline bk-wrap" style={{ alignItems: "flex-start", gap: "24px" }}>
+            <div className="bk-stack" style={{ width: "260px" }}>
               <Dropdown name="Category" options={CATEGORIES} value={category} onChange={setCategory} alone form full />
               <Dropdown name="Sort" options={SORTS} value={sort} onChange={setSort} alone form full />
               <MultiSelect name="Sources" options={sourceOptions} values={picked} onChange={setPicked} alone form full />
               <Field label="Name" value={name} onChange={setName} placeholder="A name for this bottle" full error={name.length > 12 ? "Keep the name under twelve characters." : undefined} />
               <SearchField label="Search" value={query} onChange={setQuery} placeholder="Search brushes" full />
             </div>
-            <div className="bs-stack" style={{ width: "280px" }}>
-              <div className="bs-setting">
-                <div className="bs-setting-text">
-                  <span className="bs-setting-label">Check for updates on start</span>
-                  <span className="bs-setting-note">Asks each source once per launch.</span>
+            <div className="bk-stack" style={{ width: "280px" }}>
+              <div className="bk-setting">
+                <div className="bk-setting-text">
+                  <span className="bk-setting-label">Check for updates on start</span>
+                  <span className="bk-setting-note">Asks each source once per launch.</span>
                 </div>
-                <div className="bs-setting-control">
+                <div className="bk-setting-control">
                   <Toggle label="Check for updates on start" on={settings?.check_updates_on_start ?? true} onChange={(on) => void saveSettings({ check_updates_on_start: on })} />
                 </div>
               </div>
-              <div className="bs-setting">
-                <div className="bs-setting-text">
-                  <span className="bs-setting-label">Flatpak scope</span>
+              <div className="bk-setting">
+                <div className="bk-setting-text">
+                  <span className="bk-setting-label">Flatpak scope</span>
                 </div>
-                <div className="bs-setting-control">
+                <div className="bk-setting-control">
                   <Segmented
                     name="Flatpak scope"
                     value={settings?.flatpak_scope ?? "system"}
@@ -242,12 +242,12 @@ export function Gallery() {
                   />
                 </div>
               </div>
-              <div className="bs-setting">
-                <div className="bs-setting-text">
-                  <span className="bs-setting-label">AUR helper</span>
-                  <span className="bs-setting-note">paru 2.1.0 was found on this machine.</span>
+              <div className="bk-setting">
+                <div className="bk-setting-text">
+                  <span className="bk-setting-label">AUR helper</span>
+                  <span className="bk-setting-note">paru 2.1.0 was found on this machine.</span>
                 </div>
-                <div className="bs-setting-control">
+                <div className="bk-setting-control">
                   <Dropdown
                     name="AUR helper"
                     alone
@@ -263,7 +263,7 @@ export function Gallery() {
                   />
                 </div>
               </div>
-              <div className="bs-inline bs-wrap">
+              <div className="bk-inline bk-wrap">
                 <Checkbox checked={tick} onChange={setTick}>
                   Include hidden packages
                 </Checkbox>
@@ -271,7 +271,7 @@ export function Gallery() {
                   Snap
                 </Checkbox>
               </div>
-              <div className="bs-inline bs-wrap">
+              <div className="bk-inline bk-wrap">
                 <Badge>pacman</Badge>
                 <Badge tone="good">Installed</Badge>
                 <Badge tone="caution">Out of date</Badge>
@@ -279,7 +279,7 @@ export function Gallery() {
                 <SourceBadge source="flatpak" installed repo="flathub" />
                 <SourceBadge source="aur" repo="aur" />
               </div>
-              <div className="bs-inline bs-wrap">
+              <div className="bk-inline bk-wrap">
                 <Chip label="Size" value="1.5 GB" />
                 <Chip label="Votes" value={<Count value={1257} />} />
                 <Chip onRemove={() => toast("Removed the Games filter.", "neutral")}>Games</Chip>
@@ -287,7 +287,7 @@ export function Gallery() {
                 <Keycap>F</Keycap>
                 <Keycap clash>B</Keycap>
               </div>
-              <div className="bs-inline bs-wrap bs-dim bs-tiny">
+              <div className="bk-inline bk-wrap bk-dim bk-tiny">
                 <Bytes value={1_500_000_000} />
                 <Count value={100548} />
                 <When value={Math.floor(Date.now() / 1000) - 180} />
@@ -299,8 +299,8 @@ export function Gallery() {
         </Section>
 
         <Section title="Application rows, sized by the icon">
-          <div className="bs-well">
-            <div className="bs-list">
+          <div className="bk-well">
+            <div className="bk-list">
               {apps.map((app, i) => (
                 <AppRow
                   key={app.key}
@@ -320,16 +320,16 @@ export function Gallery() {
             </div>
           </div>
           <SkeletonAppRows count={2} />
-          <div className="bs-inline" style={{ alignItems: "flex-start", gap: "24px" }}>
-            <div className="bs-well" style={{ width: "260px" }}>
-              <div className="bs-list">
-                <Row leading={<span className="bs-dot bs-dot--good" />} trailing="up 41 d" onClick={() => undefined}>
+          <div className="bk-inline" style={{ alignItems: "flex-start", gap: "24px" }}>
+            <div className="bk-well" style={{ width: "260px" }}>
+              <div className="bk-list">
+                <Row leading={<span className="bk-dot bk-dot--good" />} trailing="up 41 d" onClick={() => undefined}>
                   proxmox-01
                 </Row>
-                <Row leading={<span className="bs-dot bs-dot--good" />} trailing="24 ports" selected onClick={() => undefined}>
+                <Row leading={<span className="bk-dot bk-dot--good" />} trailing="24 ports" selected onClick={() => undefined}>
                   switch-core
                 </Row>
-                <Row leading={<span className="bs-dot bs-dot--critical" />} trailing="on battery" active onClick={() => undefined}>
+                <Row leading={<span className="bk-dot bk-dot--critical" />} trailing="on battery" active onClick={() => undefined}>
                   ups-rack
                 </Row>
                 <Row plain trailing="1 s">
@@ -337,8 +337,8 @@ export function Gallery() {
                 </Row>
               </div>
             </div>
-            <div className="bs-table-wrap bs-grow">
-              <table className="bs-table">
+            <div className="bk-table-wrap bk-grow">
+              <table className="bk-table">
                 <thead>
                   <tr>
                     <th>Device</th>
@@ -367,30 +367,30 @@ export function Gallery() {
         </Section>
 
         <Section title="Backdrop header and detail hero">
-          <div className="bs-well" style={{ background: "var(--window)" }}>
-            <div className="bs-detail-head">
-              <div className="bs-backdrop">
+          <div className="bk-well" style={{ background: "var(--window)" }}>
+            <div className="bk-detail-head">
+              <div className="bk-backdrop">
                 {blender?.screenshots[0] ? <img src={api.pictureSrc(blender.screenshots[0].image) ?? undefined} alt="Blender's viewport" /> : null}
-                <div className="bs-backdrop-fade" />
+                <div className="bk-backdrop-fade" />
               </div>
-              <div className="bs-hero bs-hero--over">
-                <div className="bs-hero-icon">
+              <div className="bk-hero bk-hero--over">
+                <div className="bk-hero-icon">
                   <AppIcon picture={blender?.icon ?? null} name="Blender" size="hero" />
                 </div>
-                <div className="bs-hero-text">
-                  <div className="bs-hero-title">{blender?.name ?? "Blender"}</div>
-                  <div className="bs-hero-sub">{blender?.summary}</div>
-                  <div className="bs-hero-actions">
+                <div className="bk-hero-text">
+                  <div className="bk-hero-title">{blender?.name ?? "Blender"}</div>
+                  <div className="bk-hero-sub">{blender?.summary}</div>
+                  <div className="bk-hero-actions">
                     <Button kind="primary" icon={<Download {...ICON} aria-hidden="true" />}>
                       Install
                     </Button>
                     <Dropdown name="Edition" alone form value="pacman" onChange={() => undefined} options={[{ value: "pacman", label: "pacman (extra) 17:5.2-1" }, { value: "flatpak", label: "Flatpak (flathub) 5.2" }]} />
-                    <span className="bs-hero-note">matched by name</span>
+                    <span className="bk-hero-note">matched by name</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="bs-page" style={{ paddingTop: "var(--s4)" }}>
+            <div className="bk-page" style={{ paddingTop: "var(--s4)" }}>
               <Facts items={[["Developer", blender?.developer ?? ""], ["Licence", blender?.licence ?? ""], ["Download", "132 MB"], ["Installed size", "480 MB"], ["Version", "17:5.2-1"]]} />
             </div>
           </div>
@@ -418,7 +418,7 @@ export function Gallery() {
         </Section>
 
         <Section title="Panel, notice, progress, skeleton, empty state">
-          <div className="bs-inline" style={{ alignItems: "flex-start", gap: "24px" }}>
+          <div className="bk-inline" style={{ alignItems: "flex-start", gap: "24px" }}>
             <Panel
               title="GeForce RTX 2070 Mobile"
               icon={<Layers {...ICON_LG} aria-hidden="true" />}
@@ -429,9 +429,9 @@ export function Gallery() {
                   <IconButton size="sm" label="Add" icon={<Plus {...ICON} aria-hidden="true" />} />
                 </>
               }
-              className="bs-grow"
+              className="bk-grow"
             >
-              <div className="bs-list">
+              <div className="bk-list">
                 <Row selected trailing="installed">
                   nvidia-open-dkms.prime
                 </Row>
@@ -443,18 +443,18 @@ export function Gallery() {
                 </Row>
               </div>
             </Panel>
-            <div className="bs-stack bs-grow" style={{ gap: "16px" }}>
+            <div className="bk-stack bk-grow" style={{ gap: "16px" }}>
               <Notice actions={<Button kind="ghost">Update all</Button>}>
                 Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.
               </Notice>
               <Progress fraction={0.64} message="Downloading firefox-155.0.1-1-x86_64.pkg.tar.zst" />
               <Progress fraction={null} message="makepkg is building. No progress is reported for this step." />
               <Progress fraction={null} sliding message="Fetching the AUR index. Its size is not announced." />
-              <div className="bs-inline" style={{ gap: "6px" }}>
+              <div className="bk-inline" style={{ gap: "6px" }}>
                 <Skeleton width="40%" />
                 <Skeleton width="20%" />
               </div>
-              <div className="bs-well">
+              <div className="bk-well">
                 <EmptyState icon={<Layers {...ICON_EMPTY} aria-hidden="true" />} action={<Button>Refresh</Button>}>
                   Nothing matches "zsh-theme". Try a shorter word, or turn on Packages in the toolbar.
                 </EmptyState>
@@ -464,7 +464,7 @@ export function Gallery() {
         </Section>
 
         <Section title="Theme cards">
-          <div className="bs-theme-cards">
+          <div className="bk-theme-cards">
             {(["dark", "light", "system"] as Theme[]).map((t) => (
               <ThemeCard key={t} theme={t} name={t === "dark" ? "Graphite" : t === "light" ? "Paper" : "Follow the system"} on={(settings?.theme ?? "dark") === t} onPick={() => void saveSettings({ theme: t })} />
             ))}
@@ -472,14 +472,14 @@ export function Gallery() {
         </Section>
 
         <Section title="Description and facts">
-          <div className="bs-inline" style={{ alignItems: "flex-start", gap: "32px" }}>
+          <div className="bk-inline" style={{ alignItems: "flex-start", gap: "32px" }}>
             <Description markup={gimp?.description} />
             <Facts items={gimp?.facts ?? []} />
           </div>
         </Section>
 
         <Section title="Dialog and toasts">
-          <div className="bs-inline bs-wrap">
+          <div className="bk-inline bk-wrap">
             <Button onClick={() => setDialog(true)}>Open a dialog</Button>
             <Button onClick={() => toast("Installed Steam.", "good")}>Good toast</Button>
             <Button onClick={() => toast("pacman could not lock the database. Another package manager is running.", "error", { label: "Details", onClick: () => undefined })}>
@@ -508,12 +508,12 @@ export function Gallery() {
           </>
         }
       >
-        <div className="bs-stack">
-          <div className="bs-setting">
-            <div className="bs-setting-text">
-              <span className="bs-setting-label">Also remove the configuration in ~/.steam</span>
+        <div className="bk-stack">
+          <div className="bk-setting">
+            <div className="bk-setting-text">
+              <span className="bk-setting-label">Also remove the configuration in ~/.steam</span>
             </div>
-            <div className="bs-setting-control">
+            <div className="bk-setting-control">
               <Toggle label="Also remove the configuration" on={false} onChange={() => undefined} />
             </div>
           </div>

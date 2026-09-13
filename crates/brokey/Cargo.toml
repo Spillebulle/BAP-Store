@@ -1,0 +1,33 @@
+[package]
+name = "brokey"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "One store for every way a Linux machine gets software"
+default-run = "brokey"
+
+[lib]
+name = "brokey_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "brokey"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+brokey-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+directories = { workspace = true }
+tauri = { version = "2.11", features = ["protocol-asset"] }
+tauri-plugin-opener = "2.5"
+tauri-plugin-single-instance = "2.4"
+tauri-plugin-window-state = "2.4"
+tauri-plugin-log = "2.9"

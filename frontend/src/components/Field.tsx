@@ -46,11 +46,11 @@ export function Field({
   inputRef,
   spellCheck = false,
 }: FieldProps) {
-  const classes = ["bs-field", full ? "bs-field--full" : "", error ? "bs-field--error" : ""]
+  const classes = ["bk-field", full ? "bk-field--full" : "", error ? "bk-field--error" : ""]
     .filter(Boolean)
     .join(" ");
   return (
-    <div className={full ? "bs-field-wrap bs-field--full" : "bs-field-wrap"} style={width ? { width } : undefined}>
+    <div className={full ? "bk-field-wrap bk-field--full" : "bk-field-wrap"} style={width ? { width } : undefined}>
       <div className={classes} title={disabled ? disabledReason : undefined}>
         {leading}
         <input
@@ -70,7 +70,7 @@ export function Field({
         />
         {trailing}
       </div>
-      {error ? <div className="bs-field-error">{error}</div> : null}
+      {error ? <div className="bk-field-error">{error}</div> : null}
     </div>
   );
 }

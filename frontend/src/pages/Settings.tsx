@@ -16,7 +16,7 @@ import { useBusy } from "./system/busy";
 import { ThemeCard } from "./system/ThemeCard";
 import "./system/system.css";
 
-const REPO_URL = "https://github.com/Spillebulle/BAP-Store";
+const REPO_URL = "https://github.com/Spillebulle/Brokey";
 const ISSUES_URL = `${REPO_URL}/issues`;
 
 /** What Restore all settings puts back. */
@@ -67,15 +67,15 @@ function message(e: unknown): string {
 /** One sentence for the toast after a check (§12: say what happened). */
 function checkSentence(result: SelfUpdate): string {
   if (result.latest && result.latest.version !== result.current) {
-    return result.remedy?.sentence ?? `BAP Store ${result.latest.version} is available. This copy is ${result.current}.`;
+    return result.remedy?.sentence ?? `Brokey ${result.latest.version} is available. This copy is ${result.current}.`;
   }
-  return `BAP Store ${result.current} is the newest version.`;
+  return `Brokey ${result.current} is the newest version.`;
 }
 
 function Group({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
   return (
-    <section className="bs-settings-group" aria-label={eyebrow}>
-      <div className="bs-eyebrow">{eyebrow}</div>
+    <section className="bk-settings-group" aria-label={eyebrow}>
+      <div className="bk-eyebrow">{eyebrow}</div>
       {children}
     </section>
   );
@@ -99,12 +99,12 @@ function SetupButton({ kind, setup, running }: { kind: SourceKind; setup: Source
 
 function Setting({ label, note, control }: { label: ReactNode; note?: ReactNode; control?: ReactNode }) {
   return (
-    <div className="bs-setting">
-      <div className="bs-setting-text">
-        <span className="bs-setting-label">{label}</span>
-        {note ? <span className="bs-setting-note">{note}</span> : null}
+    <div className="bk-setting">
+      <div className="bk-setting-text">
+        <span className="bk-setting-label">{label}</span>
+        {note ? <span className="bk-setting-note">{note}</span> : null}
       </div>
-      {control ? <div className="bs-setting-control">{control}</div> : null}
+      {control ? <div className="bk-setting-control">{control}</div> : null}
     </div>
   );
 }
@@ -112,12 +112,12 @@ function Setting({ label, note, control }: { label: ReactNode; note?: ReactNode;
 /** Rows with the geometry of a setting while the settings file is read. */
 function SkeletonSettings() {
   return (
-    <div className="bs-settings sy-settings" aria-hidden="true">
+    <div className="bk-settings sy-settings" aria-hidden="true">
       {[3, 4, 2].map((rows, g) => (
-        <div key={g} className="bs-settings-group">
-          <Skeleton width="64px" className="bs-skel--text" />
+        <div key={g} className="bk-settings-group">
+          <Skeleton width="64px" className="bk-skel--text" />
           {Array.from({ length: rows }, (_, i) => (
-            <div key={i} className="bs-setting">
+            <div key={i} className="bk-setting">
               <div className="sy-skel-lines">
                 <Skeleton width={`${24 + ((i * 11 + g * 7) % 20)}%`} />
               </div>
@@ -200,10 +200,10 @@ export function SettingsPage() {
   const version = self?.current ?? pkg.version;
 
   return (
-    <div className="bs-page">
-      <div className="bs-page-head">
-        <h1 className="bs-page-title">Settings</h1>
-        <p className="bs-page-sub">The interface should disappear behind your work. Changes save as you make them.</p>
+    <div className="bk-page">
+      <div className="bk-page-head">
+        <h1 className="bk-page-title">Settings</h1>
+        <p className="bk-page-sub">The interface should disappear behind your work. Changes save as you make them.</p>
       </div>
 
       {loadError ? (
@@ -221,9 +221,9 @@ export function SettingsPage() {
       {!settings && !loadError ? <SkeletonSettings /> : null}
 
       {settings ? (
-        <div className="bs-settings sy-settings">
+        <div className="bk-settings sy-settings">
           <Group eyebrow="Appearance">
-            <div className="bs-theme-cards">
+            <div className="bk-theme-cards">
               {THEMES.map((t) => (
                 <ThemeCard key={t.theme} theme={t.theme} name={t.name} on={settings.theme === t.theme} onPick={() => void save({ theme: t.theme })} />
               ))}
@@ -240,8 +240,8 @@ export function SettingsPage() {
                   <Setting
                     key={kind}
                     label={label}
-                    note="BAP Store has not heard from this source yet."
-                    control={<Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason="BAP Store has not heard from this source yet." />}
+                    note="Brokey has not heard from this source yet."
+                    control={<Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason="Brokey has not heard from this source yet." />}
                   />
                 );
               }
@@ -320,9 +320,9 @@ export function SettingsPage() {
               control={<Toggle label="Check for updates when the window opens" on={settings.check_updates_on_start} onChange={(v) => void save({ check_updates_on_start: v })} />}
             />
             <Setting
-              label="Tell me about new versions of BAP Store"
+              label="Tell me about new versions of Brokey"
               note="Asks GitHub for the newest release. Nothing is sent but the version."
-              control={<Toggle label="Tell me about new versions of BAP Store" on={settings.self_update_check} onChange={(v) => void save({ self_update_check: v })} />}
+              control={<Toggle label="Tell me about new versions of Brokey" on={settings.self_update_check} onChange={(v) => void save({ self_update_check: v })} />}
             />
             <Setting
               label="Check again every"
@@ -343,7 +343,7 @@ export function SettingsPage() {
             <Setting
               label={
                 <>
-                  BAP Store <Figure>{version}</Figure>
+                  Brokey <Figure>{version}</Figure>
                 </>
               }
               note={
@@ -378,7 +378,7 @@ export function SettingsPage() {
             ) : selfError ? (
               <Setting label="How this copy was installed is not known until the check answers." />
             ) : (
-              <div className="bs-setting" aria-hidden="true">
+              <div className="bk-setting" aria-hidden="true">
                 <div className="sy-skel-lines">
                   <Skeleton width="40%" />
                 </div>
@@ -409,7 +409,7 @@ export function SettingsPage() {
             </Group>
           ) : null}
 
-          <div className="bs-settings-foot">
+          <div className="bk-settings-foot">
             <span>Changes save as you make them.</span>
             <Button kind="outline" title="Put every setting back to its default." onClick={() => void restore()}>
               Restore all settings

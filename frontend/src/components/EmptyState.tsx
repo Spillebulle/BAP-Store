@@ -14,7 +14,7 @@ interface Props {
 /** Centred in the region, one sentence in dim, never an illustration (§7.19). */
 export function EmptyState({ icon, children, action, fill }: Props) {
   return (
-    <div className={fill ? "bs-empty bs-empty--fill" : "bs-empty"}>
+    <div className={fill ? "bk-empty bk-empty--fill" : "bk-empty"}>
       {icon}
       <p>{children}</p>
       {action}

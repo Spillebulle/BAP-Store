@@ -17,7 +17,7 @@
 // the module they show, at natural size (§17.3), by asking the page for the
 // element's rectangle; the whole-window picture is the 1500 × 900 viewport.
 //
-// BAP_SHOTS_BASE=http://localhost:1420/ uses a dev server that is already up.
+// BROKEY_SHOTS_BASE=http://localhost:1420/ uses a dev server that is already up.
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -60,12 +60,12 @@ export const SHOTS = [
   {
     name: "activity",
     query: "?view=installed&fast&selfupdate=none&run=install:pacman:gimp,install:aur:spotify&hold&log",
-    clip: { selector: ".bs-activity" },
+    clip: { selector: ".bk-activity" },
   },
   {
     name: "confirm",
     query: "?view=installed&fast&selfupdate=none&confirm=install:pacman:gimp,install:aur:spotify",
-    clip: { selector: ".bs-dialog" },
+    clip: { selector: ".bk-dialog" },
   },
   // Installing from a source whose tool is missing: the Flatpak edition is
   // picked from the search row, the plan sets Flatpak up first and the dialog
@@ -75,12 +75,12 @@ export const SHOTS = [
     query: "?view=search&q=gimp&fast&selfupdate=none",
     act: `(async () => {
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      for (let i = 0; i < 40 && !document.querySelector(".bs-row--app button[aria-haspopup]"); i += 1) await wait(100);
-      document.querySelector(".bs-row--app button[aria-haspopup]").click();
+      for (let i = 0; i < 40 && !document.querySelector(".bk-row--app button[aria-haspopup]"); i += 1) await wait(100);
+      document.querySelector(".bk-row--app button[aria-haspopup]").click();
       await wait(300);
       [...document.querySelectorAll('[role="option"]')].find((o) => o.textContent.startsWith("Flatpak"))?.click();
     })()`,
-    clip: { selector: ".bs-dialog" },
+    clip: { selector: ".bk-dialog" },
   },
 ];
 
@@ -124,9 +124,9 @@ export async function startDev() {
 
 /** Headless Firefox with a throwaway profile, spoken to over BiDi. */
 export async function startFirefox() {
-  const browser = process.env.BAP_SHOTS_BROWSER ?? "firefox";
+  const browser = process.env.BROKEY_SHOTS_BROWSER ?? "firefox";
   const port = await freePort();
-  const profile = mkdtempSync(join(tmpdir(), "bap-shots-"));
+  const profile = mkdtempSync(join(tmpdir(), "brokey-shots-"));
   const child = spawn(browser, ["--headless", "--no-remote", "--profile", profile, `--remote-debugging-port=${port}`, "about:blank"], { stdio: "ignore" });
   child.on("error", (e) => console.error(`${browser} could not start: ${e.message}`));
 
@@ -183,7 +183,7 @@ export async function startFirefox() {
       const until = Date.now() + settleMs;
       while (Date.now() < until) {
         const busy = await evaluate(
-          `document.querySelector('.bs-skel, [aria-busy="true"]') !== null || [...document.images].some((i) => !i.complete)`,
+          `document.querySelector('.bk-skel, [aria-busy="true"]') !== null || [...document.images].some((i) => !i.complete)`,
         );
         if (busy === false) break;
         await sleep(100);
@@ -269,7 +269,7 @@ async function main() {
   }
   mkdirSync(out, { recursive: true });
 
-  const given = process.env.BAP_SHOTS_BASE;
+  const given = process.env.BROKEY_SHOTS_BASE;
   const dev = given ? { base: given, stop: () => undefined } : await startDev();
   const firefox = await startFirefox();
   try {

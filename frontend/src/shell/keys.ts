@@ -16,7 +16,7 @@ function typing(): boolean {
 }
 
 function dialogOpen(): boolean {
-  return document.querySelector(".bs-dimmer") !== null;
+  return document.querySelector(".bk-dimmer") !== null;
 }
 
 export function useShortcuts(): void {

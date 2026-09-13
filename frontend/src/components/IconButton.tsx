@@ -18,8 +18,8 @@ export type IconButtonProps =
 export function IconButton(props: IconButtonProps) {
   const { label, icon, size = "md", kind = "icon", active, className, disabled, disabledReason, type = "button", ...rest } = props;
   const classes = [
-    kind === "tool" ? "bs-tool" : "bs-ibtn",
-    kind === "icon" && size === "sm" ? "bs-ibtn--sm" : "",
+    kind === "tool" ? "bk-tool" : "bk-ibtn",
+    kind === "icon" && size === "sm" ? "bk-ibtn--sm" : "",
     active ? "on" : "",
     className ?? "",
   ]

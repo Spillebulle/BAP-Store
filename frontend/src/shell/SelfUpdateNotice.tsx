@@ -1,4 +1,4 @@
-// The one sentence about a newer BAP Store, above the page (§7.17 notice):
+// The one sentence about a newer Brokey, above the page (§7.17 notice):
 // the version, the remedy chosen for how this copy was installed (§18.3),
 // and the actions that can actually work here. "Later" hides it for the
 // session; Settings can turn the check off altogether.
@@ -63,17 +63,17 @@ export function SelfUpdateNotice() {
     ) : canApply(update) ? (
       applying ? (
         <Button kind="ghost" disabled disabledReason="The update is being started.">
-          Update BAP Store
+          Update Brokey
         </Button>
       ) : (
         <Button kind="ghost" onClick={() => void apply()}>
-          Update BAP Store
+          Update Brokey
         </Button>
       )
     ) : null;
 
   return (
-    <div className="bs-content-notice">
+    <div className="bk-content-notice">
       <Notice
         actions={
           <>
@@ -87,7 +87,7 @@ export function SelfUpdateNotice() {
           </>
         }
       >
-        BAP Store {latest.version} is available.{remedy ? ` ${remedy.sentence}` : ""}
+        Brokey {latest.version} is available.{remedy ? ` ${remedy.sentence}` : ""}
       </Notice>
     </div>
   );

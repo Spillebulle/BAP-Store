@@ -23,8 +23,8 @@ jobs:
           python3 - <<'PY'
           import sys, xml.dom.minidom, yaml
           bad = False
-          for f in ['packaging/io.github.spillebulle.bapstore.metainfo.xml',
-                    'packaging/io.github.spillebulle.bapstore.policy']:
+          for f in ['packaging/io.github.spillebulle.brokey.metainfo.xml',
+                    'packaging/io.github.spillebulle.brokey.policy']:
               try:
                   xml.dom.minidom.parse(f)
               except Exception as e:
@@ -44,7 +44,7 @@ jobs:
       - name: Desktop entry
         run: |
           sudo apt-get update && sudo apt-get install -y desktop-file-utils
-          desktop-file-validate packaging/io.github.spillebulle.bapstore.desktop
+          desktop-file-validate packaging/io.github.spillebulle.brokey.desktop
       - name: Metadata consistency
         run: sh packaging/check.sh
 
@@ -117,9 +117,9 @@ jobs:
       - run: npm run build
       - name: Test, including the live pacman and AppStream tests
         run: |
-          cargo test -p bap-core
-          cargo test -p bap-core -- --ignored live_pacman live_appstream live_this_machine
+          cargo test -p brokey-core
+          cargo test -p brokey-core -- --ignored live_pacman live_appstream live_this_machine
       - name: Text mode against real databases
         run: |
-          cargo run --release -p bap-store -- sources
-          cargo run --release -p bap-store -- search steam
+          cargo run --release -p brokey -- sources
+          cargo run --release -p brokey -- search steam

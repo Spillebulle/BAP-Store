@@ -57,13 +57,13 @@ function promptSentence(count: number): string {
 
 function StepRow({ step }: { step: Step }) {
   return (
-    <li className="bs-plan-step">
-      <div className="bs-plan-step-head">
-        <span className="bs-plan-step-title">{step.title}</span>
+    <li className="bk-plan-step">
+      <div className="bk-plan-step-head">
+        <span className="bk-plan-step-title">{step.title}</span>
         {step.needs_root ? <Badge title="This step runs as root through the helper.">needs your password</Badge> : null}
         {asksItself(step) ? <Badge title={`${step.command.program} asks for the password itself for this step.`}>asks for your password</Badge> : null}
       </div>
-      <div className="bs-plan-step-cmd" title={commandLine(step)}>
+      <div className="bk-plan-step-cmd" title={commandLine(step)}>
         {commandLine(step)}
       </div>
     </li>
@@ -73,13 +73,13 @@ function StepRow({ step }: { step: Step }) {
 /** Rows of the same geometry while api.plan is still answering. */
 function StepSkeleton() {
   return (
-    <ul className="bs-plan-steps" aria-busy="true" aria-label="Working out the steps">
+    <ul className="bk-plan-steps" aria-busy="true" aria-label="Working out the steps">
       {[0, 1].map((i) => (
-        <li key={i} className="bs-plan-step">
-          <div className="bs-plan-step-head">
+        <li key={i} className="bk-plan-step">
+          <div className="bk-plan-step-head">
             <Skeleton width={i === 0 ? "38%" : "52%"} />
           </div>
-          <Skeleton width="72%" className="bs-skel--text" />
+          <Skeleton width="72%" className="bk-skel--text" />
         </li>
       ))}
     </ul>
@@ -131,14 +131,14 @@ export function FlowDialog() {
         </>
       }
     >
-      <div className="bs-stack bs-plan">
+      <div className="bk-stack bk-plan">
         {removes ? <p>{removes}</p> : null}
         {error ? <Notice>{error}</Notice> : null}
         {preview?.notices.map((sentence, i) => (
           <Notice key={i}>{sentence}</Notice>
         ))}
         {preview ? (
-          <ul className="bs-plan-steps" aria-label="Steps">
+          <ul className="bk-plan-steps" aria-label="Steps">
             {steps.map((step, i) => (
               <StepRow key={i} step={step} />
             ))}
@@ -147,7 +147,7 @@ export function FlowDialog() {
           <StepSkeleton />
         )}
         {preview ? (
-          <p className="bs-dim bs-small">{promptSentence(prompts)}</p>
+          <p className="bk-dim bk-small">{promptSentence(prompts)}</p>
         ) : null}
       </div>
     </Dialog>

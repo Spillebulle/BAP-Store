@@ -1,11 +1,11 @@
 #!/bin/bash
 # Build the .deb and the .rpm from already-compiled binaries.
 #
-#   packaging/linux/build-packages.sh <version> <bap-store> <bap-helper> <arch> [outdir]
+#   packaging/linux/build-packages.sh <version> <brokey> <brokey-helper> <arch> [outdir]
 #
 #   version     0.1.0
-#   bap-store   path to the compiled application (target/release/bap-store)
-#   bap-helper  path to the compiled helper (target/release/bap-helper)
+#   brokey   path to the compiled application (target/release/brokey)
+#   brokey-helper  path to the compiled helper (target/release/brokey-helper)
 #   arch        amd64 | arm64   (Debian spelling; the rpm one is derived)
 #
 # Written with `dpkg-deb` and `rpmbuild` directly rather than with Tauri's
@@ -56,10 +56,10 @@ DEB_DEPENDS="libc6, libgcc-s1, libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appin
 # the same packages differently, all resolve them.
 RPM_SONAMES="libwebkit2gtk-4.1.so.0 libjavascriptcoregtk-4.1.so.0 libgtk-3.so.0 libgdk-3.so.0 libsoup-3.0.so.0"
 
-APP_ID=io.github.spillebulle.bapstore
+APP_ID=io.github.spillebulle.brokey
 # Spelt in full so packaging/check.sh can see that the packages, the polkit
 # policy and the runner all name the same file.
-HELPER=/usr/lib/bap-store/bap-helper
+HELPER=/usr/lib/brokey/brokey-helper
 
 # --- the house archive -------------------------------------------------------
 ARCHIVE_KEYRING=spillebulle-archive
@@ -80,7 +80,7 @@ fi
 # --- the shared install tree -------------------------------------------------
 stage_tree() {
     local prefix=$1
-    install -Dm755 "$binary" "$prefix/bin/bap-store"
+    install -Dm755 "$binary" "$prefix/bin/brokey"
     install -Dm755 "$helper" "$prefix${HELPER#/usr}"
     install -Dm644 "$root/packaging/$APP_ID.policy" \
         "$prefix/share/polkit-1/actions/$APP_ID.policy"
@@ -89,16 +89,16 @@ stage_tree() {
     install -Dm644 "$root/packaging/$APP_ID.metainfo.xml" \
         "$prefix/share/metainfo/$APP_ID.metainfo.xml"
     for size in 16 32 48 64 128 256; do
-        install -Dm644 "$root/assets/icons/bap-store-$size.png" \
+        install -Dm644 "$root/assets/icons/brokey-$size.png" \
             "$prefix/share/icons/hicolor/${size}x${size}/apps/$APP_ID.png"
     done
-    install -Dm644 "$root/LICENSE" "$prefix/share/doc/bap-store/LICENSE"
-    install -Dm644 "$root/README.md" "$prefix/share/doc/bap-store/README.md"
-    install -Dm644 "$root/CHANGELOG.md" "$prefix/share/doc/bap-store/CHANGELOG.md"
+    install -Dm644 "$root/LICENSE" "$prefix/share/doc/brokey/LICENSE"
+    install -Dm644 "$root/README.md" "$prefix/share/doc/brokey/README.md"
+    install -Dm644 "$root/CHANGELOG.md" "$prefix/share/doc/brokey/CHANGELOG.md"
 }
 
 # --- .deb --------------------------------------------------------------------
-echo "==> building bap-store_${version}_${arch}.deb"
+echo "==> building brokey_${version}_${arch}.deb"
 deb="$work/deb"
 stage_tree "$deb/usr"
 mkdir -p "$deb/DEBIAN"
@@ -107,7 +107,7 @@ if [ -n "$archive_key" ]; then
 fi
 size=$(du -ks "$deb/usr" | cut -f1)
 cat > "$deb/DEBIAN/control" <<EOF2
-Package: bap-store
+Package: brokey
 Version: $version
 Section: admin
 Priority: optional
@@ -115,9 +115,9 @@ Architecture: $arch
 Depends: $DEB_DEPENDS
 Installed-Size: $size
 Maintainer: Spillebulle <spillebulle@gmail.com>
-Homepage: https://github.com/Spillebulle/BAP-Store
+Homepage: https://github.com/Spillebulle/Brokey
 Description: One store for every way a Linux machine gets software
- BAP Store searches the distribution's repositories, the AUR, Flatpak, the
+ Brokey searches the distribution's repositories, the AUR, Flatpak, the
  Snap Store and GitHub releases from one box, shows the same application
  from several sources as one row, installs through one flow with one
  password prompt per batch, and keeps everything, itself included, up to
@@ -155,10 +155,10 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 EOF2
 chmod 755 "$deb/DEBIAN/postinst" "$deb/DEBIAN/postrm"
-dpkg-deb --build --root-owner-group "$deb" "$outdir/bap-store_${version}_${arch}.deb" >/dev/null
+dpkg-deb --build --root-owner-group "$deb" "$outdir/brokey_${version}_${arch}.deb" >/dev/null
 
 # --- .rpm --------------------------------------------------------------------
-echo "==> building bap-store-${version}-1.${rpm_arch}.rpm"
+echo "==> building brokey-${version}-1.${rpm_arch}.rpm"
 rpmroot="$work/rpm"
 mkdir -p "$rpmroot"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 buildroot="$work/rpmtree"
@@ -168,12 +168,12 @@ if [ -n "$archive_key" ]; then
     install -Dm644 "$archive_key" "$buildroot$rpm_key"
 fi
 {
-    echo "Name:           bap-store"
+    echo "Name:           brokey"
     echo "Version:        $version"
     echo "Release:        1"
     echo "Summary:        One store for every way a Linux machine gets software"
     echo "License:        GPL-3.0-or-later"
-    echo "URL:            https://github.com/Spillebulle/BAP-Store"
+    echo "URL:            https://github.com/Spillebulle/Brokey"
     echo "BuildArch:      $rpm_arch"
     for so in $RPM_SONAMES; do echo "Requires:       ${so}()(64bit)"; done
     echo "Requires:       polkit"
@@ -181,7 +181,7 @@ fi
     echo "%global debug_package %{nil}"
     echo
     echo "%description"
-    echo "BAP Store searches the distribution's repositories, the AUR, Flatpak, the"
+    echo "Brokey searches the distribution's repositories, the AUR, Flatpak, the"
     echo "Snap Store and GitHub releases from one box and installs through one flow."
     echo
     echo "%install"
@@ -212,17 +212,17 @@ fi
     echo
     echo "%files"
     [ -n "$archive_key" ] && echo "$rpm_key"
-    echo "/usr/bin/bap-store"
+    echo "/usr/bin/brokey"
     echo "$HELPER"
     echo "/usr/share/polkit-1/actions/$APP_ID.policy"
     echo "/usr/share/applications/$APP_ID.desktop"
     echo "/usr/share/metainfo/$APP_ID.metainfo.xml"
     echo "/usr/share/icons/hicolor/*/apps/$APP_ID.png"
-    echo "/usr/share/doc/bap-store/"
-} > "$rpmroot/SPECS/bap-store.spec"
+    echo "/usr/share/doc/brokey/"
+} > "$rpmroot/SPECS/brokey.spec"
 
-rpmbuild --define "_topdir $rpmroot" --define "_buildhost bap-store-release" \
-         -bb "$rpmroot/SPECS/bap-store.spec" >/dev/null
+rpmbuild --define "_topdir $rpmroot" --define "_buildhost brokey-release" \
+         -bb "$rpmroot/SPECS/brokey.spec" >/dev/null
 find "$rpmroot/RPMS" -name '*.rpm' -exec cp {} "$outdir/" \;
 
 echo

@@ -61,5 +61,5 @@ export function sanitise(markup: string): ReactNode[] {
 export function Description({ markup, className }: { markup: string | null | undefined; className?: string }) {
   const nodes = useMemo(() => (markup ? sanitise(markup) : []), [markup]);
   if (nodes.length === 0) return null;
-  return <div className={className ? `bs-desc ${className}` : "bs-desc"}>{nodes}</div>;
+  return <div className={className ? `bk-desc ${className}` : "bk-desc"}>{nodes}</div>;
 }

@@ -1,4 +1,4 @@
-// The page's view of crates/bap-core/src/model.rs, field for field. The Rust
+// The page's view of crates/brokey-core/src/model.rs, field for field. The Rust
 // side is the truth: a field added there is added here in the same commit.
 // Enums are serde `rename_all = "lowercase"` unless stated; tagged enums say
 // which field carries the tag.
@@ -266,8 +266,8 @@ export interface DriversReport {
   firmware: FirmwareDevice[];
 }
 
-// ── What the commands exchange (bap_core::Query, SearchResult, updates::UpdateList,
-//    and the shapes crates/bap-store/src/commands.rs returns) ─────────────────
+// ── What the commands exchange (brokey_core::Query, SearchResult, updates::UpdateList,
+//    and the shapes crates/brokey/src/commands.rs returns) ─────────────────
 
 export interface Query {
   text: string;
@@ -344,7 +344,7 @@ export interface SelfUpdateRelease {
 export interface SelfUpdateInstallation {
   /** "aur", "archive_deb", "archive_rpm", "deb", "rpm", "pacman_file", "appimage", "portable", "unknown". */
   kind: string;
-  /** One line for the page: "Installed from the AUR as bap-store-bin". */
+  /** One line for the page: "Installed from the AUR as brokey-bin". */
   label: string;
 }
 

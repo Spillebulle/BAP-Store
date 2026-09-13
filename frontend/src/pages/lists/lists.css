@@ -1,7 +1,7 @@
 /*
  * The list pages (Installed, Updates): the geometry that is theirs alone. Every
  * control is app.css's; this file only places them. Tokens throughout, never a
- * value. Class names are prefixed bl- (bap lists) so they cannot be confused
+ * value. Class names are prefixed bl- (Brokey lists) so they cannot be confused
  * with a component.
  */
 
@@ -21,8 +21,8 @@
   z-index: 2;
 }
 
-.bl-toolbar > .bs-seg,
-.bl-toolbar > .bs-dd {
+.bl-toolbar > .bk-seg,
+.bl-toolbar > .bk-dd {
   flex: none;
 }
 
@@ -62,7 +62,7 @@
   font-size: var(--text-small);
 }
 
-.bl-foot-row > .bs-btn-group {
+.bl-foot-row > .bk-btn-group {
   margin-left: auto;
 }
 
@@ -85,7 +85,7 @@
   border-color: var(--line-dashed);
 }
 
-.bl-dd-action .bs-dd-value.empty {
+.bl-dd-action .bk-dd-value.empty {
   color: var(--text);
 }
 
@@ -208,8 +208,8 @@
 }
 
 /* A skeleton is an inline span; in a cell it needs a box to have a size at all. */
-.bl-table td > .bs-skel,
-.bl-table th > .bs-skel,
-.bl-skel-lines > .bs-skel {
+.bl-table td > .bk-skel,
+.bl-table th > .bk-skel,
+.bl-skel-lines > .bk-skel {
   display: block;
 }

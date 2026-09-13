@@ -316,52 +316,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bap-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "directories",
- "flate2",
- "log",
- "quick-xml",
- "regex",
- "reqwest",
- "ruzstd",
- "serde",
- "serde_json",
- "tar",
- "tempfile",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "bap-helper"
-version = "0.1.0"
-dependencies = [
- "bap-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bap-store"
-version = "0.1.0"
-dependencies = [
- "bap-core",
- "directories",
- "env_logger",
- "log",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-window-state",
-]
-
-[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -438,6 +392,52 @@ dependencies = [
  "futures-io",
  "futures-lite",
  "piper",
+]
+
+[[package]]
+name = "brokey"
+version = "0.1.0"
+dependencies = [
+ "brokey-core",
+ "directories",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-window-state",
+]
+
+[[package]]
+name = "brokey-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "flate2",
+ "log",
+ "quick-xml",
+ "regex",
+ "reqwest",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "brokey-helper"
+version = "0.1.0"
+dependencies = [
+ "brokey-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

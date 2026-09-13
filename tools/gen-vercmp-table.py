@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate crates/bap-core/tests/vercmp.rs from pacman's own `vercmp`.
+"""Regenerate crates/brokey-core/tests/vercmp.rs from pacman's own `vercmp`.
 
 Run on an Arch machine. The table is the truth; the Rust is what has to agree.
 """
@@ -15,7 +15,7 @@ def main():
     for a, b in pairs[:400]:
         r = subprocess.run(["vercmp", a, b], capture_output=True, text=True, check=True).stdout.strip()
         rows.append(f'    ("{a}", "{b}", {r}),')
-    out = pathlib.Path(__file__).resolve().parent.parent / "crates/bap-core/tests/vercmp.rs"
+    out = pathlib.Path(__file__).resolve().parent.parent / "crates/brokey-core/tests/vercmp.rs"
     text = out.read_text()
     start = text.index("const TABLE")
     end = text.index("];", start) + 2

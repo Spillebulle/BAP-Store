@@ -6,7 +6,7 @@
 #
 # The rule: a section starts at `## <version>`, alone on the line or followed
 # by a space and a date, and runs to the next line beginning `## `.
-# `crates/bap-store/tests/release.rs` states the same rule in Rust and fails CI
+# `crates/brokey/tests/release.rs` states the same rule in Rust and fails CI
 # when the section for the version in Cargo.toml is missing, empty, or not the
 # newest, so this script can assume a well-formed file.
 

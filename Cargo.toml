@@ -1,17 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["crates/bap-core", "crates/bap-helper", "crates/bap-store"]
+members = ["crates/brokey-core", "crates/brokey-helper", "crates/brokey"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/Spillebulle/BAP-Store"
+repository = "https://github.com/Spillebulle/Brokey"
 authors = ["Spillebulle <spillebulle@gmail.com>"]
 
 [workspace.dependencies]
-bap-core = { path = "crates/bap-core" }
+brokey-core = { path = "crates/brokey-core" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

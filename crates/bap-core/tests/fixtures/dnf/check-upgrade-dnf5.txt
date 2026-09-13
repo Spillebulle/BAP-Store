@@ -1,8 +1,0 @@
-Updating and loading repositories:
-Repositories loaded.
-bap-store.x86_64            0.2.0-1.fc41            bap
-gimp.x86_64                 2.10.38-1.fc41          updates
-kernel.x86_64               6.11.4-300.fc41         updates
-new-thing.x86_64            1.0-1.fc41              updates
-    old-thing.x86_64        0.9-1.fc41              @System
-vim-enhanced.x86_64         2:9.1.700-1.fc41        updates

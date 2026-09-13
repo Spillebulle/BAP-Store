@@ -8,11 +8,11 @@ const MAX_VISIBLE = 3;
 
 function ToastView({ toast }: { toast: ToastItem }) {
   const dismiss = useToasts((s) => s.dismiss);
-  const dot = toast.tone === "neutral" ? "bs-dot" : `bs-dot bs-dot--${toast.tone === "error" ? "critical" : toast.tone}`;
+  const dot = toast.tone === "neutral" ? "bk-dot" : `bk-dot bk-dot--${toast.tone === "error" ? "critical" : toast.tone}`;
   return (
-    <div className="bs-toast" role={toast.tone === "error" ? "alert" : "status"}>
+    <div className="bk-toast" role={toast.tone === "error" ? "alert" : "status"}>
       <span className={dot} aria-hidden="true" />
-      <span className="bs-toast-text">{toast.text}</span>
+      <span className="bk-toast-text">{toast.text}</span>
       {toast.action ? (
         <Button kind="ghost" onClick={toast.action.onClick}>
           {toast.action.label}
@@ -30,9 +30,9 @@ export function Toasts() {
   const visible = toasts.slice(-MAX_VISIBLE);
   const hidden = toasts.length - visible.length;
   return (
-    <div className="bs-toasts">
+    <div className="bk-toasts">
       {hidden > 0 ? (
-        <span className="bs-toast-more">
+        <span className="bk-toast-more">
           {hidden} more {hidden === 1 ? "message" : "messages"}
         </span>
       ) : null}

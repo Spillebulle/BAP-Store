@@ -282,10 +282,10 @@ function Picker<T extends string>(props: PickerProps<T>) {
   useEffect(() => setFocus(0), [query]);
 
   const triggerClasses = [
-    "bs-dd",
-    alone ? "bs-dd--alone" : "",
-    form ? "bs-dd--form" : "",
-    full ? "bs-dd--full" : "",
+    "bk-dd",
+    alone ? "bk-dd--alone" : "",
+    form ? "bk-dd--form" : "",
+    full ? "bk-dd--full" : "",
     open ? "open" : "",
     className ?? "",
   ]
@@ -313,22 +313,22 @@ function Picker<T extends string>(props: PickerProps<T>) {
         onClick={() => (open ? close() : openAt(options.findIndex((o) => chosen.includes(o.value))))}
         onKeyDown={onTriggerKey}
       >
-        {icon ? <span className="bs-dd-icon bs-inline">{icon}</span> : null}
-        <span className={empty ? "bs-dd-value empty" : "bs-dd-value"}>{summary}</span>
-        <ChevronDown className="bs-dd-chev" {...ICON_SM} aria-hidden="true" />
+        {icon ? <span className="bk-dd-icon bk-inline">{icon}</span> : null}
+        <span className={empty ? "bk-dd-value empty" : "bk-dd-value"}>{summary}</span>
+        <ChevronDown className="bk-dd-chev" {...ICON_SM} aria-hidden="true" />
       </button>
       {open
         ? createPortal(
             <div
               ref={menuRef}
               id={id}
-              className={placed?.above ? "bs-menu bs-menu--above" : "bs-menu"}
+              className={placed?.above ? "bk-menu bk-menu--above" : "bk-menu"}
               style={placed ? placed.style : { visibility: "hidden", left: 0, top: 0 }}
               onKeyDown={onMenuKey}
             >
               {searchable ? (
-                <div className="bs-menu-head">
-                  <div className="bs-field">
+                <div className="bk-menu-head">
+                  <div className="bk-field">
                     <Search {...ICON} aria-hidden="true" />
                     <input
                       ref={searchRef}
@@ -343,7 +343,7 @@ function Picker<T extends string>(props: PickerProps<T>) {
               ) : null}
               <div
                 ref={listRef}
-                className="bs-menu-list"
+                className="bk-menu-list"
                 role="listbox"
                 aria-label={name}
                 aria-multiselectable={multi || undefined}
@@ -355,22 +355,22 @@ function Picker<T extends string>(props: PickerProps<T>) {
                     <div
                       role="option"
                       aria-selected={allChecked}
-                      className="bs-menu-item"
+                      className="bk-menu-item"
                       onClick={() => (allChecked ? clearAll?.(visible.map((o) => o.value)) : pickAll?.(visible.filter((o) => !o.disabled).map((o) => o.value)))}
                     >
                       <CheckMark checked={allState} />
-                      <span className="bs-menu-item-label">All</span>
+                      <span className="bk-menu-item-label">All</span>
                     </div>
-                    <div className="bs-menu-sep" />
+                    <div className="bk-menu-sep" />
                   </>
                 ) : null}
-                {visible.length === 0 ? <div className="bs-menu-empty">Nothing matches.</div> : null}
+                {visible.length === 0 ? <div className="bk-menu-empty">Nothing matches.</div> : null}
                 {visible.map((o, i) => {
                   const group = o.group !== lastGroup && o.group ? o.group : null;
                   lastGroup = o.group;
                   const current = chosen.includes(o.value);
                   const cls = [
-                    "bs-menu-item",
+                    "bk-menu-item",
                     !multi && current ? "cur" : "",
                     i === focus ? "focus" : "",
                     o.disabled ? "off" : "",
@@ -381,8 +381,8 @@ function Picker<T extends string>(props: PickerProps<T>) {
                     <div key={o.value}>
                       {group ? (
                         <>
-                          {i > 0 ? <div className="bs-menu-sep" /> : null}
-                          <div className="bs-eyebrow bs-menu-eyebrow">{group}</div>
+                          {i > 0 ? <div className="bk-menu-sep" /> : null}
+                          <div className="bk-eyebrow bk-menu-eyebrow">{group}</div>
                         </>
                       ) : null}
                       <div
@@ -397,11 +397,11 @@ function Picker<T extends string>(props: PickerProps<T>) {
                         onClick={() => choose(i)}
                       >
                         {multi ? <CheckMark checked={current} /> : null}
-                        {o.icon ? <span className="bs-menu-item-icon bs-inline">{o.icon}</span> : null}
-                        <span className="bs-menu-item-label">{o.label}</span>
-                        {o.hint ? <span className="bs-menu-item-hint">{o.hint}</span> : null}
-                        {o.figure ? <Figure className="bs-menu-item-figure">{o.figure}</Figure> : null}
-                        {!multi && current ? <Check className="bs-menu-item-check" {...ICON_SM} aria-hidden="true" /> : null}
+                        {o.icon ? <span className="bk-menu-item-icon bk-inline">{o.icon}</span> : null}
+                        <span className="bk-menu-item-label">{o.label}</span>
+                        {o.hint ? <span className="bk-menu-item-hint">{o.hint}</span> : null}
+                        {o.figure ? <Figure className="bk-menu-item-figure">{o.figure}</Figure> : null}
+                        {!multi && current ? <Check className="bk-menu-item-check" {...ICON_SM} aria-hidden="true" /> : null}
                       </div>
                     </div>
                   );

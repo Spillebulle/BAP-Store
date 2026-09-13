@@ -13,7 +13,7 @@ import type { DriverDevice, DriverProfile, DriversReport, FirmwareDevice, Packag
 import { isBusy, useBusy, type Busy } from "./system/busy";
 import "./system/system.css";
 
-const NO_MANAGER = "Drivers are not managed on this distribution. chwd is the only driver manager BAP Store knows.";
+const NO_MANAGER = "Drivers are not managed on this distribution. chwd is the only driver manager Brokey knows.";
 const NO_FIRMWARE_SERVICE = "fwupd is not installed. Install the fwupd package to see firmware updates here.";
 const NO_FIRMWARE_DEVICES = "fwupd found no device on this machine whose firmware it can update.";
 const NO_DEVICES = "chwd found no device on this machine with a driver profile.";
@@ -38,12 +38,12 @@ function ProfileRow({ profile, busy }: { profile: DriverProfile; busy: Busy }) {
       <div className="sy-profile-text">
         <div className={profile.installed ? "sy-profile-name on" : "sy-profile-name"}>
           {profile.installed ? (
-            <span className="bs-dot bs-dot--accent" title="Installed" aria-hidden="true" />
+            <span className="bk-dot bk-dot--accent" title="Installed" aria-hidden="true" />
           ) : (
             <span className="sy-dot-slot" aria-hidden="true" />
           )}
-          <span className="bs-row-label">{profile.name}</span>
-          <span className="bs-row-badges">
+          <span className="bk-row-label">{profile.name}</span>
+          <span className="bk-row-badges">
             {profile.installed ? <Badge tone="good">installed</Badge> : null}
             {profile.recommended ? <Badge title="chwd recommends this profile for the device.">recommended</Badge> : null}
           </span>
@@ -121,7 +121,7 @@ function FirmwareRow({ device, busy }: { device: FirmwareDevice; busy: Busy }) {
         <div>{device.name}</div>
         {device.vendor ? <div className="sy-fw-sub">{device.vendor}</div> : null}
       </td>
-      <td className="n">{device.version ? <Figure>{device.version}</Figure> : <span className="bs-dim">unknown</span>}</td>
+      <td className="n">{device.version ? <Figure>{device.version}</Figure> : <span className="bk-dim">unknown</span>}</td>
       <td>
         {hasUpdate ? (
           <>
@@ -133,7 +133,7 @@ function FirmwareRow({ device, busy }: { device: FirmwareDevice; busy: Busy }) {
             {device.update_summary ? <div className="sy-fw-sub">{device.update_summary}</div> : null}
           </>
         ) : (
-          <span className="bs-dim">up to date</span>
+          <span className="bk-dim">up to date</span>
         )}
       </td>
       <td className="sy-fw-action">
@@ -177,8 +177,8 @@ function FirmwarePanel({ report, busy }: { report: DriversReport; busy: Busy }) 
     body = <EmptyState icon={<Microchip {...ICON_EMPTY} aria-hidden="true" />}>{report.firmware_note ?? NO_FIRMWARE_DEVICES}</EmptyState>;
   } else {
     body = (
-      <div className="bs-table-wrap">
-        <table className="bs-table">
+      <div className="bk-table-wrap">
+        <table className="bk-table">
           <thead>
             <tr>
               <th scope="col">Device</th>
@@ -187,7 +187,7 @@ function FirmwarePanel({ report, busy }: { report: DriversReport; busy: Busy }) 
               </th>
               <th scope="col">Available</th>
               <th scope="col">
-                <span className="bs-sr">Action</span>
+                <span className="bk-sr">Action</span>
               </th>
             </tr>
           </thead>
@@ -216,18 +216,18 @@ function FirmwarePanel({ report, busy }: { report: DriversReport; busy: Busy }) 
 /** A panel with three-line rows, the geometry of a device panel, while chwd and fwupd answer. */
 function SkeletonPanel({ rows }: { rows: number }) {
   return (
-    <div className="bs-panel" aria-hidden="true">
+    <div className="bk-panel" aria-hidden="true">
       <div className="sy-skel-head">
         <Skeleton width="28%" />
       </div>
-      <div className="bs-panel-body">
+      <div className="bk-panel-body">
         <div className="sy-profiles">
           {Array.from({ length: rows }, (_, i) => (
             <div key={i} className="sy-profile">
               <div className="sy-skel-lines">
                 <Skeleton width={`${18 + ((i * 13) % 20)}%`} />
-                <Skeleton width={`${50 + ((i * 23) % 30)}%`} className="bs-skel--text" />
-                <Skeleton width={`${30 + ((i * 17) % 25)}%`} className="bs-skel--text" />
+                <Skeleton width={`${50 + ((i * 23) % 30)}%`} className="bk-skel--text" />
+                <Skeleton width={`${30 + ((i * 17) % 25)}%`} className="bk-skel--text" />
               </div>
               <Skeleton width="64px" height="26px" />
             </div>
@@ -269,10 +269,10 @@ export function DriversPage() {
   const nothing = report !== null && report.manager === null && !report.firmware_available;
 
   return (
-    <div className="bs-page" aria-busy={loading}>
-      <div className="bs-page-head">
-        <h1 className="bs-page-title">Drivers and firmware</h1>
-        <p className="bs-page-sub">{sub}</p>
+    <div className="bk-page" aria-busy={loading}>
+      <div className="bk-page-head">
+        <h1 className="bk-page-title">Drivers and firmware</h1>
+        <p className="bk-page-sub">{sub}</p>
       </div>
 
       {error ? (
@@ -303,7 +303,7 @@ export function DriversPage() {
       {report && !nothing ? (
         <>
           {report.manager && report.devices.length === 0 ? (
-            <div className="bs-well">
+            <div className="bk-well">
               <EmptyState icon={<Cpu {...ICON_EMPTY} aria-hidden="true" />}>{NO_DEVICES}</EmptyState>
             </div>
           ) : null}

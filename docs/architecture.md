@@ -1,6 +1,6 @@
 # Architecture
 
-Dated 2026-09-10. What BAP Store is, the shape it is built in, the rules that
+Dated 2026-09-10. What Brokey is, the shape it is built in, the rules that
 shape settles, what was rejected and why, and what is still open. Superseded
 sections are marked in place rather than rewritten.
 
@@ -24,13 +24,13 @@ run on a real Debian and a real Fedora.
 |---|---|
 | Language | Rust for everything that touches the system; TypeScript for the interface |
 | Interface | Tauri 2 window over a React + TypeScript page styled by `tokens.css` at the **desktop** scale. No `class="web"`, ever: this is a desktop application |
-| Shape | One workspace: `bap-core` (library, no window, every source and every rule, fully testable), `bap-helper` (the one binary that runs as root), `bap-store` (the Tauri application and a text mode from the same executable) |
+| Shape | One workspace: `brokey-core` (library, no window, every source and every rule, fully testable), `brokey-helper` (the one binary that runs as root), `brokey` (the Tauri application and a text mode from the same executable) |
 | Privilege | The window never runs as root. The helper is started through `pkexec` with a polkit policy and reads a plan on stdin; it executes a closed list of operations and streams JSON events on stdout |
 | Package databases | Read directly, in pure Rust, with no libalpm and no libapt linkage: `/var/lib/pacman/sync/*.db` and `/var/lib/pacman/local`, `/var/lib/apt/lists` and `/var/lib/dpkg/status`. One binary runs on every distribution |
 | Metadata | AppStream is the spine: the distribution catalogue under `/usr/share/swcatalog` or `/var/lib/swcatalog`, Flatpak's per-remote `appstream.xml.gz`, and Flathub's web API. Icons and screenshots come from there; a package without a component is still listed, as a package rather than an application |
 | Grouping | Results from different sources that are the same application are one row with several **editions**. The join key is the AppStream component id where both sides have one, then a normalised name match with a confidence score. Never a guess presented as certain |
 | Accent hue | **300** (plum). Umber is 60/68, Muster 200, HomeLab 160, Tally 255 |
-| Application id | `io.github.spillebulle.bapstore`. Binary and package `bap-store`, helper `bap-helper` |
+| Application id | `io.github.spillebulle.brokey`. Binary and package `brokey`, helper `brokey-helper` |
 | Targets | Linux x86-64 and ARM64. Nothing else |
 | Licence | GPL-3.0-or-later |
 
@@ -38,14 +38,14 @@ run on a real Debian and a real Fedora.
 
 ```
 crates/
-  bap-core/        the library. sources/, appstream/, group/, transaction/, updates/, drivers/, selfupdate/, system/
-  bap-helper/      root helper: reads a Plan, runs it, streams Events. Nothing else
-  bap-store/       Tauri app: commands, events, settings, the `bap-store <subcommand>` text mode
+  brokey-core/        the library. sources/, appstream/, group/, transaction/, updates/, drivers/, selfupdate/, system/
+  brokey-helper/      root helper: reads a Plan, runs it, streams Events. Nothing else
+  brokey/       Tauri app: commands, events, settings, the `brokey <subcommand>` text mode
 frontend/          React + TypeScript. tokens.css verbatim, app.css for components, pages/
 packaging/         desktop entry, AppStream metainfo, polkit policy, linux/ (deb, rpm, PKGBUILD)
 ```
 
-### bap-core
+### brokey-core
 
 **`Source`** is the one trait every provider implements:
 
@@ -92,7 +92,7 @@ how this copy was installed as a pure function of a probe, ask GitHub for the
 newest release, and say the one true thing about how to get it (§18.3 of the
 style guide).
 
-### bap-helper
+### brokey-helper
 
 A separate executable, deliberately tiny. Reads one JSON `Plan` on stdin,
 validates it against a closed list (`pacman -S/-Syu/-Rs/-U`, `apt-get`, `dnf`,
@@ -102,20 +102,20 @@ the store downloaded, and the four exact commands setting a source up needs:
 address, `systemctl enable --now snapd.socket`, `ln -sfn /var/lib/snapd/snap
 /snap` and `snap wait system seed.loaded`), refuses anything else, runs the steps, streams one
 JSON event per line on stdout. It has no network code, no search, no
-metadata. `packaging/io.github.spillebulle.bapstore.policy` grants it
+metadata. `packaging/io.github.spillebulle.brokey.policy` grants it
 `auth_admin_keep`, so a batch of installs is one password.
 
 When the store is run from a development build the helper beside it is used
 through plain `pkexec` and the generic dialog; nothing is installed to make
 that work.
 
-### bap-store
+### brokey
 
-Tauri commands are thin: each one calls into `bap-core` and returns a
+Tauri commands are thin: each one calls into `brokey-core` and returns a
 serialisable value. Events from a running transaction are forwarded to the
 page as `transaction://event`. Settings are a flat `key = value` file in the
 config directory (Muster's `prefs.rs` shape). The text mode
-(`bap-store search steam`, `bap-store updates`, `bap-store sources`) is the
+(`brokey search steam`, `brokey updates`, `brokey sources`) is the
 same core with a table printer, and it is how the sources are exercised on a
 machine with no display.
 

@@ -181,7 +181,7 @@ export default function App() {
   return (
     <>
       <Shell>{gallery ? <Suspense fallback={null}><Gallery /></Suspense> : <Page />}</Shell>
-      <div className="bs-corner">
+      <div className="bk-corner">
         <Toasts />
         <ActivityPanel />
       </div>

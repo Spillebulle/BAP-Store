@@ -18,7 +18,7 @@ export type ButtonProps =
 
 export function Button(props: ButtonProps) {
   const { kind = "secondary", icon, children, className, disabled, disabledReason, title, type = "button", ...rest } = props;
-  const classes = ["bs-btn", kind !== "secondary" ? `bs-btn--${kind}` : "", className ?? ""]
+  const classes = ["bk-btn", kind !== "secondary" ? `bk-btn--${kind}` : "", className ?? ""]
     .filter(Boolean)
     .join(" ");
   return (

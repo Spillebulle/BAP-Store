@@ -57,11 +57,11 @@ step 'checking the version'
 declared=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
 [ "$declared" = "$version" ] || \
     fail "Cargo.toml says $declared but you asked for $version. Edit [workspace.package] version, commit it, then run this again."
-conf=$(python3 -c "import json;print(json.load(open('crates/bap-store/tauri.conf.json'))['version'])")
-[ "$conf" = "$version" ] || fail "crates/bap-store/tauri.conf.json says $conf, not $version."
+conf=$(python3 -c "import json;print(json.load(open('crates/brokey/tauri.conf.json'))['version'])")
+[ "$conf" = "$version" ] || fail "crates/brokey/tauri.conf.json says $conf, not $version."
 pkg=$(python3 -c "import json;print(json.load(open('package.json'))['version'])")
 [ "$pkg" = "$version" ] || fail "package.json says $pkg, not $version."
-grep -q "<release version=\"$version\"" packaging/io.github.spillebulle.bapstore.metainfo.xml || \
+grep -q "<release version=\"$version\"" packaging/io.github.spillebulle.brokey.metainfo.xml || \
     fail "the metainfo has no <release version=\"$version\">."
 
 step 'reading the release notes'

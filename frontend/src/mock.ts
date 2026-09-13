@@ -736,8 +736,8 @@ function buildPlain(spec: PlainSpec): App {
 
 const SELF_PACKAGE: Package = {
   source: "aur",
-  id: "bap-store-bin",
-  name: "BAP Store",
+  id: "brokey-bin",
+  name: "Brokey",
   kind: "app",
   summary: "One store for every place a Linux machine gets software",
   description:
@@ -747,7 +747,7 @@ const SELF_PACKAGE: Package = {
   installed: true,
   repo: "aur",
   licence: "GPL-3.0-or-later",
-  homepage: "https://github.com/spillebulle/bap-store",
+  homepage: "https://github.com/spillebulle/brokey",
   developer: "spillebulle",
   updated: NOW - 1 * DAY,
   download_size: 9.2 * MB,
@@ -757,7 +757,7 @@ const SELF_PACKAGE: Package = {
   icon: null,
   screenshots: [],
   categories: ["System", "PackageManager"],
-  appstream_id: "io.github.spillebulle.bapstore",
+  appstream_id: "io.github.spillebulle.brokey",
   out_of_date: false,
   sandboxed: false,
   facts: [
@@ -769,8 +769,8 @@ const SELF_PACKAGE: Package = {
 const APPS: App[] = [
   ...SPECS.map(buildApp),
   {
-    key: "io.github.spillebulle.bapstore",
-    name: "BAP Store",
+    key: "io.github.spillebulle.brokey",
+    name: "Brokey",
     kind: "app",
     summary: SELF_PACKAGE.summary,
     icon: null,
@@ -880,7 +880,7 @@ function updateList(): Update[] {
         to: p.version,
         download_size: p.download_size,
         published: p.updated,
-        is_self: p.appstream_id === "io.github.spillebulle.bapstore",
+        is_self: p.appstream_id === "io.github.spillebulle.brokey",
       });
     }
   }
@@ -920,8 +920,8 @@ function stepsFor(op: Op): Step[] {
           return [{ source: "flatpak", title: `Installing ${name} from Flathub`, command: cmd("flatpak", "install", "-y", "--noninteractive", "--system", "flathub", op.package.id), needs_root: false, weight: 3 }];
         case "github":
           return [
-            { source: "github", title: `Downloading ${name}`, command: cmd("bap-store", "download", op.package.id), needs_root: false, weight: 2 },
-            { source: "github", title: `Installing ${name}`, command: cmd("pacman", "-U", "--noconfirm", `/var/cache/bap-store/${op.package.id.replace("/", "-")}.pkg.tar.zst`), needs_root: true, weight: 2 },
+            { source: "github", title: `Downloading ${name}`, command: cmd("brokey", "download", op.package.id), needs_root: false, weight: 2 },
+            { source: "github", title: `Installing ${name}`, command: cmd("pacman", "-U", "--noconfirm", `/var/cache/brokey/${op.package.id.replace("/", "-")}.pkg.tar.zst`), needs_root: true, weight: 2 },
           ];
         default:
           return [{ source: op.package.source, title: `Installing ${name}`, command: cmd(op.package.source, "install", op.package.id), needs_root: true, weight: 3 }];
@@ -938,8 +938,8 @@ function stepsFor(op: Op): Step[] {
       if (op.package.source === "github") {
         const asset = `${op.package.id.split("/").pop() ?? "release"}-0.2.0-1-x86_64.pkg.tar.zst`;
         return [
-          { source: "github", title: `Downloading ${name} 0.2.0`, command: cmd("bap-store", "download", op.package.id, asset), needs_root: false, weight: 2 },
-          { source: "github", title: `Installing ${name} 0.2.0`, command: cmd("pacman", "-U", "--noconfirm", `/var/cache/bap-store/${asset}`), needs_root: true, weight: 2 },
+          { source: "github", title: `Downloading ${name} 0.2.0`, command: cmd("brokey", "download", op.package.id, asset), needs_root: false, weight: 2 },
+          { source: "github", title: `Installing ${name} 0.2.0`, command: cmd("pacman", "-U", "--noconfirm", `/var/cache/brokey/${asset}`), needs_root: true, weight: 2 },
         ];
       }
       if (op.package.source === "aur") {
@@ -1042,7 +1042,7 @@ export async function plan(ops: Op[]): Promise<PlanPreview> {
     if (op.op === "setup") {
       notices.push(setupNotice(op.source, ops));
       if ((op.source === "flatpak" || op.source === "snap") && !available(op.source)) {
-        notices.push(`Your launcher lists ${sourceLabel(op.source)} applications only after you log out and back in once. Until then, open them from BAP Store.`);
+        notices.push(`Your launcher lists ${sourceLabel(op.source)} applications only after you log out and back in once. Until then, open them from Brokey.`);
       }
     }
   }
@@ -1419,14 +1419,14 @@ export async function launch_targets(refs: PackageRef[]): Promise<(string | null
 export async function open_app(pkg: PackageRef): Promise<void> {
   await delay(150);
   const target = (await launch_targets([pkg]))[0];
-  if (!target) throw new Error(`${pkg.id} is not something BAP Store can open. It may not be installed, or it has no application to start.`);
+  if (!target) throw new Error(`${pkg.id} is not something Brokey can open. It may not be installed, or it has no application to start.`);
 }
 
 export async function launcher_notices(): Promise<[SourceKind, string][]> {
   await delay(40);
   return [...setUpThisSession].map((kind) => {
     const label = sourceLabel(kind);
-    return [kind, `${label} applications are installed but this desktop session started before ${label} was set up, so your launcher does not list them yet. Log out and back in once to see them there; until then, open them from BAP Store.`];
+    return [kind, `${label} applications are installed but this desktop session started before ${label} was set up, so your launcher does not list them yet. Log out and back in once to see them there; until then, open them from Brokey.`];
   });
 }
 
@@ -1445,17 +1445,17 @@ const SELF_UPDATE: SelfUpdate = {
     version: "0.2.0",
     notes: "- Search across pacman, the AUR and Flatpak in one list.\n- Updates page with a self-update notice.\n- Drivers and firmware through chwd and fwupd.",
     published: NOW - 1 * DAY,
-    url: "https://github.com/spillebulle/bap-store/releases/tag/v0.2.0",
+    url: "https://github.com/spillebulle/brokey/releases/tag/v0.2.0",
   },
-  installation: { kind: "aur", label: "Installed from the AUR as bap-store-bin" },
+  installation: { kind: "aur", label: "Installed from the AUR as brokey-bin" },
   remedy: {
     kind: "updates_page",
-    sentence: "BAP Store 0.2.0 is in the Updates page as bap-store-bin. Tick it there and it updates with everything else.",
-    package: "bap-store-bin",
+    sentence: "Brokey 0.2.0 is in the Updates page as brokey-bin. Tick it there and it updates with everything else.",
+    package: "brokey-bin",
   },
 };
 
-const SELF_ASSET = "bap-store-bin-0.2.0-1-x86_64.pkg.tar.zst";
+const SELF_ASSET = "brokey-bin-0.2.0-1-x86_64.pkg.tar.zst";
 
 /** The release check as the switch asks: the AUR remedy by default, an asset install, or nothing new. */
 function selfUpdate(): SelfUpdate {
@@ -1466,9 +1466,9 @@ function selfUpdate(): SelfUpdate {
         installation: { kind: "pacman_file", label: "Installed from the release package with pacman -U" },
         remedy: {
           kind: "install_asset",
-          sentence: `This copy was installed from the release package. BAP Store downloads ${SELF_ASSET} and installs it with pacman, asking for your password once.`,
+          sentence: `This copy was installed from the release package. Brokey downloads ${SELF_ASSET} and installs it with pacman, asking for your password once.`,
           asset: SELF_ASSET,
-          url: `https://github.com/spillebulle/bap-store/releases/download/v0.2.0/${SELF_ASSET}`,
+          url: `https://github.com/spillebulle/brokey/releases/download/v0.2.0/${SELF_ASSET}`,
         },
       };
     case "none":
@@ -1487,7 +1487,7 @@ export async function self_update_apply(): Promise<PlanStatus> {
   await delay(60);
   const remedy = selfUpdate().remedy;
   if (remedy?.kind !== "install_asset" && remedy?.kind !== "replace_file") {
-    throw new Error("This copy of BAP Store updates through the Updates page. Tick bap-store-bin there.");
+    throw new Error("This copy of Brokey updates through the Updates page. Tick brokey-bin there.");
   }
-  return run_plan([{ op: "update", package: { source: "github", id: "spillebulle/bap-store" } }]);
+  return run_plan([{ op: "update", package: { source: "github", id: "spillebulle/brokey" } }]);
 }

@@ -1,5 +1,5 @@
 {
-  "name": "bap-store",
+  "name": "brokey",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,8 +10,8 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "check:design": "node tools/check-design.mjs",
     "tauri": "tauri",
-    "app:dev": "tauri dev --config crates/bap-store/tauri.conf.json",
-    "app:build": "tauri build --config crates/bap-store/tauri.conf.json"
+    "app:dev": "tauri dev --config crates/brokey/tauri.conf.json",
+    "app:build": "tauri build --config crates/brokey/tauri.conf.json"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

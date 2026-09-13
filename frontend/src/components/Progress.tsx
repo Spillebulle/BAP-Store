@@ -28,15 +28,15 @@ export function Progress(props: ProgressProps) {
   const pct = known ? Math.round(Math.max(0, Math.min(1, props.fraction)) * 100) : null;
   const sliding = !known && props.sliding === true;
   return (
-    <div className="bs-prog-wrap" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined} aria-valuetext={props.message ?? undefined}>
+    <div className="bk-prog-wrap" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined} aria-valuetext={props.message ?? undefined}>
       {props.message || pct !== null ? (
-        <div className="bs-prog-row">
+        <div className="bk-prog-row">
           <span>{props.message ?? ""}</span>
           {pct !== null ? <Figure>{pct}%</Figure> : null}
         </div>
       ) : null}
-      <div className={sliding ? "bs-prog bs-prog--sliding" : "bs-prog"}>
-        <i className="bs-prog-fill" style={{ width: sliding ? undefined : `${pct ?? 0}%` }} />
+      <div className={sliding ? "bk-prog bk-prog--sliding" : "bk-prog"}>
+        <i className="bk-prog-fill" style={{ width: sliding ? undefined : `${pct ?? 0}%` }} />
       </div>
     </div>
   );

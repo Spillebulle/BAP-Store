@@ -31,7 +31,7 @@
 
 :root {
   /* ── The one number an app changes ─────────────────────────────────────── */
-  --accent-h: 300;           /* BAP Store plum. Umber 60/68, Muster 200, HomeLab 160, Tally 255. */
+  --accent-h: 300;           /* Brokey plum. Umber 60/68, Muster 200, HomeLab 160, Tally 255. */
 
   /* ── Type ──────────────────────────────────────────────────────────────── */
   --font-ui: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;

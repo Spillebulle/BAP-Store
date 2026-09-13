@@ -17,7 +17,7 @@ export function Toggle({ on, onChange, label, disabled, disabledReason }: Toggle
       role="switch"
       aria-checked={on}
       aria-label={label}
-      className={on ? "bs-toggle on" : "bs-toggle"}
+      className={on ? "bk-toggle on" : "bk-toggle"}
       title={disabled ? disabledReason : undefined}
       disabled={disabled}
       onClick={() => onChange(!on)}

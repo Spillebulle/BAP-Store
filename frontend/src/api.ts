@@ -1,5 +1,5 @@
 // The page's one door to the Rust side: one function per Tauri command, named
-// exactly as crates/bap-store/src/commands.rs registers them. Inside the
+// exactly as crates/brokey/src/commands.rs registers them. Inside the
 // window every call is `invoke`; in a plain browser (`vite dev`, screenshots)
 // the mock world in ./mock.ts answers instead, so the page renders without a
 // backend. Nothing else in frontend/src imports @tauri-apps.
@@ -37,7 +37,7 @@ function mock() {
   return import("./mock");
 }
 
-/** What a command failed with, as the sentence bap_core::Error carries. */
+/** What a command failed with, as the sentence brokey_core::Error carries. */
 export class ApiError extends Error {
   constructor(message: string) {
     super(message);

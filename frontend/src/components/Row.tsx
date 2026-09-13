@@ -33,8 +33,8 @@ function activate(onClick: (() => void) | undefined) {
 /** A list row (§7.16). Clickable rows are buttons in behaviour but divs in markup, so they can hold a button. */
 export function Row({ selected, active, plain, onClick, leading, children, trailing, className, title }: RowProps) {
   const classes = [
-    "bs-row",
-    plain ? "bs-row--plain" : "",
+    "bk-row",
+    plain ? "bk-row--plain" : "",
     onClick ? "clickable" : "",
     selected ? "sel" : "",
     active ? "act" : "",
@@ -53,8 +53,8 @@ export function Row({ selected, active, plain, onClick, leading, children, trail
       onKeyDown={activate(onClick)}
     >
       {leading}
-      <span className="bs-row-label">{children}</span>
-      {trailing !== undefined && trailing !== null ? <span className="bs-row-trail">{trailing}</span> : null}
+      <span className="bk-row-label">{children}</span>
+      {trailing !== undefined && trailing !== null ? <span className="bk-row-trail">{trailing}</span> : null}
     </div>
   );
 }
@@ -94,7 +94,7 @@ function editionBadges(editions: Edition[], sourceHint?: (source: SourceKind) =>
 export function AppRow({ app, onOpen, selected, check, figure, action, sub, sourceHint }: AppRowProps) {
   const open = onOpen ? () => onOpen(app) : undefined;
   const stop = (e: MouseEvent) => e.stopPropagation();
-  const classes = ["bs-row", "bs-row--app", open ? "clickable" : "", selected ? "sel" : ""].filter(Boolean).join(" ");
+  const classes = ["bk-row", "bk-row--app", open ? "clickable" : "", selected ? "sel" : ""].filter(Boolean).join(" ");
   return (
     <div
       className={classes}
@@ -104,21 +104,21 @@ export function AppRow({ app, onOpen, selected, check, figure, action, sub, sour
       onKeyDown={activate(open)}
     >
       {check ? (
-        <span className="bs-row-check" onClick={stop}>
+        <span className="bk-row-check" onClick={stop}>
           {check}
         </span>
       ) : null}
       <AppIcon picture={app.icon} name={app.name} size="row" />
-      <div className="bs-row-text">
-        <div className="bs-row-name">
-          <span className="bs-row-label">{app.name}</span>
-          <span className="bs-row-badges">{editionBadges(app.editions, sourceHint)}</span>
+      <div className="bk-row-text">
+        <div className="bk-row-name">
+          <span className="bk-row-label">{app.name}</span>
+          <span className="bk-row-badges">{editionBadges(app.editions, sourceHint)}</span>
         </div>
-        <div className="bs-row-sub">{sub ?? app.summary ?? app.developer ?? ""}</div>
+        <div className="bk-row-sub">{sub ?? app.summary ?? app.developer ?? ""}</div>
       </div>
-      {figure !== undefined && figure !== null ? <span className="bs-row-figure">{figure}</span> : null}
+      {figure !== undefined && figure !== null ? <span className="bk-row-figure">{figure}</span> : null}
       {action ? (
-        <div className="bs-row-action" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+        <div className="bk-row-action" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
           {action}
         </div>
       ) : null}
