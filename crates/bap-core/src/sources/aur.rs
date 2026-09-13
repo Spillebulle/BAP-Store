@@ -103,6 +103,19 @@ impl Helper {
         Helper::None
     }
 
+    /// The helper the user named in Settings ("paru", "yay", "builtin"),
+    /// when it is installed; otherwise whatever [`Helper::detect`] finds, so
+    /// a choice that cannot be honoured degrades to one that works rather
+    /// than to a build that fails. Anything else is [`Helper::detect`].
+    pub fn choose(choice: &str) -> Helper {
+        match choice {
+            "paru" if system::which("paru").is_some() => Helper::Paru(version_of("paru")),
+            "yay" if system::which("yay").is_some() => Helper::Yay(version_of("yay")),
+            "builtin" if system::which("makepkg").is_some() => Helper::Makepkg,
+            _ => Helper::detect(),
+        }
+    }
+
     /// The status bar line: "paru 2.1.0", "yay 12.4", "makepkg".
     pub fn detail(&self) -> Option<String> {
         match self {

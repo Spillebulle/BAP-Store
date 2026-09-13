@@ -904,11 +904,11 @@ function stepsFor(op: Op): Step[] {
       const name = nameOf(op.package);
       switch (op.package.source) {
         case "pacman":
-          return [{ source: "pacman", title: `Installing ${name}`, command: cmd("pacman", "-S", "--needed", "--noconfirm", op.package.id), needs_root: true, weight: 3 }];
+          return [{ source: "pacman", title: `Installing ${name} and updating the system`, command: cmd("pacman", "-Syu", "--noconfirm", "--needed", op.package.id), needs_root: true, weight: 3 }];
         case "aur":
           return [{ source: "aur", title: `Building ${name} from the AUR`, command: cmd("paru", "-S", "--noconfirm", "--sudo", "pkexec", op.package.id), needs_root: false, weight: 5 }];
         case "flatpak":
-          return [{ source: "flatpak", title: `Installing ${name} from Flathub`, command: cmd("flatpak", "install", "-y", "--system", "flathub", op.package.id), needs_root: true, weight: 3 }];
+          return [{ source: "flatpak", title: `Installing ${name} from Flathub`, command: cmd("flatpak", "install", "-y", "--noninteractive", "--system", "flathub", op.package.id), needs_root: false, weight: 3 }];
         case "github":
           return [
             { source: "github", title: `Downloading ${name}`, command: cmd("bap-store", "download", op.package.id), needs_root: false, weight: 2 },
@@ -922,7 +922,7 @@ function stepsFor(op: Op): Step[] {
       const name = nameOf(op.package);
       const program = op.package.source === "flatpak" ? "flatpak" : op.package.source === "aur" ? "pacman" : op.package.source;
       const args = op.package.source === "flatpak" ? ["uninstall", "-y", "--system", op.package.id] : ["-Rs", "--noconfirm", op.package.id];
-      return [{ source: op.package.source, title: `Removing ${name}`, command: cmd(program, ...args), needs_root: true, weight: 2 }];
+      return [{ source: op.package.source, title: `Removing ${name}`, command: cmd(program, ...args), needs_root: op.package.source !== "flatpak", weight: 2 }];
     }
     case "update": {
       const name = nameOf(op.package);
@@ -937,7 +937,7 @@ function stepsFor(op: Op): Step[] {
         return [{ source: "aur", title: `Updating ${name}`, command: cmd("paru", "-S", "--noconfirm", "--sudo", "pkexec", op.package.id), needs_root: false, weight: 5 }];
       }
       if (op.package.source === "flatpak") {
-        return [{ source: "flatpak", title: `Updating ${name}`, command: cmd("flatpak", "update", "-y", "--system", op.package.id), needs_root: true, weight: 3 }];
+        return [{ source: "flatpak", title: `Updating ${name}`, command: cmd("flatpak", "update", "-y", "--noninteractive", op.package.id), needs_root: false, weight: 3 }];
       }
       return [{ source: op.package.source, title: `Updating ${name}`, command: cmd("pacman", "-S", "--noconfirm", op.package.id), needs_root: true, weight: 3 }];
     }
@@ -948,7 +948,7 @@ function stepsFor(op: Op): Step[] {
         case "aur":
           return [{ source: "aur", title: "Updating AUR packages", command: cmd("paru", "-Sua", "--noconfirm", "--sudo", "pkexec"), needs_root: false, weight: 6 }];
         case "flatpak":
-          return [{ source: "flatpak", title: "Updating Flatpak applications", command: cmd("flatpak", "update", "-y", "--system"), needs_root: true, weight: 4 }];
+          return [{ source: "flatpak", title: "Updating Flatpak applications", command: cmd("flatpak", "update", "-y", "--noninteractive"), needs_root: false, weight: 4 }];
         default:
           return [{ source: op.source, title: `Updating ${sourceLabel(op.source)}`, command: cmd(op.source, "update"), needs_root: true, weight: 4 }];
       }

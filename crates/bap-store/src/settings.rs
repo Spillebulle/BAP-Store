@@ -124,6 +124,19 @@ impl FlatpakScope {
     }
 }
 
+impl Settings {
+    /// The part of the settings the sources act on.
+    pub fn preferences(&self) -> bap_core::Preferences {
+        bap_core::Preferences {
+            flatpak_user: self.flatpak_scope == FlatpakScope::User,
+            aur_helper: match self.aur_helper {
+                AurHelper::Auto => None,
+                other => Some(other.id().to_string()),
+            },
+        }
+    }
+}
+
 /// What is remembered between runs.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -549,6 +562,23 @@ mod tests {
         assert_eq!(
             Settings::load_from(&scratch("missing")),
             Settings::default()
+        );
+    }
+
+    #[test]
+    fn preferences_carry_what_the_sources_act_on() {
+        let mut s = Settings::default();
+        assert_eq!(s.preferences(), bap_core::Preferences::default());
+        s.flatpak_scope = FlatpakScope::User;
+        s.aur_helper = AurHelper::Yay;
+        let p = s.preferences();
+        assert!(p.flatpak_user);
+        assert_eq!(p.aur_helper.as_deref(), Some("yay"));
+        s.aur_helper = AurHelper::Auto;
+        assert_eq!(
+            s.preferences().aur_helper,
+            None,
+            "automatic stays a lazy look on PATH"
         );
     }
 }

@@ -176,15 +176,33 @@ pub struct Store {
     pub sources: Vec<Box<dyn Source>>,
 }
 
+/// The user's choices that change how a source behaves, as opposed to which
+/// sources are searched (the page's business). Read from Settings by the
+/// application and passed to [`Store::detect_with`]; the text mode uses the
+/// defaults.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Preferences {
+    /// Flatpak installs, and the Flathub remote a setup adds, go to the
+    /// user's own installation rather than the system one.
+    pub flatpak_user: bool,
+    /// "paru", "yay" or "builtin"; `None` picks whichever is installed.
+    pub aur_helper: Option<String>,
+}
+
 impl Store {
     /// Build every source the machine could have, in interface order. Each
     /// reports its own availability; unavailable sources stay in the list so
     /// the page can say why.
     pub fn detect() -> Store {
+        Store::detect_with(&Preferences::default())
+    }
+
+    /// [`Store::detect`], with the user's preferences applied to the sources.
+    pub fn detect_with(preferences: &Preferences) -> Store {
         let system = system::detect();
         let client = http::Client::shared();
         let catalogue = appstream::Catalogue::load_system(&system);
-        let sources = sources::all(&system, client, catalogue);
+        let sources = sources::all(&system, client, catalogue, preferences);
         Store { system, sources }
     }
 

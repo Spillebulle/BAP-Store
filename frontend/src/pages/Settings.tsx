@@ -247,7 +247,27 @@ export function SettingsPage() {
               }
               if (!status.available) {
                 const reason = status.reason ?? `${label} is not available on this machine.`;
-                // The toggle stays off-limits with the reason until the tool is here; the button beside it is how it gets here.
+                const setup = status.setup ? <SetupButton kind={kind} setup={status.setup} running={busy.setups.has(kind)} /> : null;
+                // A source that is searched through its public store before its tool is here
+                // still has a meaningful switch: whether search asks it. The button beside it
+                // is how the tool gets here.
+                if (status.searchable) {
+                  return (
+                    <Setting
+                      key={kind}
+                      label={label}
+                      note={reason}
+                      control={
+                        <>
+                          {setup}
+                          <Toggle label={label} on={on} onChange={(v) => setSource(kind, v)} />
+                        </>
+                      }
+                    />
+                  );
+                }
+                // Nothing here can use it, so the switch is drawn off: a lit switch that
+                // cannot be moved reads as a setting that is on and broken.
                 return (
                   <Setting
                     key={kind}
@@ -255,8 +275,8 @@ export function SettingsPage() {
                     note={reason}
                     control={
                       <>
-                        {status.setup ? <SetupButton kind={kind} setup={status.setup} running={busy.setups.has(kind)} /> : null}
-                        <Toggle label={label} on={on} onChange={() => undefined} disabled disabledReason={reason} />
+                        {setup}
+                        <Toggle label={label} on={false} onChange={() => undefined} disabled disabledReason={reason} />
                       </>
                     }
                   />

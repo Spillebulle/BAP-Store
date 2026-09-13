@@ -53,8 +53,10 @@ AppStream id where both sides have one and by name where they do not; a match
 by name says so, and can be split if it is wrong.
 
 Filter by source, by applications or every package, by installed; sort by
-relevance, name, last updated, popularity or size. A source that cannot be
-used on this machine is listed disabled with the reason in its tooltip.
+relevance, name, last updated, popularity or size. Flathub and the Snap Store
+are searched even when Flatpak or snapd is not installed yet: installing from
+them sets the tool up first in the same step, and Settings has a button to set
+either up on its own.
 
 
 ## Details and install
@@ -93,7 +95,6 @@ guessing.
 ## What is not there yet
 
 - apt and dnf are written to the same interface as pacman but have not run on a real Debian or Fedora. They are marked untested in the sources list until they have.
-- Snap needs snapd; the Snap Store is not searched without it, because a result that cannot be installed is not a result.
 - Drivers are managed only through chwd (CachyOS). Elsewhere they install as ordinary packages.
 - No reviews or ratings.
 - AppImages from GitHub releases are placed in `~/.local/bin` without a menu entry yet.

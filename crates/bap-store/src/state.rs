@@ -151,7 +151,7 @@ impl AppState {
         if let Some(store) = slot.as_ref() {
             return store.clone();
         }
-        let store = Arc::new(Store::detect());
+        let store = Arc::new(Store::detect_with(&self.settings().preferences()));
         *slot = Some(store.clone());
         store
     }
@@ -196,8 +196,15 @@ impl AppState {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         settings.unknown = std::mem::take(&mut slot.unknown);
+        // A change to what the sources act on (the Flatpak installation, the
+        // AUR helper) is only seen by a store built after it, so the store is
+        // detected again on the next command.
+        let changed = slot.preferences() != settings.preferences();
         *slot = settings.clone();
         drop(slot);
+        if changed {
+            *self.inner.store.write().unwrap_or_else(|e| e.into_inner()) = None;
+        }
         settings.save_to(&self.inner.settings_path).map_err(|e| {
             format!(
                 "The settings apply for now but could not be saved to {}: {e}. Check that the directory is writable.",
@@ -589,5 +596,37 @@ mod tests {
             state.updates_refreshed_once(),
             "a transaction does not ask for the refresh again"
         );
+    }
+
+    #[test]
+    fn a_setting_the_sources_act_on_detects_the_store_again() {
+        let dir = std::env::temp_dir().join(format!(
+            "bap-store-state-{}-preferences",
+            std::process::id()
+        ));
+        let empty = || Store {
+            system: bap_core::system::from_os_release(""),
+            sources: Vec::new(),
+        };
+        let state = AppState::with_store(dir.join(crate::settings::FILE_NAME), empty());
+
+        let mut theme_only = state.settings();
+        theme_only.theme = crate::settings::Theme::Light;
+        state.set_settings(theme_only).unwrap();
+        assert!(state.has_store(), "the theme changes nothing a source does");
+
+        let mut user = state.settings();
+        user.flatpak_scope = crate::settings::FlatpakScope::User;
+        state.set_settings(user).unwrap();
+        assert!(
+            !state.has_store(),
+            "the Flatpak installation is read when the store is built"
+        );
+
+        *state.inner.store.write().unwrap() = Some(Arc::new(empty()));
+        let mut helper = state.settings();
+        helper.aur_helper = crate::settings::AurHelper::Builtin;
+        state.set_settings(helper).unwrap();
+        assert!(!state.has_store(), "so is the AUR helper");
     }
 }

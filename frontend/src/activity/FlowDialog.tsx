@@ -16,12 +16,52 @@ function commandLine(step: Step): string {
   return [step.command.program, ...step.command.args].join(" ");
 }
 
+/**
+ * Whether a step that does not run through the helper still raises a password
+ * prompt of its own: an AUR build installs what it built through pkexec, a
+ * system-wide Flatpak and fwupd ask polkit themselves.
+ */
+function asksItself(step: Step): boolean {
+  if (step.needs_root) return false;
+  const { program, args } = step.command;
+  if (program === "paru" || program === "yay" || program === "makepkg") return true;
+  if (program === "flatpak") return !args.includes("--user");
+  return program === "fwupdmgr";
+}
+
+/**
+ * How many password prompts the plan raises: one for each run of consecutive
+ * root steps (the runner starts the helper once per run) and one for each step
+ * that asks for itself. The dialog promises no fewer than this.
+ */
+export function promptCount(steps: Step[]): number {
+  let count = 0;
+  let inRootRun = false;
+  for (const step of steps) {
+    if (step.needs_root) {
+      if (!inRootRun) count += 1;
+      inRootRun = true;
+    } else {
+      inRootRun = false;
+      if (asksItself(step)) count += 1;
+    }
+  }
+  return count;
+}
+
+function promptSentence(count: number): string {
+  if (count === 0) return "Nothing here needs your password.";
+  if (count === 1) return "You will be asked for your password once.";
+  return `You may be asked for your password ${count} times: once for each group of steps marked below.`;
+}
+
 function StepRow({ step }: { step: Step }) {
   return (
     <li className="bs-plan-step">
       <div className="bs-plan-step-head">
         <span className="bs-plan-step-title">{step.title}</span>
         {step.needs_root ? <Badge title="This step runs as root through the helper.">needs your password</Badge> : null}
+        {asksItself(step) ? <Badge title={`${step.command.program} asks for the password itself for this step.`}>asks for your password</Badge> : null}
       </div>
       <div className="bs-plan-step-cmd" title={commandLine(step)}>
         {commandLine(step)}
@@ -59,7 +99,7 @@ export function FlowDialog() {
 
   const verb = verbFor(ops);
   const steps = preview?.plan.steps ?? [];
-  const needsRoot = steps.some((s) => s.needs_root);
+  const prompts = promptCount(steps);
   const removes = removalSentence(ops, steps);
   const disabledReason = error ?? (preview ? null : "The steps are still being worked out.");
 
@@ -107,7 +147,7 @@ export function FlowDialog() {
           <StepSkeleton />
         )}
         {preview ? (
-          <p className="bs-dim bs-small">{needsRoot ? "You will be asked for your password once." : "Nothing here needs your password."}</p>
+          <p className="bs-dim bs-small">{promptSentence(prompts)}</p>
         ) : null}
       </div>
     </Dialog>
