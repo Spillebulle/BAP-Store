@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { trackPlan } from "../activity/flow";
+import { markSelfUpdate } from "../activity/launch";
 import * as api from "../api";
 import { Button } from "../components/Button";
 import { Notice } from "../components/Notice";
@@ -46,7 +47,9 @@ export function SelfUpdateNotice() {
   const apply = async () => {
     setApplying(true);
     try {
-      trackPlan(await api.self_update_apply());
+      const status = await api.self_update_apply();
+      markSelfUpdate(status.plan.id);
+      trackPlan(status);
       hide();
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), "error");

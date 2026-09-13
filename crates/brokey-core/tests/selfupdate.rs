@@ -792,7 +792,7 @@ fn the_check_serialises_with_lower_case_tags_for_the_page() {
     let json = serde_json::to_value(&s).expect("serialises");
     assert_eq!(json["installation"]["kind"], "dpkg");
     assert_eq!(json["installation"]["archive"], false);
-    assert_eq!(json["remedy"]["kind"], "installasset");
+    assert_eq!(json["remedy"]["kind"], "install_asset");
     assert_eq!(json["remedy"]["installer"], "dpkgi");
     assert_eq!(json["latest"]["newer"], true);
     assert!(

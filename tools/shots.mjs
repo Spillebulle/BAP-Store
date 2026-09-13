@@ -52,6 +52,8 @@ export const SHOTS = [
   // seeded query fills; without q= it reports the application as gone.
   { name: "detail", query: "?view=app&app=com.valvesoftware.Steam&q=steam&fast&selfupdate=none" },
   { name: "installed", query: "?view=installed&fast&selfupdate=none" },
+  // The self-update notice for a copy installed from the release's pacman package: its Update button must be there.
+  { name: "selfupdate-asset", query: "?view=installed&fast&selfupdate=asset" },
   // A Flatpak set up and an application installed from it, finished: the named toast with Open, and the launcher notice that stays.
   { name: "installed-toast", query: "?view=installed&fast&selfupdate=none&run=setup:flatpak,install:flatpak:flathub/app/org.gimp.GIMP/x86_64/stable" },
   { name: "updates", query: "?view=updates&fast" },

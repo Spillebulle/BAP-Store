@@ -1445,14 +1445,18 @@ const SELF_UPDATE: SelfUpdate = {
     version: "0.2.0",
     notes: "- Search across pacman, the AUR and Flatpak in one list.\n- Updates page with a self-update notice.\n- Drivers and firmware through chwd and fwupd.",
     published: NOW - 1 * DAY,
-    url: "https://github.com/spillebulle/brokey/releases/tag/v0.2.0",
+    url: "https://github.com/Spillebulle/Brokey/releases/tag/v0.2.0",
+    newer: true,
   },
-  installation: { kind: "aur", label: "Installed from the AUR as brokey-bin" },
+  installation: { kind: "pacman", package: "brokey" },
+  installation_label: "the brokey package from the AUR",
   remedy: {
     kind: "updates_page",
-    sentence: "Brokey 0.2.0 is in the Updates page as brokey-bin. Tick it there and it updates with everything else.",
-    package: "brokey-bin",
+    source: "aur",
+    package: "brokey",
+    sentence: "Brokey 0.2.0 is published. This copy updates through the AUR package brokey, which appears in Updates once the AUR has it.",
   },
+  error: null,
 };
 
 const SELF_ASSET = "brokey-bin-0.2.0-1-x86_64.pkg.tar.zst";
@@ -1463,12 +1467,14 @@ function selfUpdate(): SelfUpdate {
     case "asset":
       return {
         ...SELF_UPDATE,
-        installation: { kind: "pacman_file", label: "Installed from the release package with pacman -U" },
+        installation: { kind: "pacman", package: "brokey-bin" },
+        installation_label: "the brokey-bin package",
         remedy: {
           kind: "install_asset",
-          sentence: `This copy was installed from the release package. Brokey downloads ${SELF_ASSET} and installs it with pacman, asking for your password once.`,
           asset: SELF_ASSET,
-          url: `https://github.com/spillebulle/brokey/releases/download/v0.2.0/${SELF_ASSET}`,
+          url: `https://github.com/Spillebulle/Brokey/releases/download/v0.2.0/${SELF_ASSET}`,
+          installer: "pacmanu",
+          sentence: `Brokey 0.2.0 is not in a repository this machine uses. Brokey will download ${SELF_ASSET} and install it with pacman.`,
         },
       };
     case "none":

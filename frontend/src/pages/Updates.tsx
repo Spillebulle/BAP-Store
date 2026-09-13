@@ -6,6 +6,7 @@
 import { ArrowRight, ArrowUpDown, CircleCheck, ExternalLink, Layers, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { startOps } from "../activity/flow";
+import { markSelfUpdate } from "../activity/launch";
 import { useActivity } from "../activity/store";
 import * as api from "../api";
 import { AppIcon, Button, Bytes, Checkbox, Count, Dropdown, EmptyState, Figure, ICON, ICON_EMPTY, MultiSelect, Notice, SearchField, Skeleton, SourceBadge, When, toast } from "../components";
@@ -102,7 +103,7 @@ function SelfUpdateNotice({ self, hasSelfRow }: { self: SelfUpdate; hasSelfRow: 
   const remedy = self.remedy;
 
   let sentence: string;
-  if (!remedy) sentence = `${self.installation.label}.`;
+  if (!remedy) sentence = `This copy is ${self.installation_label}.`;
   else if (remedy.kind === "updates_page") sentence = hasSelfRow ? `It is in this list as ${remedy.package}. Tick it and it updates with the rest.` : remedy.sentence;
   else sentence = remedy.sentence;
 
@@ -111,6 +112,7 @@ function SelfUpdateNotice({ self, hasSelfRow }: { self: SelfUpdate; hasSelfRow: 
     setBusy(true);
     try {
       const status = await api.self_update_apply();
+      markSelfUpdate(status.plan.id);
       useActivity.getState().track(status);
     } catch (e) {
       toast(message(e), "error");

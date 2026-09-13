@@ -66,9 +66,11 @@ function message(e: unknown): string {
 
 /** One sentence for the toast after a check (§12: say what happened). */
 function checkSentence(result: SelfUpdate): string {
-  if (result.latest && result.latest.version !== result.current) {
+  if (result.error) return result.error;
+  if (result.latest?.newer) {
     return result.remedy?.sentence ?? `Brokey ${result.latest.version} is available. This copy is ${result.current}.`;
   }
+  if (!result.latest) return "No release of Brokey has been published yet.";
   return `Brokey ${result.current} is the newest version.`;
 }
 
@@ -172,7 +174,8 @@ export function SettingsPage() {
       const result = await api.self_update_check(true);
       setSelf(result);
       setSelfError(null);
-      toast(checkSentence(result), "good");
+      // A check GitHub did not answer is a failure, whatever else the answer holds.
+      toast(checkSentence(result), result.error ? "error" : "good");
     } catch (e) {
       setSelfError(message(e));
       toast(message(e), "error");
@@ -348,12 +351,16 @@ export function SettingsPage() {
               }
               note={
                 self ? (
-                  self.latest && self.latest.version !== self.current ? (
+                  self.error ? (
+                    self.error
+                  ) : self.latest?.newer ? (
                     <>
                       <Figure>{self.latest.version}</Figure> is available. {self.remedy?.sentence ?? ""}
                     </>
-                  ) : (
+                  ) : self.latest ? (
                     "This is the newest version."
+                  ) : (
+                    "No release has been published yet."
                   )
                 ) : selfError ? (
                   selfError
@@ -374,7 +381,7 @@ export function SettingsPage() {
               }
             />
             {self ? (
-              <Setting label={`${self.installation.label}.`} />
+              <Setting label={`Installed as ${self.installation_label}.`} />
             ) : selfError ? (
               <Setting label="How this copy was installed is not known until the check answers." />
             ) : (

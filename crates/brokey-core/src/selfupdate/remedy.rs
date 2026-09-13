@@ -164,9 +164,11 @@ pub enum Installer {
     FlatpakBundle,
 }
 
-/// What to do, and the one sentence that says so.
+/// What to do, and the one sentence that says so. The kind is written in
+/// snake case (`install_asset`), the spelling the page uses for every tag;
+/// `crates/brokey/tests/contract.rs` holds the two sides to it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Remedy {
     /// This copy updates through its package manager, so the release is a
     /// row on the Updates page once that manager has it.
@@ -481,7 +483,7 @@ mod tests {
             sentence: "S.".into(),
         };
         let json = serde_json::to_value(&r).expect("serialises");
-        assert_eq!(json["kind"], "installasset");
+        assert_eq!(json["kind"], "install_asset");
         assert_eq!(json["installer"], "pacmanu");
         assert_eq!(json["sentence"], "S.");
         let s = Remedy::Sentence {

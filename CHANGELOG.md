@@ -2,6 +2,12 @@
 
 Newest first. Each section is the release's notes, published verbatim.
 
+## 0.1.2
+
+- The Update Brokey button appears in the notice for a new version. In 0.1.0 and 0.1.1 the notice said what would happen but had nothing to click, so install 0.1.2 by hand once; updates work from the notice after that.
+- Settings says how this copy was installed, and says so when GitHub could not be asked instead of claiming Brokey is up to date.
+- After Brokey updates itself, a notice says to restart it.
+
 ## 0.1.1
 
 - Installed applications are recognised as applications on every Arch machine, from the desktop entry their package installs, with the name, icon and categories their launcher shows. Before, only a machine with the AppStream catalogue installed saw them, and AUR applications never counted.

@@ -146,6 +146,11 @@ These were decided before the first line and are not re-litigated in a fix:
 - **The self-updater never prints a command that cannot work.** Every
   remedy is chosen by `selfupdate::install::detect`, a pure function of a
   probe, and `selfupdate/tests` assert the forbidden sentences never appear.
+- **The page's types are the contract.** Every value the Rust side sends is
+  checked against `frontend/src/types.ts` by `crates/brokey/tests/contract.rs`:
+  keys, nested types, tags and enum words. A new field or command result gets
+  a sample there. 0.1.0 shipped a self-update button that never appeared
+  because the two sides spelt a tag differently and each tested its own.
 - **CHANGELOG.md is the release notes.** `crates/brokey/tests/release.rs`
   fails if the section for the current version is missing or is not newest.
 - **`frontend/src/tokens.css` is not edited here.** It is a copy; a change

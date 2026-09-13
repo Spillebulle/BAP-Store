@@ -87,6 +87,14 @@ export const useLaunch = create<LaunchState>((set, get) => ({
   },
 }));
 
+/** Plans that update Brokey itself, which end with a restart rather than an Open. */
+const selfUpdatePlans = new Set<string>();
+
+/** Remember that a plan updates Brokey, so its end says to restart. */
+export function markSelfUpdate(id: string): void {
+  selfUpdatePlans.add(id);
+}
+
 /** What Open would open for this package: a string, null for nothing, undefined while it is being asked. */
 export function useLaunchTarget(ref: PackageRef | null | undefined): string | null | undefined {
   const refKey = ref ? key(ref) : null;
@@ -130,6 +138,11 @@ export async function openPackage(ref: PackageRef, name: string): Promise<void> 
 export async function afterPlan(status: PlanStatus, nameOf: (ref: PackageRef) => Promise<string>): Promise<void> {
   const launch = useLaunch.getState();
   launch.forget();
+  if (selfUpdatePlans.has(status.plan.id)) {
+    selfUpdatePlans.delete(status.plan.id);
+    toast("Brokey is updated. Restart it to use the new version.", "good", undefined, true);
+    return;
+  }
   const installed = status.plan.ops.flatMap((op) => (op.op === "install" ? [op.package] : []));
   const touched = new Set<SourceKind>(
     status.plan.ops.flatMap((op) => (op.op === "setup" ? [op.source] : op.op === "install" ? [op.package.source] : [])),

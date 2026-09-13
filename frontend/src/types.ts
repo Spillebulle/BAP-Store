@@ -270,6 +270,8 @@ export interface DriversReport {
 //    and the shapes crates/brokey/src/commands.rs returns) ─────────────────
 
 export interface Query {
+  /** Editions split out of their rows (`source:id`); the application fills it from settings when absent. */
+  split?: string[];
   text: string;
   /** null means every available source. */
   sources: SourceKind[] | null;
@@ -335,32 +337,49 @@ export interface Settings {
 
 export interface SelfUpdateRelease {
   version: string;
+  /** Markdown, from the release body. */
   notes: string;
   /** Unix seconds. */
-  published: number;
+  published: number | null;
   url: string;
-}
-
-export interface SelfUpdateInstallation {
-  /** "aur", "archive_deb", "archive_rpm", "deb", "rpm", "pacman_file", "appimage", "portable", "unknown". */
-  kind: string;
-  /** One line for the page: "Installed from the AUR as brokey-bin". */
-  label: string;
+  /** Newer than this copy; `remedy` is set exactly when it is. */
+  newer: boolean;
 }
 
 /**
+ * How this copy was installed (`#[serde(tag = "kind", rename_all = "lowercase")]`):
+ * flatpak, appimage (with its path), pacman (with the package, brokey or
+ * brokey-bin), dpkg and rpm (with whether the Spillebulle archive is set up),
+ * portable, unknown. `SelfUpdate.installation_label` is the sentence to draw.
+ */
+export interface SelfUpdateInstallation {
+  kind: "flatpak" | "appimage" | "pacman" | "dpkg" | "rpm" | "portable" | "unknown";
+  path?: string;
+  package?: string;
+  archive?: boolean;
+}
+
+export type SelfUpdateInstaller = "pacmanu" | "dpkgi" | "rpmu" | "flatpakbundle";
+
+/**
  * The one true thing to say about getting the new version (§18.3): never a
- * command that cannot work on this machine.
+ * command that cannot work on this machine. Only install_asset and
+ * replace_file are something Brokey runs (`self_update_apply`).
  */
 export type SelfUpdateRemedy =
-  | { kind: "updates_page"; sentence: string; package: string }
-  | { kind: "install_asset"; sentence: string; asset: string; url: string }
-  | { kind: "replace_file"; sentence: string; path: string; url: string }
+  | { kind: "updates_page"; source: SourceKind; package: string; sentence: string }
+  | { kind: "install_asset"; asset: string; url: string; installer: SelfUpdateInstaller; sentence: string }
+  | { kind: "replace_file"; path: string; asset: string; url: string; sentence: string }
   | { kind: "sentence"; sentence: string };
 
 export interface SelfUpdate {
   current: string;
+  /** Null when GitHub has no release yet, or could not be asked (then `error` says why). */
   latest: SelfUpdateRelease | null;
   installation: SelfUpdateInstallation;
+  /** "a pacman package installed from a file", for Settings. */
+  installation_label: string;
   remedy: SelfUpdateRemedy | null;
+  /** Why GitHub could not be asked, in a sentence. */
+  error: string | null;
 }

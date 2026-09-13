@@ -20,16 +20,16 @@
 
 ## Install
 
-**Brokey 0.1.1.** Take the file for your system, or browse the
+**Brokey 0.1.2.** Take the file for your system, or browse the
 [release itself](https://github.com/Spillebulle/Brokey/releases/latest) for the
 notes and the checksums.
 
 | Your system | x86-64 | ARM64 |
 |---|---|---|
-| Arch, CachyOS, EndeavourOS, Manjaro | [`.pkg.tar.zst`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-bin-0.1.1-1-x86_64.pkg.tar.zst) | not built |
-| Debian, Ubuntu, Mint, Pop!_OS | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey_0.1.1_amd64.deb) | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey_0.1.1_arm64.deb) |
-| Fedora, RHEL, openSUSE | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-0.1.1-1.x86_64.rpm) | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-0.1.1-1.aarch64.rpm) |
-| Any other Linux | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/Brokey-0.1.1-x86_64.AppImage), one file with nothing to install | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/Brokey-0.1.1-aarch64.AppImage) |
+| Arch, CachyOS, EndeavourOS, Manjaro | [`.pkg.tar.zst`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/brokey-bin-0.1.2-1-x86_64.pkg.tar.zst) | not built |
+| Debian, Ubuntu, Mint, Pop!_OS | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/brokey_0.1.2_amd64.deb) | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/brokey_0.1.2_arm64.deb) |
+| Fedora, RHEL, openSUSE | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/brokey-0.1.2-1.x86_64.rpm) | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/brokey-0.1.2-1.aarch64.rpm) |
+| Any other Linux | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/Brokey-0.1.2-x86_64.AppImage), one file with nothing to install | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.2/Brokey-0.1.2-aarch64.AppImage) |
 
 The `.deb` and `.rpm` add the [Spillebulle archive](https://spillebulle.github.io/packages/)
 as they install, so `apt upgrade` or your usual system update carries Brokey
