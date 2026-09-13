@@ -20,16 +20,16 @@
 
 ## Install
 
-**Brokey 0.1.0.** Take the file for your system, or browse the
+**Brokey 0.1.1.** Take the file for your system, or browse the
 [release itself](https://github.com/Spillebulle/Brokey/releases/latest) for the
 notes and the checksums.
 
 | Your system | x86-64 | ARM64 |
 |---|---|---|
-| Arch, CachyOS, EndeavourOS, Manjaro | [`.pkg.tar.zst`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/brokey-bin-0.1.0-1-x86_64.pkg.tar.zst) | not built |
-| Debian, Ubuntu, Mint, Pop!_OS | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/brokey_0.1.0_amd64.deb) | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/brokey_0.1.0_arm64.deb) |
-| Fedora, RHEL, openSUSE | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/brokey-0.1.0-1.x86_64.rpm) | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/brokey-0.1.0-1.aarch64.rpm) |
-| Any other Linux | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/Brokey-0.1.0-x86_64.AppImage), one file with nothing to install | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.0/Brokey-0.1.0-aarch64.AppImage) |
+| Arch, CachyOS, EndeavourOS, Manjaro | [`.pkg.tar.zst`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-bin-0.1.1-1-x86_64.pkg.tar.zst) | not built |
+| Debian, Ubuntu, Mint, Pop!_OS | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey_0.1.1_amd64.deb) | [`.deb`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey_0.1.1_arm64.deb) |
+| Fedora, RHEL, openSUSE | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-0.1.1-1.x86_64.rpm) | [`.rpm`](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/brokey-0.1.1-1.aarch64.rpm) |
+| Any other Linux | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/Brokey-0.1.1-x86_64.AppImage), one file with nothing to install | [AppImage](https://github.com/Spillebulle/Brokey/releases/download/v0.1.1/Brokey-0.1.1-aarch64.AppImage) |
 
 The `.deb` and `.rpm` add the [Spillebulle archive](https://spillebulle.github.io/packages/)
 as they install, so `apt upgrade` or your usual system update carries Brokey
@@ -99,6 +99,7 @@ guessing.
 - apt and dnf are written to the same interface as pacman but have not run on a real Debian or Fedora. They are marked untested in the sources list until they have.
 - Drivers are managed only through chwd (CachyOS). Elsewhere they install as ordinary packages.
 - No reviews or ratings.
+- An application installed by hand, such as a browser unpacked into your home folder, is not listed: no package manager has a record of it.
 - AppImages from GitHub releases are placed in `~/.local/bin` without a menu entry yet.
 - A Flatpak of Brokey itself is not published: a sandboxed store cannot reach the helper.
 

@@ -170,6 +170,135 @@ pub fn listable_text(text: &str) -> bool {
     kind.as_deref() == Some("Application")
 }
 
+/// What a desktop entry says about the application it starts: the parts a
+/// store row needs when no AppStream catalogue describes the package.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntryInfo {
+    pub path: PathBuf,
+    pub name: Option<String>,
+    pub comment: Option<String>,
+    /// The icon file the entry's `Icon=` resolves to, when one is found.
+    pub icon: Option<PathBuf>,
+    pub categories: Vec<String>,
+}
+
+/// The `[Desktop Entry]` group's untranslated `Name`, `Comment`, `Icon` and
+/// `Categories`. Localised keys (`Name[de]`) are skipped: the rest of the
+/// store is in one language too.
+pub fn read_entry(path: &Path, icon_roots: &[PathBuf]) -> Option<EntryInfo> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut info = EntryInfo {
+        path: path.to_path_buf(),
+        name: None,
+        comment: None,
+        icon: None,
+        categories: Vec::new(),
+    };
+    let mut in_main = false;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_main = line == "[Desktop Entry]";
+            continue;
+        }
+        if !in_main {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        match key.trim() {
+            "Name" => info.name = Some(value.to_string()),
+            "Comment" => info.comment = Some(value.to_string()),
+            "Icon" => info.icon = resolve_icon(value, icon_roots),
+            "Categories" => {
+                info.categories = value
+                    .split(';')
+                    .filter(|c| !c.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            }
+            _ => {}
+        }
+    }
+    Some(info)
+}
+
+/// The best listable desktop entry among a package's files, read.
+pub fn app_entry<'a>(
+    files: impl IntoIterator<Item = &'a str>,
+    root: &Path,
+    preferred: &[&str],
+    icon_roots: &[PathBuf],
+) -> Option<EntryInfo> {
+    choose_entry(entries_in(files, root), preferred).and_then(|p| read_entry(&p, icon_roots))
+}
+
+/// Where icon themes live on this machine, `hicolor` first because every
+/// application installs its icon there, then the other themes in name order.
+pub fn icon_roots() -> Vec<PathBuf> {
+    icon_roots_under(Path::new("/usr/share/icons"))
+}
+
+pub fn icon_roots_under(icons: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![icons.join("hicolor")];
+    let mut others: Vec<PathBuf> = std::fs::read_dir(icons)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_dir() && p.file_name().is_some_and(|n| n != "hicolor"))
+                .collect()
+        })
+        .unwrap_or_default();
+    others.sort();
+    roots.extend(others);
+    roots
+}
+
+/// The file an `Icon=` value names. An absolute path is taken as it is. A
+/// name is looked up in each theme under the application sizes, largest
+/// first (a store draws icons at 32 to 96 px), in both layouts themes use
+/// (`48x48/apps` and `apps/48`), then in `/usr/share/pixmaps`. Only PNG and
+/// SVG, which the page can draw.
+pub fn resolve_icon(icon: &str, roots: &[PathBuf]) -> Option<PathBuf> {
+    let icon = icon.trim();
+    if icon.starts_with('/') {
+        let path = PathBuf::from(icon);
+        return path.is_file().then_some(path);
+    }
+    if icon.is_empty() || icon.contains('/') {
+        return None;
+    }
+    const SIZES: [&str; 9] = [
+        "512", "256", "192", "128", "96", "64", "48", "scalable", "32",
+    ];
+    const EXTS: [&str; 2] = ["png", "svg"];
+    for root in roots {
+        for size in SIZES {
+            let dir_a = if size == "scalable" {
+                root.join("scalable/apps")
+            } else {
+                root.join(format!("{size}x{size}/apps"))
+            };
+            let dir_b = root.join("apps").join(size);
+            for dir in [dir_a, dir_b] {
+                for ext in EXTS {
+                    let p = dir.join(format!("{icon}.{ext}"));
+                    if p.is_file() {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+    }
+    EXTS.iter()
+        .map(|ext| PathBuf::from(format!("/usr/share/pixmaps/{icon}.{ext}")))
+        .find(|p| p.is_file())
+}
+
 /// The directories the session reads desktop entries from: each entry of
 /// `XDG_DATA_DIRS` with `applications` appended, and the user's own data
 /// directory. An unset or empty variable means the specification's default,
@@ -389,5 +518,41 @@ mod tests {
         let run = Launch::Command(command("flatpak", &["run", "com.notepadqq.Notepadqq"]));
         assert_eq!(run.describe(), "flatpak run com.notepadqq.Notepadqq");
         assert!(!run.returns_at_once());
+    }
+    #[test]
+    fn an_entry_gives_its_name_comment_categories_and_icon() {
+        let dir = tempfile::tempdir().unwrap();
+        let icons = dir.path().join("icons");
+        write(&icons.join("hicolor/256x256/apps/steam.png"), "png");
+        write(&icons.join("hicolor/48x48/apps/steam.png"), "png");
+        write(&icons.join("Adwaita/scalable/apps/btop.svg"), "svg");
+        write(&icons.join("breeze/apps/48/kate.svg"), "svg");
+        let roots = icon_roots_under(&icons);
+        assert_eq!(roots[0], icons.join("hicolor"), "hicolor first");
+        let entry = dir.path().join("steam.desktop");
+        write(
+            &entry,
+            "[Desktop Entry]\nType=Application\nName=Steam\nName[de]=Dampf\nComment=Play games\nIcon=steam\nCategories=Network;Game;\n\n[Desktop Action x]\nName=Not this\n",
+        );
+        let info = read_entry(&entry, &roots).unwrap();
+        assert_eq!(info.name.as_deref(), Some("Steam"));
+        assert_eq!(info.comment.as_deref(), Some("Play games"));
+        assert_eq!(info.categories, ["Network", "Game"]);
+        assert_eq!(
+            info.icon,
+            Some(icons.join("hicolor/256x256/apps/steam.png")),
+            "the largest size"
+        );
+        assert_eq!(
+            resolve_icon("btop", &roots),
+            Some(icons.join("Adwaita/scalable/apps/btop.svg"))
+        );
+        assert_eq!(
+            resolve_icon("kate", &roots),
+            Some(icons.join("breeze/apps/48/kate.svg")),
+            "the other layout"
+        );
+        assert_eq!(resolve_icon("nothing-like-this", &roots), None);
+        assert_eq!(resolve_icon("../etc/passwd", &roots), None);
     }
 }

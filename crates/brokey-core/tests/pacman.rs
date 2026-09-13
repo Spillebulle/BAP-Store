@@ -899,3 +899,63 @@ fn live_load_is_fast() {
     let _ = p.installed().unwrap();
     println!("a warm call took {:?}", warm.elapsed());
 }
+
+#[test]
+fn an_installed_package_with_a_listed_desktop_entry_is_an_application_without_a_catalogue() {
+    let m = machine();
+    let files_root = m.root.join("files-root");
+    let write = |path: PathBuf, text: &str| {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    };
+    // brokey ships an entry and an icon; linux-cachyos ships only a hidden entry; bash ships none.
+    write(
+        m.root.join("local/brokey-0.1.0-1/files"),
+        "%FILES%\nusr/\nusr/bin/brokey\nusr/share/applications/io.github.spillebulle.brokey.desktop\n",
+    );
+    write(
+        files_root.join("usr/share/applications/io.github.spillebulle.brokey.desktop"),
+        "[Desktop Entry]\nType=Application\nName=Brokey\nComment=Find and install software\nIcon=io.github.spillebulle.brokey\nCategories=System;PackageManager;\n",
+    );
+    write(
+        files_root.join("usr/share/icons/hicolor/256x256/apps/io.github.spillebulle.brokey.png"),
+        "png",
+    );
+    write(
+        m.root.join("local/linux-cachyos-6.16.5-1/files"),
+        "%FILES%\nusr/share/applications/kernel-settings.desktop\n",
+    );
+    write(
+        files_root.join("usr/share/applications/kernel-settings.desktop"),
+        "[Desktop Entry]\nType=Application\nName=Kernel\nNoDisplay=true\n",
+    );
+
+    let p = Pacman::with_paths(
+        m.paths.clone(),
+        Arc::new(Catalogue::from_components(Vec::new())),
+    )
+    .with_root(files_root.clone());
+    let installed = p.installed().unwrap();
+    let by_id = |id: &str| installed.iter().find(|p| p.id == id).unwrap();
+
+    let brokey = by_id("brokey");
+    assert_eq!(brokey.kind, PackageKind::App);
+    assert_eq!(brokey.name, "Brokey", "the launcher's name");
+    assert_eq!(
+        brokey.icon,
+        Some(Picture::File(files_root.join(
+            "usr/share/icons/hicolor/256x256/apps/io.github.spillebulle.brokey.png"
+        )))
+    );
+    assert_eq!(brokey.categories, ["System", "PackageManager"]);
+    assert_ne!(
+        by_id("linux-cachyos").kind,
+        PackageKind::App,
+        "a hidden entry is not an application"
+    );
+    assert_ne!(
+        by_id("bash").kind,
+        PackageKind::App,
+        "no entry, no application"
+    );
+}

@@ -476,6 +476,30 @@ impl Aur {
             if pkg.installed_size.is_none() {
                 pkg.installed_size = d.u64("SIZE");
             }
+            self.lend_entry(pkg);
+        }
+    }
+
+    /// An installed AUR package that ships a desktop entry a launcher lists
+    /// is an application, whatever the catalogue knows: no catalogue
+    /// describes the AUR. The entry lends it a name, an icon and categories,
+    /// the way `pacman::apply_entry` does for repository packages.
+    fn lend_entry(&self, pkg: &mut Package) {
+        if pkg.kind == PackageKind::App && pkg.icon.is_some() {
+            return;
+        }
+        let Some(files) = super::alpmdb::local_files(&self.paths.local_db, &pkg.id) else {
+            return;
+        };
+        let base = base_name(&pkg.id).to_string();
+        let roots = crate::launch::icon_roots();
+        if let Some(entry) = crate::launch::app_entry(
+            files.iter().map(String::as_str),
+            std::path::Path::new("/"),
+            &[&pkg.id, &base],
+            &roots,
+        ) {
+            super::pacman::apply_entry(pkg, entry);
         }
     }
 
@@ -580,10 +604,12 @@ impl Aur {
                     p.installed = true;
                     p.installed_version = Some(desc.version().to_string());
                     p.installed_size = desc.u64("SIZE");
+                    self.lend_entry(&mut p);
                     p
                 }
                 None => {
                     let mut p = self.local_package(desc);
+                    self.lend_entry(&mut p);
                     if info.is_some() {
                         p.repo = Some("local".to_string());
                         p.facts.push((

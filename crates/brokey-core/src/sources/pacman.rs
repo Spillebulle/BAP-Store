@@ -366,6 +366,13 @@ pub struct Pacman {
     paths: Paths,
     catalogue: Arc<Catalogue>,
     dbs: Mutex<Option<Arc<Loaded>>>,
+    /// Where installed files are, `/` on a real machine; a fixture tree in
+    /// tests, so a test does not read this machine's desktop entries.
+    root: PathBuf,
+    /// Desktop entries read for installed packages, by `name version`: a
+    /// package's files only change when its version does.
+    entries: Mutex<HashMap<String, Option<crate::launch::EntryInfo>>>,
+    icon_roots: std::sync::OnceLock<Vec<PathBuf>>,
 }
 
 impl Pacman {
@@ -378,7 +385,43 @@ impl Pacman {
             paths,
             catalogue,
             dbs: Mutex::new(None),
+            root: PathBuf::from("/"),
+            entries: Mutex::new(HashMap::new()),
+            icon_roots: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Read installed files, and icon themes, under `root` instead of `/`.
+    pub fn with_root(mut self, root: PathBuf) -> Pacman {
+        let icons = root.join("usr/share/icons");
+        let _ = self.icon_roots.set(crate::launch::icon_roots_under(&icons));
+        self.root = root;
+        self
+    }
+
+    /// The desktop entry an installed package ships, when it ships one a
+    /// launcher lists. This is how an installed package is known to be an
+    /// application on a machine with no AppStream catalogue, and the only
+    /// way at all for a package no catalogue describes.
+    fn installed_entry(&self, name: &str, version: &str) -> Option<crate::launch::EntryInfo> {
+        let key = format!("{name} {version}");
+        if let Some(known) = self
+            .entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+        {
+            return known.clone();
+        }
+        let found = super::alpmdb::local_files(&self.paths.local_dir, name).and_then(|files| {
+            let roots = self.icon_roots.get_or_init(crate::launch::icon_roots);
+            crate::launch::app_entry(files.iter().map(String::as_str), &self.root, &[name], roots)
+        });
+        self.entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, found.clone());
+        found
     }
 
     pub fn paths(&self) -> &Paths {
@@ -716,6 +759,10 @@ impl Pacman {
         let component = self.component_for(name);
         let mut p = Package::new(SourceKind::Pacman, name, display_name(name, component));
         p.kind = kind_of(name, component);
+        let entry = match (component, local) {
+            (None, Some(l)) => self.installed_entry(name, l.version()),
+            _ => None,
+        };
         p.summary = component
             .and_then(|c| c.summary.clone())
             .or_else(|| desc.first("DESC").map(str::to_string));
@@ -737,12 +784,19 @@ impl Pacman {
             p.appstream_id = Some(c.id.clone());
         }
         p.facts = facts(desc, local, full);
+        if let Some(e) = entry {
+            apply_entry(&mut p, e);
+        }
         Some(p)
     }
 
     fn update(&self, name: &str, desc: &Desc, local: &Desc) -> Update {
         let component = self.component_for(name);
-        Update {
+        let entry = component
+            .is_none()
+            .then(|| self.installed_entry(name, local.version()))
+            .flatten();
+        let mut update = Update {
             package: PackageRef {
                 source: SourceKind::Pacman,
                 id: name.to_string(),
@@ -758,7 +812,17 @@ impl Pacman {
             download_size: desc.u64("CSIZE"),
             published: desc.i64("BUILDDATE"),
             is_self: name == "brokey" || name == "brokey-bin",
+        };
+        if let Some(e) = entry {
+            update.kind = PackageKind::App;
+            if let Some(n) = e.name {
+                update.name = n;
+            }
+            if update.icon.is_none() {
+                update.icon = e.icon.map(Picture::File);
+            }
         }
+        update
     }
 
     /// The name a plan step may carry: ours, and shaped like a package name,
@@ -1115,6 +1179,26 @@ fn word_contains(text_l: &str, term: &str) -> bool {
     text_l
         .split(|c: char| !c.is_alphanumeric())
         .any(|w| !w.is_empty() && w.contains(term))
+}
+
+/// What a desktop entry lends a package no catalogue describes: it is an
+/// application, called what its launcher calls it, with that icon and those
+/// categories. The package's own description stays the summary where it has
+/// one; the entry's comment fills in where it does not.
+pub fn apply_entry(p: &mut Package, entry: crate::launch::EntryInfo) {
+    p.kind = PackageKind::App;
+    if let Some(name) = entry.name.filter(|n| !n.trim().is_empty()) {
+        p.name = name;
+    }
+    if p.summary.as_deref().is_none_or(|s| s.trim().is_empty()) {
+        p.summary = entry.comment;
+    }
+    if p.icon.is_none() {
+        p.icon = entry.icon.map(Picture::File);
+    }
+    if p.categories.is_empty() {
+        p.categories = entry.categories;
+    }
 }
 
 fn display_name(name: &str, component: Option<&Component>) -> String {

@@ -11,7 +11,9 @@ pkgdesc="One store for every way a Linux machine gets software"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Spillebulle/Brokey"
 license=('GPL-3.0-or-later')
-depends=('webkit2gtk-4.1' 'gtk3' 'polkit' 'curl' 'hicolor-icon-theme')
+# archlinux-appstream-data: names, icons, descriptions and screenshots for
+# repository packages; without it only installed applications are recognised.
+depends=('webkit2gtk-4.1' 'gtk3' 'polkit' 'curl' 'hicolor-icon-theme' 'archlinux-appstream-data')
 makedepends=('cargo' 'nodejs' 'npm' 'pkgconf')
 optdepends=('paru: build AUR packages with paru'
             'yay: build AUR packages with yay'

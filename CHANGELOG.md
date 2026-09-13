@@ -2,6 +2,11 @@
 
 Newest first. Each section is the release's notes, published verbatim.
 
+## 0.1.1
+
+- Installed applications are recognised as applications on every Arch machine, from the desktop entry their package installs, with the name, icon and categories their launcher shows. Before, only a machine with the AppStream catalogue installed saw them, and AUR applications never counted.
+- The Arch packages now depend on archlinux-appstream-data, so names, icons, descriptions and screenshots appear for repository packages you have not installed yet. The .deb and .rpm recommend the same catalogue.
+
 ## 0.1.0
 
 - Search across pacman, the AUR, Flatpak and Snap from one box, with the same application from several sources shown as one row.

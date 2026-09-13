@@ -51,6 +51,9 @@ done
 # polkit's. Debian's package names for the same libraries differ between
 # releases only in the appindicator line, hence the alternative.
 DEB_DEPENDS="libc6, libgcc-s1, libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1 | libappindicator3-1, polkitd | policykit-1, pkexec | policykit-1, curl"
+# appstream downloads the distribution's catalogue (names, icons, screenshots)
+# with every apt update; recommended rather than required, as Debian does.
+DEB_RECOMMENDS="appstream"
 
 # RPM requirements are sonames so that Fedora, RHEL and openSUSE, which name
 # the same packages differently, all resolve them.
@@ -113,6 +116,7 @@ Section: admin
 Priority: optional
 Architecture: $arch
 Depends: $DEB_DEPENDS
+Recommends: $DEB_RECOMMENDS
 Installed-Size: $size
 Maintainer: Spillebulle <spillebulle@gmail.com>
 Homepage: https://github.com/Spillebulle/Brokey
@@ -177,6 +181,9 @@ fi
     echo "BuildArch:      $rpm_arch"
     for so in $RPM_SONAMES; do echo "Requires:       ${so}()(64bit)"; done
     echo "Requires:       polkit"
+    # The catalogue of names, icons and screenshots; weak, as its package name
+    # differs between Fedora (appstream-data) and openSUSE.
+    echo "Recommends:     appstream-data"
     echo "Requires:       curl"
     echo "%global debug_package %{nil}"
     echo
