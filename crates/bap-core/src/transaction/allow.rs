@@ -80,10 +80,40 @@ pub fn env_value_ok(key: &str, value: &str) -> bool {
 }
 
 /// Every program the helper will start. A step naming anything else is
-/// refused, whatever its arguments.
-pub const ALLOWED_PROGRAMS: [&str; 8] = [
-    "pacman", "apt-get", "dnf", "snap", "flatpak", "chwd", "rpm", "dpkg",
+/// refused, whatever its arguments. `systemctl` and `ln` are here for one
+/// command each, the two that setting snapd up needs; see `systemctl` and
+/// `ln` below.
+pub const ALLOWED_PROGRAMS: [&str; 10] = [
+    "pacman",
+    "apt-get",
+    "dnf",
+    "snap",
+    "flatpak",
+    "chwd",
+    "rpm",
+    "dpkg",
+    "systemctl",
+    "ln",
 ];
+
+/// The one remote the helper will add, by name and by the address of its
+/// `.flatpakrepo` file: Flathub, from either of its hosts. Setting Flatpak
+/// up adds it; nothing else is ever added as root.
+pub const FLATHUB_REMOTES: [(&str, &str); 2] = [
+    ("flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"),
+    ("flathub", "https://flathub.org/repo/flathub.flatpakrepo"),
+];
+
+/// The one unit the helper will enable: snapd's socket, which starts snapd
+/// on the first request.
+pub const SNAPD_SOCKET_UNIT: &str = "snapd.socket";
+
+/// Where snapd mounts snaps on a distribution that does not use `/snap`
+/// (Arch, Fedora), and the link classic snaps need. Classic confinement is
+/// built with `/snap` as the mount point, so without the link a classic
+/// snap refuses to install; `snap` itself says to create it.
+pub const SNAP_MOUNT_DIR: &str = "/var/lib/snapd/snap";
+pub const SNAP_LINK: &str = "/snap";
 
 /// Check a plan against the closed list with the system package caches only.
 /// `Ok(())` means every step may run; `Err` carries the sentence the helper
@@ -164,6 +194,8 @@ fn check_command(command: &Command, allowed: &Allowed) -> Result<(), String> {
         "chwd" => chwd(&args),
         "rpm" => one_file("rpm", "-U", ".rpm", &args, allowed),
         "dpkg" => one_file("dpkg", "-i", ".deb", &args, allowed),
+        "systemctl" => systemctl(&args),
+        "ln" => ln(&args),
         _ => Err(format!(
             "Only {} may be run by the helper, by name and not by path.",
             list(&ALLOWED_PROGRAMS)
@@ -268,9 +300,21 @@ fn dnf(args: &[&str], allowed: &Allowed) -> Result<(), String> {
     }
 }
 
+/// `snap wait system seed.loaded`, exactly: a freshly started snapd seeds
+/// itself before it accepts an install ("too early for operation, device
+/// not yet seeded"), so setting snapd up waits for that in the same plan.
+pub const SNAP_WAIT_SEEDED: [&str; 3] = ["wait", "system", "seed.loaded"];
+
 fn snap(args: &[&str]) -> Result<(), String> {
     const VERBS: [&str; 3] = ["install", "remove", "refresh"];
     const OPTIONS: [&str; 1] = ["--classic"];
+    if args.first() == Some(&"wait") {
+        return if args == SNAP_WAIT_SEEDED {
+            Ok(())
+        } else {
+            Err("snap may only wait for system seed.loaded.".to_string())
+        };
+    }
     let (verb, _, positionals) = verb_options_positionals("snap", args, &VERBS, &OPTIONS)?;
     if positionals.is_empty() && verb != "refresh" {
         return Err(format!("snap {verb} needs at least one snap name."));
@@ -284,6 +328,9 @@ fn snap(args: &[&str]) -> Result<(), String> {
 fn flatpak(args: &[&str]) -> Result<(), String> {
     const VERBS: [&str; 3] = ["install", "uninstall", "update"];
     const OPTIONS: [&str; 3] = ["-y", "--noninteractive", "--system"];
+    if args.contains(&"remote-add") {
+        return flatpak_remote_add(args);
+    }
     let (verb, _, positionals) = verb_options_positionals("flatpak", args, &VERBS, &OPTIONS)?;
     if positionals.is_empty() && verb != "update" {
         return Err(format!("flatpak {verb} needs at least one ref."));
@@ -309,6 +356,52 @@ fn flatpak_positional_is_a_path(value: &str) -> bool {
         || value
             .split('/')
             .any(|part| part.ends_with(".flatpak") || part.ends_with(".flatpakref"))
+}
+
+/// The sentence for a `flatpak remote-add` that is not the one form allowed.
+pub const FLATPAK_REMOTE_ADD_ONLY_FLATHUB: &str = "The helper adds one Flatpak remote only: Flathub, as flatpak remote-add --if-not-exists --system flathub with Flathub's own .flatpakrepo address.";
+
+/// `flatpak remote-add --if-not-exists --system flathub <url>` with `url`
+/// one of [`FLATHUB_REMOTES`], exactly in that order, and nothing else: not
+/// another name, not another address, not without `--if-not-exists` (which
+/// would fail on a machine that has it), not with any further option. A
+/// `.flatpakrepo` file can point anywhere and carry a GPG key, so the
+/// address is matched whole rather than by host.
+fn flatpak_remote_add(args: &[&str]) -> Result<(), String> {
+    let form_ok = matches!(
+        args,
+        ["remote-add", "--if-not-exists", "--system", name, url]
+            if FLATHUB_REMOTES.contains(&(*name, *url))
+    );
+    if form_ok {
+        Ok(())
+    } else {
+        Err(FLATPAK_REMOTE_ADD_ONLY_FLATHUB.to_string())
+    }
+}
+
+/// `systemctl enable --now snapd.socket`, exactly: setting snapd up is the
+/// only reason the helper touches a unit.
+fn systemctl(args: &[&str]) -> Result<(), String> {
+    if args == ["enable", "--now", SNAPD_SOCKET_UNIT] {
+        Ok(())
+    } else {
+        Err(format!(
+            "systemctl may only run enable --now {SNAPD_SOCKET_UNIT}."
+        ))
+    }
+}
+
+/// `ln -sfn /var/lib/snapd/snap /snap`, exactly: the link classic snaps
+/// need on a distribution that mounts snaps elsewhere.
+fn ln(args: &[&str]) -> Result<(), String> {
+    if args == ["-sfn", SNAP_MOUNT_DIR, SNAP_LINK] {
+        Ok(())
+    } else {
+        Err(format!(
+            "ln may only link {SNAP_MOUNT_DIR} to {SNAP_LINK} with -sfn."
+        ))
+    }
 }
 
 fn chwd(args: &[&str]) -> Result<(), String> {
@@ -593,6 +686,154 @@ mod tests {
             "dpkg",
             &["-i", "/home/me/.cache/bap-store/bap-store_0.2.0_amd64.deb"],
         );
+        ok(
+            "flatpak",
+            &[
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "https://dl.flathub.org/repo/flathub.flatpakrepo",
+            ],
+        );
+        ok("systemctl", &["enable", "--now", "snapd.socket"]);
+        ok("ln", &["-sfn", "/var/lib/snapd/snap", "/snap"]);
+        ok("snap", &["wait", "system", "seed.loaded"]);
+    }
+
+    /// Setting a source up is exactly four commands beyond the package
+    /// installs: Flathub added, snapd's socket enabled, the `/snap` link,
+    /// and the wait for snapd to seed.
+    /// Every other spelling of each is refused.
+    #[test]
+    fn setting_a_source_up_is_exactly_four_commands() {
+        for (name, url) in FLATHUB_REMOTES {
+            ok(
+                "flatpak",
+                &["remote-add", "--if-not-exists", "--system", name, url],
+            );
+        }
+        let flathub = "https://dl.flathub.org/repo/flathub.flatpakrepo";
+        for args in [
+            vec!["remote-add", "--if-not-exists", "--system", "flathub"],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                flathub,
+                "extra",
+            ],
+            vec!["remote-add", "--system", "flathub", flathub],
+            vec!["remote-add", "--if-not-exists", "flathub", flathub],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--user",
+                "flathub",
+                flathub,
+            ],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "--no-gpg-verify",
+                "flathub",
+                flathub,
+            ],
+            vec!["remote-add", "--if-not-exists", "--system", "hub", flathub],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo",
+            ],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "https://evil.example/flathub.flatpakrepo",
+            ],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "http://dl.flathub.org/repo/flathub.flatpakrepo",
+            ],
+            vec![
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "/tmp/flathub.flatpakrepo",
+            ],
+            vec![
+                "--system",
+                "remote-add",
+                "--if-not-exists",
+                "flathub",
+                flathub,
+            ],
+            vec!["remote-delete", "--system", "flathub"],
+            vec!["remote-modify", "--system", "flathub", "--url", flathub],
+        ] {
+            let err = refused("flatpak", &args);
+            if args.contains(&"remote-add") {
+                assert!(err.ends_with(FLATPAK_REMOTE_ADD_ONLY_FLATHUB), "{err}");
+            }
+        }
+
+        for args in [
+            vec!["enable", "snapd.socket"],
+            vec!["enable", "--now", "snapd.service"],
+            vec!["enable", "--now", "sshd.socket"],
+            vec!["enable", "--now", "snapd.socket", "sshd.service"],
+            vec!["start", "snapd.socket"],
+            vec!["disable", "--now", "snapd.socket"],
+            vec!["enable", "--now", "--force", "snapd.socket"],
+            vec!["--now", "enable", "snapd.socket"],
+            vec!["enable", "--now"],
+            vec![],
+        ] {
+            let err = refused("systemctl", &args);
+            assert!(
+                err.ends_with("systemctl may only run enable --now snapd.socket."),
+                "{err}"
+            );
+        }
+
+        for args in [
+            vec!["-sfn", "/var/lib/snapd/snap", "/usr/bin/snap"],
+            vec!["-sfn", "/tmp/evil", "/snap"],
+            vec!["-s", "/var/lib/snapd/snap", "/snap"],
+            vec!["-sfn", "/snap", "/var/lib/snapd/snap"],
+            vec!["-sfn", "/var/lib/snapd/snap", "/snap", "--force"],
+            vec!["-sfn", "/var/lib/snapd/snap"],
+            vec![],
+        ] {
+            let err = refused("ln", &args);
+            assert!(
+                err.ends_with("ln may only link /var/lib/snapd/snap to /snap with -sfn."),
+                "{err}"
+            );
+        }
+        for args in [
+            vec!["wait", "system"],
+            vec!["wait", "system", "seed.loaded", "extra"],
+            vec!["wait", "core", "seed.loaded"],
+            vec!["wait", "system", "refresh.hold"],
+        ] {
+            let err = refused("snap", &args);
+            assert!(
+                err.ends_with("snap may only wait for system seed.loaded."),
+                "{err}"
+            );
+        }
+        assert!(FLATPAK_REMOTE_ADD_ONLY_FLATHUB.ends_with('.'));
+        assert!(!FLATPAK_REMOTE_ADD_ONLY_FLATHUB.contains('\u{2014}'));
     }
 
     #[test]

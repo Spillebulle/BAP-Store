@@ -10,7 +10,7 @@
 //! 2 when the arguments were wrong.
 
 use crate::commands::{logic, selfupdate_adapter, sentence};
-use bap_core::{App, Op, PackageKind, PackageRef, Query, SourceKind, Store};
+use bap_core::{App, Op, PackageKind, PackageRef, Plan, Query, SourceKind, SourceStatus, Store};
 use std::io::IsTerminal;
 
 pub const USAGE: &str = "\
@@ -21,13 +21,14 @@ Commands:
       Search the sources for a term. Only applications are listed unless
       --packages is given.
   sources
-      Which sources this machine has, and why the others are not usable.
+      Which sources this machine has, why the others are not usable, and
+      which of those BAP Store can set up.
   updates
       Everything that can be brought up to date, with download sizes.
   installed
       Everything the sources have put on this machine.
   plan install|remove|update <source>:<id> ...
-  plan update-all|refresh <source>
+  plan update-all|refresh|setup <source>
       The steps a transaction would run. Nothing is executed.
   drivers
       Devices, the driver profiles offered for them, and firmware.
@@ -270,8 +271,21 @@ fn sources(args: &[String]) -> i32 {
         return code;
     }
     let store = Store::detect();
-    let mut table = Table::new(&["Source", "Available", "Detail"]);
-    for status in store.statuses() {
+    print!(
+        "{}",
+        sources_table(&store.statuses()).render(terminal_width())
+    );
+    println!("{} on {}.", store.system.pretty_name, store.system.arch);
+    0
+}
+
+/// One row per source: whether it is usable, what setting it up is called
+/// when the store can do that ("Install Flatpak"), and the detail or the
+/// reason it is not usable. A source that can be searched without its tool
+/// says so in the Available column.
+pub fn sources_table(statuses: &[SourceStatus]) -> Table {
+    let mut table = Table::new(&["Source", "Available", "Setup", "Detail"]);
+    for status in statuses {
         let detail = if status.available {
             status.detail.clone().unwrap_or_default()
         } else {
@@ -281,15 +295,25 @@ fn sources(args: &[String]) -> i32 {
                 .map(|r| sentence(&r))
                 .unwrap_or_default()
         };
+        let available = if status.available {
+            "yes"
+        } else if status.searchable {
+            "search only"
+        } else {
+            "no"
+        };
         table.row(vec![
             status.kind.label().to_string(),
-            if status.available { "yes" } else { "no" }.to_string(),
+            available.to_string(),
+            status
+                .setup
+                .as_ref()
+                .map(|s| s.label.clone())
+                .unwrap_or_default(),
             detail,
         ]);
     }
-    print!("{}", table.render(terminal_width()));
-    println!("{} on {}.", store.system.pretty_name, store.system.arch);
-    0
+    table
 }
 
 // --------------------------------------------------------------- updates
@@ -379,11 +403,12 @@ pub fn parse_ref(text: &str) -> Result<PackageRef, String> {
     })
 }
 
-/// `install|remove|update <ref>...` or `update-all|refresh <source>`.
+/// `install|remove|update <ref>...` or `update-all|refresh|setup <source>`.
 pub fn parse_plan(args: &[String]) -> Result<Vec<Op>, String> {
     let Some(verb) = args.first() else {
         return Err(
-            "plan needs an operation: install, remove, update, update-all or refresh.".to_string(),
+            "plan needs an operation: install, remove, update, update-all, refresh or setup."
+                .to_string(),
         );
     };
     let rest = &args[1..];
@@ -405,7 +430,7 @@ pub fn parse_plan(args: &[String]) -> Result<Vec<Op>, String> {
                 })
                 .collect()
         }
-        "update-all" | "refresh" => {
+        "update-all" | "refresh" | "setup" => {
             if rest.is_empty() {
                 return Err(format!(
                     "plan {verb} needs a source, for example plan {verb} pacman."
@@ -415,16 +440,16 @@ pub fn parse_plan(args: &[String]) -> Result<Vec<Op>, String> {
                 .map(|s| {
                     let source = parse_sources(s)?;
                     let source = source[0];
-                    Ok(if verb == "update-all" {
-                        Op::UpdateAll { source }
-                    } else {
-                        Op::Refresh { source }
+                    Ok(match verb.as_str() {
+                        "update-all" => Op::UpdateAll { source },
+                        "refresh" => Op::Refresh { source },
+                        _ => Op::Setup { source },
                     })
                 })
                 .collect()
         }
         other => Err(format!(
-            "{other} is not a plan operation. Use install, remove, update, update-all or refresh."
+            "{other} is not a plan operation. Use install, remove, update, update-all, refresh or setup."
         )),
     }
 }
@@ -442,8 +467,19 @@ fn plan(args: &[String]) -> i32 {
             return 1;
         }
     };
+    print!(
+        "{}",
+        plan_text(&plan, &logic::notices(&store, &ops), terminal_width())
+    );
+    0
+}
+
+/// What `plan` prints: the steps as a table and a count, or that there is
+/// nothing to do, then every notice.
+pub fn plan_text(plan: &Plan, notices: &[String], width: Option<usize>) -> String {
+    let mut out = String::new();
     if plan.steps.is_empty() {
-        println!("Nothing to do. Everything asked for is already in place.");
+        out.push_str("Nothing to do. Everything asked for is already in place.\n");
     } else {
         let mut table = Table::new(&["#", "Source", "Root", "Step", "Command"]);
         for (i, step) in plan.steps.iter().enumerate() {
@@ -457,20 +493,20 @@ fn plan(args: &[String]) -> i32 {
                 command.join(" "),
             ]);
         }
-        print!("{}", table.render(terminal_width()));
+        out.push_str(&table.render(width));
         let root = plan.steps.iter().filter(|s| s.needs_root).count();
-        println!(
-            "{} {}, {} {} root. Nothing was run.",
+        out.push_str(&format!(
+            "{} {}, {} {} root. Nothing was run.\n",
             plan.steps.len(),
             plural(plan.steps.len(), "step", "steps"),
             root,
             plural(root, "needs", "need")
-        );
+        ));
     }
-    for notice in logic::notices(&store, &ops) {
-        println!("Note: {}", sentence(&notice));
+    for notice in notices {
+        out.push_str(&format!("Note: {}\n", sentence(notice)));
     }
-    0
+    out
 }
 
 // --------------------------------------------------------------- drivers
@@ -820,6 +856,27 @@ mod tests {
                 source: SourceKind::Flatpak
             }
         ));
+        assert_eq!(
+            parse_plan(&args(&["setup", "flatpak", "snap"])).unwrap(),
+            [
+                Op::Setup {
+                    source: SourceKind::Flatpak
+                },
+                Op::Setup {
+                    source: SourceKind::Snap
+                }
+            ]
+        );
+        assert!(
+            parse_plan(&args(&["setup"]))
+                .unwrap_err()
+                .contains("needs a source")
+        );
+        assert!(
+            parse_plan(&args(&["setup", "nowhere"]))
+                .unwrap_err()
+                .contains("nowhere")
+        );
         assert!(
             parse_plan(&args(&[]))
                 .unwrap_err()
@@ -891,6 +948,106 @@ mod tests {
         );
         assert_eq!(truncate("abcdef", 4), "abc…");
         assert_eq!(truncate("abcd", 4), "abcd");
+    }
+
+    #[test]
+    fn the_sources_table_has_a_setup_column() {
+        let status = |kind, available, searchable, setup: Option<&str>| SourceStatus {
+            kind,
+            available,
+            reason: (!available).then(|| format!("{} is not installed", kind.label())),
+            detail: available.then(|| "core, extra".to_string()),
+            searchable,
+            setup: setup.map(|label| bap_core::SourceSetup {
+                label: label.to_string(),
+                sentence: "Sets it up.".to_string(),
+            }),
+        };
+        let table = sources_table(&[
+            status(SourceKind::Pacman, true, false, None),
+            status(SourceKind::Flatpak, false, true, Some("Install Flatpak")),
+            status(SourceKind::Fwupd, false, false, None),
+        ]);
+        assert_eq!(
+            table.render(None),
+            "\
+Source    Available    Setup            Detail
+pacman    yes                           core, extra
+Flatpak   search only  Install Flatpak  Flatpak is not installed.
+Firmware  no                            Firmware is not installed.
+"
+        );
+    }
+
+    #[test]
+    fn a_setup_plan_prints_its_steps_in_order_and_its_notice() {
+        let step = |source, title: &str, program: &str, args: &[&str], root| bap_core::Step {
+            source,
+            title: title.to_string(),
+            command: bap_core::Command {
+                program: program.to_string(),
+                args: args.iter().map(|a| a.to_string()).collect(),
+                env: Vec::new(),
+                cwd: None,
+            },
+            needs_root: root,
+            weight: 1,
+        };
+        let plan = Plan {
+            id: "p".into(),
+            ops: vec![Op::Setup {
+                source: SourceKind::Flatpak,
+            }],
+            steps: vec![
+                step(
+                    SourceKind::Pacman,
+                    "Installing flatpak and updating the system",
+                    "pacman",
+                    &["-Syu", "--noconfirm", "--needed", "flatpak"],
+                    true,
+                ),
+                step(
+                    SourceKind::Flatpak,
+                    "Adding Flathub",
+                    "flatpak",
+                    &[
+                        "remote-add",
+                        "--if-not-exists",
+                        "--system",
+                        "flathub",
+                        "https://dl.flathub.org/repo/flathub.flatpakrepo",
+                    ],
+                    true,
+                ),
+            ],
+        };
+        let text = plan_text(
+            &plan,
+            &["Flatpak is not installed. It is installed and Flathub is added.".to_string()],
+            None,
+        );
+        assert_eq!(
+            text,
+            "\
+#  Source   Root  Step                                        Command
+1  pacman   yes   Installing flatpak and updating the system  pacman -Syu --noconfirm --needed flatpak
+2  Flatpak  yes   Adding Flathub                              flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+2 steps, 2 need root. Nothing was run.
+Note: Flatpak is not installed. It is installed and Flathub is added.
+"
+        );
+        assert_eq!(
+            plan_text(
+                &Plan {
+                    id: "p".into(),
+                    ops: Vec::new(),
+                    steps: Vec::new()
+                },
+                &[],
+                None
+            ),
+            "Nothing to do. Everything asked for is already in place.\n"
+        );
     }
 
     #[test]

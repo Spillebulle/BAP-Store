@@ -432,19 +432,23 @@ pub mod logic {
             _ => None,
         };
         state.push_event(id, event.clone());
+        let mut sets_up = false;
         if let Some(ok) = finished
             && let Some(ops) = state.plan_ops(id)
         {
             // The sources that keep their own records (GitHub) learn how it
             // went before the state's store is dropped below.
             store.finished(&ops, ok);
+            sets_up = ops.iter().any(|op| matches!(op, Op::Setup { .. }));
         }
-        if finished == Some(true) {
-            // The machine changed under the sources. The store is detected
-            // again on the next command; the sources reload by mtime
-            // anyway, but `Store::detect` also re-runs availability, which
-            // is what makes a newly installed Flatpak appear without a
-            // restart.
+        // The machine changed under the sources. The store is detected
+        // again on the next command; the sources reload by mtime anyway,
+        // but `Store::detect` also re-runs availability, which is what
+        // makes a newly installed Flatpak appear without a restart. A plan
+        // that sets a source up does it even when a later step failed:
+        // the tool may be installed by then, and no status is cached
+        // across a detection.
+        if finished == Some(true) || (finished == Some(false) && sets_up) {
             state.invalidate_after_transaction();
         }
         emit(&event);
@@ -602,6 +606,8 @@ mod tests {
                 available: true,
                 reason: None,
                 detail: None,
+                searchable: false,
+                setup: None,
             }
         }
         fn search(&self, _query: &Query) -> bap_core::Result<Vec<Package>> {
@@ -922,6 +928,51 @@ mod tests {
         );
         let finished = counts.finished.lock().unwrap();
         assert_eq!(finished.as_slice(), &[(op, true)]);
+    }
+
+    /// A plan that sets a source up forgets the store however it ended, so
+    /// the next `sources` or `search` detects the tool the plan installed.
+    /// Any other failed plan leaves the store alone.
+    #[test]
+    fn a_setup_plan_forgets_the_store_even_when_it_fails() {
+        for (ops, ok, forgotten) in [
+            (
+                vec![Op::Setup {
+                    source: SourceKind::Flatpak,
+                }],
+                false,
+                true,
+            ),
+            (
+                vec![Op::Setup {
+                    source: SourceKind::Snap,
+                }],
+                true,
+                true,
+            ),
+            (vec![Op::Install { package: steam() }], false, false),
+        ] {
+            let (store, _) = Fake::store(SourceKind::Pacman);
+            let state = state_with("setup-reset", store);
+            let bound = state.store();
+            state.add_plan(Plan {
+                id: "plan-s".into(),
+                ops,
+                steps: Vec::new(),
+            });
+            deliver(
+                &state,
+                &bound,
+                "plan-s",
+                Event::PlanFinished {
+                    plan: "plan-s".into(),
+                    ok,
+                    message: "Finished.".into(),
+                },
+                &|_| {},
+            );
+            assert_eq!(!state.has_store(), forgotten, "ok {ok}");
+        }
     }
 
     #[test]

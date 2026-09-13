@@ -495,6 +495,8 @@ impl Source for Chwd {
                         .to_string(),
                 ),
                 detail: None,
+                searchable: false,
+                setup: None,
             };
         }
         let detail = self
@@ -506,6 +508,8 @@ impl Source for Chwd {
             available: true,
             reason: None,
             detail,
+            searchable: false,
+            setup: None,
         }
     }
 
@@ -557,7 +561,9 @@ impl Source for Chwd {
         match op {
             Op::Install { package } => Ok(vec![install_step(&package.id)?]),
             Op::Remove { package } => Ok(vec![remove_step(&package.id)?]),
-            Op::Update { .. } | Op::UpdateAll { .. } | Op::Refresh { .. } => Ok(Vec::new()),
+            Op::Update { .. } | Op::UpdateAll { .. } | Op::Refresh { .. } | Op::Setup { .. } => {
+                Ok(Vec::new())
+            }
         }
     }
 }

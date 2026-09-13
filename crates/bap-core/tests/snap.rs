@@ -4,8 +4,13 @@
 //! back those files; the one `live_` test talks to the real socket where
 //! there is one.
 
-use bap_core::sources::snap::{self, Presence, Response, Snap, SnapInfo, Transport};
-use bap_core::{Op, PackageKind, PackageRef, Picture, Query, Source, SourceKind, SystemInfo};
+use bap_core::sources::snap::{
+    self, Presence, Response, ScriptedSnapStore, Snap, SnapInfo, SnapStore, Transport,
+};
+use bap_core::transaction::allow::{Allowed, check_step};
+use bap_core::{
+    Op, PackageKind, PackageRef, Picture, Query, Source, SourceKind, SourceSetup, SystemInfo,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -147,24 +152,51 @@ fn no_em_dash(s: &str) {
 // Status.
 
 #[test]
-fn without_snapd_the_status_says_so_and_names_the_aur_only_on_arch() {
-    let on_arch = Snap::with_transport(&arch(), Box::new(Canned::absent())).status();
+fn without_snapd_the_status_is_searchable_and_offers_to_set_it_up() {
+    let on_arch = Snap::with_transport(&arch(), Box::new(Canned::absent()))
+        .with_aur_builds(true)
+        .status();
     assert_eq!(on_arch.kind, SourceKind::Snap);
     assert!(!on_arch.available);
+    assert!(on_arch.searchable);
     assert_eq!(
         on_arch.reason.as_deref(),
         Some(
-            "snapd is not installed. Install the snapd package to search the Snap Store. On Arch it is the snapd package in the AUR."
+            "snapd is not installed. The Snap Store is searched through its website, and installing from it sets snapd up first."
         )
+    );
+    assert_eq!(
+        on_arch.setup,
+        Some(SourceSetup {
+            label: "Install snapd".to_string(),
+            sentence: "Installs snapd and starts its service, then Snap applications can be installed and updated here. snapd comes from the AUR.".to_string(),
+        })
     );
     assert_eq!(on_arch.detail, None);
 
     let on_debian = Snap::with_transport(&debian(), Box::new(Canned::absent())).status();
     assert_eq!(
-        on_debian.reason.as_deref(),
-        Some("snapd is not installed. Install the snapd package to search the Snap Store.")
+        on_debian.setup.map(|s| s.sentence).as_deref(),
+        Some(
+            "Installs snapd and starts its service, then Snap applications can be installed and updated here."
+        ),
+        "the AUR is named only on Arch"
     );
-    no_em_dash(on_arch.reason.as_deref().unwrap());
+
+    let no_builder = Snap::with_transport(&arch(), Box::new(Canned::absent()))
+        .with_aur_builds(false)
+        .status();
+    assert!(no_builder.searchable);
+    assert_eq!(no_builder.setup, None);
+    assert_eq!(
+        no_builder.reason.as_deref(),
+        Some(
+            "snapd is not installed. The Snap Store is searched through its website; install base-devel so snapd can be built from the AUR."
+        )
+    );
+    for status in [&on_arch, &no_builder] {
+        no_em_dash(status.reason.as_deref().unwrap());
+    }
 }
 
 #[test]
@@ -178,6 +210,209 @@ fn with_the_program_but_no_socket_the_status_says_to_start_it() {
         Some(
             "snapd is installed but not running. Start it with systemctl enable --now snapd.socket."
         )
+    );
+    assert!(status.searchable);
+    assert_eq!(
+        status.setup.map(|s| s.label).as_deref(),
+        Some("Start snapd")
+    );
+}
+
+fn store_json(name: &str) -> serde_json::Value {
+    serde_json::from_slice(&fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"))
+}
+
+/// The public store with a search for gimp and a lookup of code.
+fn store() -> ScriptedSnapStore {
+    ScriptedSnapStore {
+        find: Some(store_json("store-find-gimp.json")),
+        info: HashMap::from([("code".to_string(), store_json("store-info-code.json"))]),
+    }
+}
+
+fn without_snapd(system: &SystemInfo) -> Snap {
+    Snap::with_transport(system, Box::new(Canned::absent()))
+        .with_store(Box::new(store()))
+        .with_aur_builds(true)
+}
+
+#[test]
+fn without_snapd_search_asks_the_public_store() {
+    let s = without_snapd(&arch());
+    let found = s.search(&Query::new("gimp")).unwrap();
+    let ids: Vec<&str> = found.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["gimp", "gimp-plugins-gmic", "openvino-ai-plugins-gimp"]
+    );
+    let gimp = &found[0];
+    assert_eq!(gimp.source, SourceKind::Snap);
+    assert_eq!(gimp.name, "GNU Image Manipulation Program");
+    assert_eq!(gimp.kind, PackageKind::App);
+    assert_eq!(
+        gimp.summary.as_deref(),
+        Some("High-end image creation and manipulation")
+    );
+    assert_eq!(gimp.developer.as_deref(), Some("GIMP team"));
+    assert_eq!(gimp.version.as_deref(), Some("3.2.6"));
+    assert_eq!(gimp.repo.as_deref(), Some("latest/stable"));
+    assert!(matches!(&gimp.icon, Some(Picture::Url(u)) if u.starts_with("https://")));
+    assert_eq!(
+        gimp.screenshots.len(),
+        5,
+        "the banner leads, then four screenshots"
+    );
+    assert_eq!(gimp.categories, ["art-and-design"]);
+    assert!(gimp.sandboxed);
+    assert!(!gimp.installed);
+    assert_eq!(fact(&gimp.facts, "Publisher"), Some("GIMP team (verified)"));
+    assert_eq!(fact(&gimp.facts, "Revision"), Some("561"));
+    assert_eq!(fact(&gimp.facts, "Confinement"), Some("strict"));
+
+    let mut query = Query::new("gimp");
+    query.limit = 1;
+    assert_eq!(s.search(&query).unwrap().len(), 1);
+
+    let offline = Snap::with_transport(&arch(), Box::new(Canned::absent()));
+    let e = offline.search(&Query::new("gimp")).unwrap_err();
+    assert_eq!(e.source_kind, Some(SourceKind::Snap));
+    assert!(
+        e.message.starts_with("The Snap Store did not answer"),
+        "{}",
+        e.message
+    );
+    assert!(e.message.ends_with('.'));
+}
+
+#[test]
+fn without_snapd_details_and_confinement_come_from_the_public_store() {
+    let s = without_snapd(&arch());
+    let code = s.details("code").unwrap();
+    assert_eq!(fact(&code.facts, "Confinement"), Some("classic"));
+    assert!(!code.sandboxed);
+    assert_eq!(code.repo.as_deref(), Some("latest/stable"));
+    assert_eq!(
+        s.details("nonesuch").unwrap_err().message,
+        "Could not reach api.snapcraft.io."
+    );
+
+    // A plan for a classic snap found without snapd still says --classic.
+    let fresh = without_snapd(&arch());
+    let steps = fresh
+        .plan(&Op::Install {
+            package: snap_ref("code"),
+        })
+        .unwrap();
+    assert_eq!(steps[0].command.args, ["install", "code", "--classic"]);
+
+    let info = snap::parse_store_info(&store_json("store-info-code.json"), "amd64").unwrap();
+    assert_eq!(info.name, "code");
+    assert_eq!(info.channel, "stable");
+    assert_eq!(snap::store_arch("x86_64"), "amd64");
+    assert_eq!(snap::store_arch("aarch64"), "arm64");
+    assert!(snap::parse_store_find(&serde_json::json!({})).is_empty());
+}
+
+#[test]
+fn setting_snapd_up_installs_it_per_distribution_then_starts_it() {
+    let installs = |s: &Snap| -> Vec<(SourceKind, String)> {
+        s.setup()
+            .unwrap()
+            .ops
+            .iter()
+            .map(|op| match op {
+                Op::Install { package } => (package.source, package.id.clone()),
+                other => panic!("a setup installs, it does not {other:?}"),
+            })
+            .collect()
+    };
+    let programs = |s: &Snap| -> Vec<String> {
+        s.setup()
+            .unwrap()
+            .steps
+            .iter()
+            .map(|step| {
+                assert!(step.needs_root, "{}", step.title);
+                assert_eq!(step.source, SourceKind::Snap);
+                assert_eq!(
+                    check_step(step, &Allowed::system()),
+                    Ok(()),
+                    "the helper allows {}",
+                    step.title
+                );
+                format!("{} {}", step.command.program, step.command.args.join(" "))
+            })
+            .collect()
+    };
+
+    let on_arch = without_snapd(&arch());
+    assert_eq!(installs(&on_arch), [(SourceKind::Aur, "snapd".to_string())]);
+    assert_eq!(
+        programs(&on_arch),
+        [
+            "systemctl enable --now snapd.socket",
+            "ln -sfn /var/lib/snapd/snap /snap",
+            "snap wait system seed.loaded",
+        ]
+    );
+    assert_eq!(
+        on_arch.setup().unwrap().notice,
+        "snapd is not installed. It is built from the AUR and started."
+    );
+
+    let on_debian = without_snapd(&debian());
+    assert_eq!(
+        installs(&on_debian),
+        [(SourceKind::Apt, "snapd".to_string())]
+    );
+    assert_eq!(
+        programs(&on_debian),
+        [
+            "systemctl enable --now snapd.socket",
+            "snap wait system seed.loaded",
+        ],
+        "Debian mounts snaps at /snap already"
+    );
+    assert_eq!(
+        on_debian.setup().unwrap().notice,
+        "snapd is not installed. It is installed and started."
+    );
+
+    let fedora = bap_core::system::from_os_release("ID=fedora\n");
+    let on_fedora = without_snapd(&fedora);
+    assert_eq!(
+        installs(&on_fedora),
+        [(SourceKind::Dnf, "snapd".to_string())]
+    );
+    assert!(programs(&on_fedora).contains(&"ln -sfn /var/lib/snapd/snap /snap".to_string()));
+
+    let no_builder = without_snapd(&arch()).with_aur_builds(false);
+    assert!(no_builder.setup().is_none());
+    let gentoo = bap_core::system::from_os_release("ID=gentoo\n");
+    assert!(without_snapd(&gentoo).setup().is_none());
+
+    let mut stopped = Canned::absent();
+    stopped.presence = Presence::ProgramOnly;
+    let stopped = source(stopped);
+    let setup = stopped.setup().unwrap();
+    assert!(setup.ops.is_empty(), "snapd is installed already");
+    assert_eq!(setup.notice, "snapd is not running. It is started.");
+
+    assert!(source(Canned::snapd()).setup().is_none());
+    assert_eq!(source(Canned::snapd()).status().setup, None);
+}
+
+#[test]
+#[ignore = "needs the network"]
+fn live_the_public_store_finds_gimp() {
+    let store = snap::LiveSnapStore::new(bap_core::http::Client::shared());
+    let json = store.find("gimp").unwrap();
+    let found = snap::parse_store_find(&json);
+    assert!(found.iter().any(|s| s.name == "gimp"), "{json}");
+    let info = store.info("code").unwrap();
+    assert_eq!(
+        snap::parse_store_info(&info, "amd64").unwrap().confinement,
+        "classic"
     );
 }
 

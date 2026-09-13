@@ -1,0 +1,195 @@
+{
+ "results": [
+  {
+   "name": "gimp",
+   "revision": {
+    "confinement": "strict",
+    "revision": 561,
+    "version": "3.2.6"
+   },
+   "snap": {
+    "categories": [
+     {
+      "featured": true,
+      "name": "art-and-design"
+     }
+    ],
+    "description": "GIMP is an acronym for GNU Image Manipulation Program. It is\nCommunity-driven Free Software for high-end image creation and manipulation.\n\n\n\nIt has many capabilities. It can be used as a paint program,\nan expert quality photo retouching program, image composition,\nan online batch processing system, a mass production image\nrenderer, an image format converter, etc.\n\n\n\nGIMP is expandable and extensible. It is designed to be\naugmented with plug-ins and extensions to do just about\nanything. The advanced scripting interface allows everything\nfrom the simplest task to the most complex image manipulation\nprocedures to be easily scripted. GIMP is available for Linux,\nMicrosoft Windows and macOS.",
+    "license": "GPL-3.0+ AND LGPL-3.0+",
+    "links": {
+     "contact": [],
+     "donations": [
+      "https://www.gimp.org/donating/"
+     ],
+     "issues": [
+      "https://www.gimp.org/bugs/"
+     ],
+     "source": [
+      "https://gitlab.gnome.org/GNOME/gimp/"
+     ],
+     "website": [
+      "https://www.gimp.org/"
+     ]
+    },
+    "media": [
+     {
+      "height": 512,
+      "type": "icon",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/gimp-logo-shadow.svg_1mt1zvq.png",
+      "width": 512
+     },
+     {
+      "height": 1280,
+      "type": "banner",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/503769391-2dd9f6db-4b24-466e-a1b2-a79d4a6393cf.jpg",
+      "width": 3840
+     },
+     {
+      "height": 1080,
+      "type": "screenshot",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/Screenshot-gimp-3.0-painting-1759941129.jpg",
+      "width": 1920
+     },
+     {
+      "height": 1048,
+      "type": "screenshot",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/Screenshot-gimp-3.0-photo-editing-1-1759941129.jpg",
+      "width": 1920
+     },
+     {
+      "height": 1048,
+      "type": "screenshot",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/Screenshot-gimp-3.0-photo-editing-2-1759941129.jpg",
+      "width": 1920
+     },
+     {
+      "height": 1080,
+      "type": "screenshot",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2025/10/Screenshot-gimp-3.0-engraving-1759941129.jpg",
+      "width": 1920
+     }
+    ],
+    "publisher": {
+     "display-name": "GIMP team",
+     "id": "KnkwCsgcmmqa9phHCWgT9XUaUYIdGsGk",
+     "username": "gimp",
+     "validation": "verified"
+    },
+    "store-url": "https://snapcraft.io/gimp",
+    "summary": "High-end image creation and manipulation",
+    "title": "GNU Image Manipulation Program"
+   },
+   "snap-id": "KDHYbyuzZukmLhiogKiUksByRhXD2gYV"
+  },
+  {
+   "name": "gimp-plugins-gmic",
+   "revision": {
+    "confinement": "strict",
+    "revision": 37,
+    "version": "4.0.5"
+   },
+   "snap": {
+    "categories": [
+     {
+      "featured": false,
+      "name": "art-and-design"
+     },
+     {
+      "featured": false,
+      "name": "photo-and-video"
+     }
+    ],
+    "description": "G'MIC is a full-featured open-source framework for digital image processing.\nThis is a content producer snap providing G'MIC plugins for the GIMP snap.",
+    "license": "CECILL-2.1",
+    "links": {
+     "contact": [],
+     "donations": [],
+     "issues": [
+      "https://github.com/canonical/gimp-plugins-gmic-snap/issues"
+     ],
+     "source": [],
+     "website": [
+      "https://gmic.eu",
+      "https://github.com/canonical/gimp-plugins-gmic-snap"
+     ]
+    },
+    "media": [
+     {
+      "height": 220,
+      "type": "icon",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2026/06/output.jpg.png",
+      "width": 220
+     },
+     {
+      "height": 320,
+      "type": "banner",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2026/06/attmpt2.jpg",
+      "width": 960
+     }
+    ],
+    "publisher": {
+     "display-name": "Will French",
+     "id": "gbc1kNZ6nA5AnEYqW9hz5A8jj0dHbpAa",
+     "username": "wfrench",
+     "validation": "unproven"
+    },
+    "store-url": "https://snapcraft.io/gimp-plugins-gmic",
+    "summary": "A Full-Featured Open-Source Framework for Image Processing",
+    "title": "G'MIC Plugins for GIMP"
+   },
+   "snap-id": "oBE3JDBTAegvidfkal7rIQZu922NS3hb"
+  },
+  {
+   "name": "openvino-ai-plugins-gimp",
+   "revision": {
+    "confinement": "strict",
+    "revision": 62,
+    "version": "3.3.0"
+   },
+   "snap": {
+    "categories": [
+     {
+      "featured": false,
+      "name": "photo-and-video"
+     },
+     {
+      "featured": false,
+      "name": "utilities"
+     }
+    ],
+    "description": "OpenVINO\u2122 AI plugins for GIMP adds AI functionality to GIMP for\nstable diffusion, super resolution, and semantic segmentation.\nThe plugins can run on Intel CPU, NPU, or GPU devices. This snap\nalso provides an application for downloading models that can be\nused with the stable diffusion plugin.",
+    "license": "Apache-2.0",
+    "links": {
+     "contact": [],
+     "donations": [],
+     "issues": [],
+     "source": [
+      "https://github.com/intel/openvino-ai-plugins-gimp"
+     ],
+     "website": [
+      "https://github.com/intel/openvino-ai-plugins-gimp",
+      "https://github.com/canonical/openvino-ai-plugins-gimp-snap"
+     ]
+    },
+    "media": [
+     {
+      "height": 345,
+      "type": "icon",
+      "url": "https://dashboard.snapcraft.io/site_media/appmedia/2024/12/intel.web.345.345.png",
+      "width": 345
+     }
+    ],
+    "publisher": {
+     "display-name": "Intel OpenVINO",
+     "id": "02P6fTDGdyZwgCXFl9IqQUJxaXVP5l2B",
+     "username": "openvino",
+     "validation": "verified"
+    },
+    "store-url": "https://snapcraft.io/openvino-ai-plugins-gimp",
+    "summary": "Intel's OpenVINO\u2122 AI Plugins for GIMP",
+    "title": "openvino-ai-plugins-gimp"
+   },
+   "snap-id": "zM5fNkCmjI8lwyT1HG7g2KLquYREwHuQ"
+  }
+ ]
+}

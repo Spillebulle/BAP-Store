@@ -359,12 +359,16 @@ impl Source for Dnf {
                 available: false,
                 reason: Some(reason),
                 detail: None,
+                searchable: false,
+                setup: None,
             },
             None => SourceStatus {
                 kind: SourceKind::Dnf,
                 available: true,
                 reason: None,
                 detail: self.version().map(|v| format!("dnf {v}")),
+                searchable: false,
+                setup: None,
             },
         }
     }
@@ -523,6 +527,8 @@ impl Source for Dnf {
                 &["makecache"],
                 1,
             )]),
+            // The planner expands a setup through `Source::setup`.
+            Op::Setup { .. } => Ok(Vec::new()),
         }
     }
 }

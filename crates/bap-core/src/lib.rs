@@ -146,6 +146,28 @@ pub trait Source: Send + Sync {
     /// its own record of what it installed (GitHub) can update it. Never
     /// runs anything.
     fn finished(&self, _op: &Op, _ok: bool) {}
+
+    /// How this source would be set up on this machine when it is not
+    /// available: the operations other sources carry out first (installing
+    /// the tool's package through the distribution's source), then the
+    /// source's own steps (adding Flathub, enabling snapd's socket). `None`
+    /// when there is nothing to set up, or no way to do it here. The
+    /// planner expands `Op::Setup` through it; a source never runs it.
+    fn setup(&self) -> Option<Setup> {
+        None
+    }
+}
+
+/// What setting a source up takes. See [`Source::setup`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Setup {
+    /// Operations for other sources, planned first and in this order.
+    pub ops: Vec<Op>,
+    /// The source's own steps, after those.
+    pub steps: Vec<Step>,
+    /// The sentence the confirm dialog shows: "Flatpak is not installed.
+    /// It is installed and Flathub is added."
+    pub notice: String,
 }
 
 /// The sources this machine has, and the operations across them.
@@ -177,18 +199,26 @@ impl Store {
             .map(|s| s.as_ref())
     }
 
-    fn selected(&self, wanted: &Option<Vec<SourceKind>>) -> Vec<&dyn Source> {
+    /// The sources a command may ask: the available ones, and for a search
+    /// also those that can answer through their public store while their
+    /// tool is missing (`SourceStatus::searchable`). Installed and updates
+    /// need the tool, so they never take the second kind.
+    fn selected(&self, wanted: &Option<Vec<SourceKind>>, searching: bool) -> Vec<&dyn Source> {
         self.sources
             .iter()
             .map(|s| s.as_ref())
-            .filter(|s| s.status().available)
             .filter(|s| wanted.as_ref().is_none_or(|w| w.contains(&s.kind())))
+            .filter(|s| {
+                let status = s.status();
+                status.available || (searching && status.searchable)
+            })
             .collect()
     }
 
-    /// Search every selected, available source at once and group the results.
+    /// Search every selected source at once and group the results: the
+    /// available ones, and the searchable ones whose tool is not installed.
     pub fn search(&self, query: &Query) -> SearchResult {
-        let sources = self.selected(&query.sources);
+        let sources = self.selected(&query.sources, true);
         let searched: Vec<SourceKind> = sources.iter().map(|s| s.kind()).collect();
         let results: Vec<(SourceKind, Result<Vec<Package>>)> = std::thread::scope(|scope| {
             let handles: Vec<_> = sources
@@ -221,7 +251,7 @@ impl Store {
 
     /// Everything installed, across every available source, grouped.
     pub fn installed(&self) -> SearchResult {
-        let sources = self.selected(&None);
+        let sources = self.selected(&None, false);
         let searched: Vec<SourceKind> = sources.iter().map(|s| s.kind()).collect();
         let results: Vec<(SourceKind, Result<Vec<Package>>)> = std::thread::scope(|scope| {
             let handles: Vec<_> = sources
@@ -266,21 +296,127 @@ impl Store {
     /// Tell each operation's source how its plan ended.
     pub fn finished(&self, ops: &[Op], ok: bool) {
         for op in ops {
-            let kind = match op {
-                Op::Install { package } | Op::Remove { package } | Op::Update { package } => {
-                    package.source
-                }
-                Op::UpdateAll { source } | Op::Refresh { source } => *source,
-            };
-            if let Some(source) = self.source(kind) {
+            if let Some(source) = self.source(op.source()) {
                 source.finished(op, ok);
             }
         }
     }
 
-    /// Build a plan for a list of operations, grouped so every root step of
-    /// one source runs in one helper invocation.
+    /// Build a plan for a list of operations: refresh steps first, then
+    /// the steps in the order of the operations, with adjacent package
+    /// manager calls joined. A `Setup` operation is expanded through the
+    /// source's [`Source::setup`].
     pub fn plan(&self, ops: &[Op]) -> Result<Plan> {
         transaction::plan::build(self, ops)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    /// A source whose availability is set by the test and which records
+    /// every question it is asked.
+    struct Fake {
+        kind: SourceKind,
+        available: bool,
+        searchable: bool,
+        asked: std::sync::Arc<Mutex<Vec<(SourceKind, &'static str)>>>,
+    }
+
+    impl Fake {
+        fn ask(&self, what: &'static str) {
+            self.asked.lock().unwrap().push((self.kind, what));
+        }
+    }
+
+    impl Source for Fake {
+        fn kind(&self) -> SourceKind {
+            self.kind
+        }
+        fn status(&self) -> SourceStatus {
+            SourceStatus {
+                kind: self.kind,
+                available: self.available,
+                reason: (!self.available).then(|| "Not installed.".to_string()),
+                detail: None,
+                searchable: self.searchable,
+                setup: None,
+            }
+        }
+        fn search(&self, query: &Query) -> Result<Vec<Package>> {
+            self.ask("search");
+            Ok(vec![Package::new(
+                self.kind,
+                format!("{}-{}", self.kind.id(), query.text),
+                query.text.clone(),
+            )])
+        }
+        fn installed(&self) -> Result<Vec<Package>> {
+            self.ask("installed");
+            Ok(Vec::new())
+        }
+        fn updates(&self) -> Result<Vec<Update>> {
+            self.ask("updates");
+            Ok(Vec::new())
+        }
+        fn details(&self, id: &str) -> Result<Package> {
+            Err(Error::new(format!("{id} is not known.")))
+        }
+        fn plan(&self, _op: &Op) -> Result<Vec<Step>> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn a_searchable_source_is_searched_without_its_tool_but_never_asked_what_it_installed() {
+        let asked = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let fake = |kind, available, searchable| -> Box<dyn Source> {
+            Box::new(Fake {
+                kind,
+                available,
+                searchable,
+                asked: asked.clone(),
+            })
+        };
+        let store = Store {
+            system: system::from_os_release("ID=arch\n"),
+            sources: vec![
+                fake(SourceKind::Pacman, true, false),
+                fake(SourceKind::Flatpak, false, true),
+                fake(SourceKind::Fwupd, false, false),
+            ],
+        };
+        let result = store.search(&Query::new("gimp"));
+        assert_eq!(result.searched, [SourceKind::Pacman, SourceKind::Flatpak]);
+        assert!(result.failed.is_empty());
+        let mut sources: Vec<SourceKind> = result
+            .apps
+            .iter()
+            .flat_map(|a| a.editions.iter().map(|e| e.package.source))
+            .collect();
+        sources.sort_by_key(|k| k.id());
+        sources.dedup();
+        assert_eq!(sources.len(), 2, "{:?}", result.apps);
+
+        let only_flatpak = Query {
+            sources: Some(vec![SourceKind::Flatpak]),
+            ..Query::new("gimp")
+        };
+        assert_eq!(store.search(&only_flatpak).searched, [SourceKind::Flatpak]);
+
+        asked.lock().unwrap().clear();
+        assert_eq!(store.installed().searched, [SourceKind::Pacman]);
+        store.updates();
+        assert!(
+            asked
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(kind, _)| *kind == SourceKind::Pacman),
+            "installed and updates need the tool: {:?}",
+            asked.lock().unwrap()
+        );
     }
 }

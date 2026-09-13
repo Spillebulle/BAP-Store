@@ -12,6 +12,12 @@
 //! parsers are tested against recorded output on a machine with no flatpak
 //! at all, which is the machine this was written on.
 //!
+//! When flatpak is not installed the source is still searchable: Flathub's
+//! own search API answers, so a Flathub edition sits beside the
+//! distribution's, and [`Source::setup`] says how Flatpak is installed
+//! (through the distribution's package manager) and Flathub added before
+//! the first install from it, all in one plan.
+//!
 //! Installs, removals and updates are described as [`Step`]s and never run
 //! here. They do not need root: a `--system` operation asks polkit through
 //! flatpak's own system helper, so the step runs in the user session and the
@@ -22,18 +28,41 @@
 use crate::appstream::{Catalogue, Component};
 use crate::http::Client;
 use crate::model::*;
-use crate::{Error, Op, Query, Result, Source};
+use crate::{Error, Op, Query, Result, Setup, Source};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-/// What the page says when there is no `flatpak` on `PATH`.
-pub const NOT_INSTALLED: &str =
-    "Flatpak is not installed. Install the flatpak package to search Flathub.";
+/// What a question that needs the `flatpak` command says when there is none.
+pub const NOT_INSTALLED: &str = "Flatpak is not installed.";
+
+/// The status reason when flatpak is missing and the store can set it up:
+/// Flathub is still searched, through its web API.
+pub const NOT_INSTALLED_SEARCHABLE: &str = "Flatpak is not installed. Flathub is searched through its website, and installing from it sets Flatpak up first.";
+
+/// The status reason when flatpak is missing and this system has no
+/// package the store knows to install it from.
+pub const NOT_INSTALLED_NO_SETUP: &str = "Flatpak is not installed. Flathub is searched through its website; install the flatpak package to install from it.";
 
 /// What the page says when flatpak exists but has nowhere to look.
 pub const NO_REMOTES: &str = "No Flatpak remotes are configured. Add Flathub to search it.";
+
+/// The button and the sentence for setting Flatpak up.
+pub const SETUP_LABEL: &str = "Install Flatpak";
+pub const SETUP_SENTENCE: &str = "Installs Flatpak and adds Flathub, then Flatpak applications can be installed and updated here.";
+/// What the confirm dialog says for that setup.
+pub const SETUP_NOTICE: &str = "Flatpak is not installed. It is installed and Flathub is added.";
+
+/// The button, sentence and notice for a flatpak with no remotes.
+pub const ADD_FLATHUB_LABEL: &str = "Add Flathub";
+pub const ADD_FLATHUB_SENTENCE: &str =
+    "Adds Flathub, then Flatpak applications can be installed and updated here.";
+pub const ADD_FLATHUB_NOTICE: &str = "No Flatpak remotes are configured. Flathub is added.";
+
+/// Flathub's `.flatpakrepo` file, the address the helper's closed list
+/// allows `flatpak remote-add` to take.
+pub const FLATHUB_REPO_FILE: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
 
 /// BAP Store's own Flatpak id, so an update to it is marked as the store's
 /// own. Kept here until the self-updater exports one name for every source.
@@ -394,6 +423,9 @@ pub struct FlathubHit {
 pub struct Flatpak {
     /// Flatpak's spelling of the machine's architecture: "x86_64", "aarch64".
     arch: String,
+    /// Which distribution this is, so a setup knows which package manager
+    /// installs flatpak.
+    system: SystemInfo,
     runner: Box<dyn Runner>,
     flathub: Box<dyn FlathubApi>,
     /// The remotes' catalogues, read on first use because parsing them is
@@ -409,6 +441,7 @@ impl Flatpak {
     pub fn new(system: &SystemInfo, client: Arc<Client>) -> Flatpak {
         Flatpak {
             arch: flatpak_arch(&system.arch),
+            system: system.clone(),
             runner: Box::new(SystemRunner),
             flathub: Box::new(LiveFlathub::new(client)),
             catalogue: OnceLock::new(),
@@ -427,6 +460,7 @@ impl Flatpak {
     ) -> Flatpak {
         Flatpak {
             arch: arch.to_string(),
+            system: crate::system::from_os_release(""),
             runner: Box::new(runner),
             flathub: Box::new(flathub),
             catalogue: OnceLock::from(catalogue),
@@ -434,8 +468,115 @@ impl Flatpak {
         }
     }
 
+    /// The distribution this source sets Flatpak up on. [`Flatpak::with_parts`]
+    /// starts from an unknown one, which has no setup.
+    pub fn with_system(mut self, system: &SystemInfo) -> Flatpak {
+        self.system = system.clone();
+        self
+    }
+
     fn catalogue(&self) -> &Catalogue {
         self.catalogue.get_or_init(Catalogue::load_flatpak)
+    }
+
+    fn is_installed(&self) -> bool {
+        self.runner.locate().is_some()
+    }
+
+    /// The distribution's flatpak package, as an install through its own
+    /// source, or `None` on a system the store has no package manager for.
+    pub fn flatpak_package(&self) -> Option<PackageRef> {
+        let source = if self.system.is_arch_like() {
+            SourceKind::Pacman
+        } else if self.system.is_debian_like() {
+            SourceKind::Apt
+        } else if self.system.is_fedora_like() {
+            SourceKind::Dnf
+        } else {
+            return None;
+        };
+        Some(PackageRef {
+            source,
+            id: "flatpak".to_string(),
+        })
+    }
+
+    /// Flathub as it will be once added, in the installation installs go to.
+    fn flathub_to_be(&self) -> Remote {
+        Remote {
+            name: "flathub".to_string(),
+            url: "https://dl.flathub.org/repo/".to_string(),
+            installation: self.installation,
+        }
+    }
+
+    /// The step that adds Flathub. The system installation is changed
+    /// through the helper, whose closed list allows exactly this command;
+    /// the user's is the user's own and needs no password.
+    pub fn add_flathub_step(&self) -> Step {
+        let args = [
+            "remote-add",
+            "--if-not-exists",
+            self.installation.flag(),
+            "flathub",
+            FLATHUB_REPO_FILE,
+        ];
+        match self.installation {
+            Installation::System => Step {
+                source: SourceKind::Flatpak,
+                title: "Adding Flathub".to_string(),
+                command: Command {
+                    program: "flatpak".to_string(),
+                    args: args.iter().map(|a| a.to_string()).collect(),
+                    env: Vec::new(),
+                    cwd: None,
+                },
+                needs_root: true,
+                weight: 1,
+            },
+            Installation::User => self.step("Adding Flathub".to_string(), &args, 1),
+        }
+    }
+
+    /// A search answered by Flathub's API alone, for a machine where
+    /// flatpak cannot answer (not installed, or no remote yet). Every hit
+    /// is an application from Flathub in the installation installs go to.
+    fn search_flathub(&self, query: &Query) -> Result<Vec<Package>> {
+        let term = query.text.trim();
+        if term.is_empty() {
+            return Ok(Vec::new());
+        }
+        let json = self.flathub.search(term).map_err(|e| {
+            Error::from_source(
+                SourceKind::Flatpak,
+                format!(
+                    "Flathub's search did not answer ({}). Check the connection and try again.",
+                    e.message
+                ),
+            )
+        })?;
+        let remote = self.flathub_to_be();
+        let mut scored: Vec<(f32, Package)> = parse_hits(&json)
+            .values()
+            .map(|hit| {
+                let p = self.package_from_hit(hit, &remote);
+                let component = Component {
+                    name: p.name.clone(),
+                    id: hit.app_id.clone(),
+                    summary: p.summary.clone(),
+                    keywords: hit.keywords.clone(),
+                    ..Component::default()
+                };
+                (score(&component, term).max(0.2), p)
+            })
+            .collect();
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()))
+        });
+        scored.truncate(query.limit);
+        Ok(scored.into_iter().map(|(_, p)| p).collect())
     }
 
     fn require_installed(&self) -> Result<()> {
@@ -665,12 +806,23 @@ impl Source for Flatpak {
 
     fn status(&self) -> SourceStatus {
         let kind = SourceKind::Flatpak;
-        if self.runner.locate().is_none() {
+        if !self.is_installed() {
+            let setup = self.flatpak_package().map(|_| SourceSetup {
+                label: SETUP_LABEL.to_string(),
+                sentence: SETUP_SENTENCE.to_string(),
+            });
+            let reason = if setup.is_some() {
+                NOT_INSTALLED_SEARCHABLE
+            } else {
+                NOT_INSTALLED_NO_SETUP
+            };
             return SourceStatus {
                 kind,
                 available: false,
-                reason: Some(NOT_INSTALLED.to_string()),
+                reason: Some(reason.to_string()),
                 detail: None,
+                searchable: true,
+                setup,
             };
         }
         match self.remotes() {
@@ -679,12 +831,19 @@ impl Source for Flatpak {
                 available: false,
                 reason: Some(e.message),
                 detail: None,
+                searchable: false,
+                setup: None,
             },
             Ok(remotes) if remotes.is_empty() => SourceStatus {
                 kind,
                 available: false,
                 reason: Some(NO_REMOTES.to_string()),
                 detail: Some("no remotes".to_string()),
+                searchable: true,
+                setup: Some(SourceSetup {
+                    label: ADD_FLATHUB_LABEL.to_string(),
+                    sentence: ADD_FLATHUB_SENTENCE.to_string(),
+                }),
             },
             Ok(remotes) => {
                 let mut names: Vec<&str> = Vec::new();
@@ -698,16 +857,23 @@ impl Source for Flatpak {
                     available: true,
                     reason: None,
                     detail: Some(names.join(", ")),
+                    searchable: false,
+                    setup: None,
                 }
             }
         }
     }
 
     fn search(&self, query: &Query) -> Result<Vec<Package>> {
-        self.require_installed()?;
+        if !self.is_installed() {
+            return self.search_flathub(query);
+        }
         let remotes = self.remotes()?;
+        if remotes.is_empty() {
+            return self.search_flathub(query);
+        }
         let term = query.text.trim();
-        if remotes.is_empty() || term.is_empty() {
+        if term.is_empty() {
             return Ok(Vec::new());
         }
         let installed = self.installed_rows();
@@ -859,15 +1025,23 @@ impl Source for Flatpak {
 
     fn details(&self, id: &str) -> Result<Package> {
         let r = FlatpakRef::parse(id)?;
-        self.require_installed()?;
+        let present = self.is_installed();
         let bundle = r.bundle();
-        let installed = self.installed_rows();
+        let installed = if present {
+            self.installed_rows()
+        } else {
+            Vec::new()
+        };
         let current = find_installed(&installed, &r.app_id, &r.branch);
         let mut package = self
             .component_for(&r.remote, &r.app_id, &bundle)
             .map(|c| self.package_from_component(c, &r.remote, &bundle));
 
-        let remotes = self.remotes().unwrap_or_default();
+        let remotes = if present {
+            self.remotes().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let is_flathub = remotes
             .iter()
             .find(|x| x.name == r.remote)
@@ -913,6 +1087,15 @@ impl Source for Flatpak {
         let mut p = match (package, current) {
             (Some(p), _) => p,
             (None, Some(row)) => self.package_from_row(row),
+            (None, None) if !present => {
+                return Err(Error::from_source(
+                    SourceKind::Flatpak,
+                    format!(
+                        "Flathub did not describe {}, and Flatpak is not installed to ask. Check the connection and try again.",
+                        r.app_id
+                    ),
+                ));
+            }
             (None, None) => {
                 return Err(Error::from_source(
                     SourceKind::Flatpak,
@@ -953,12 +1136,24 @@ impl Source for Flatpak {
         match op {
             Op::Install { package } if package.source == SourceKind::Flatpak => {
                 let r = FlatpakRef::parse(&package.id)?;
-                let installed = self.installed_rows();
+                // Without flatpak (a plan that sets it up first) nothing is
+                // installed and the remote will be in the preferred
+                // installation, where the setup adds it.
+                let present = self.is_installed();
+                let installed = if present {
+                    self.installed_rows()
+                } else {
+                    Vec::new()
+                };
                 if find_installed(&installed, &r.app_id, &r.branch).is_some() {
                     return Ok(Vec::new());
                 }
                 let name = self.display_name(&r, &installed);
-                let installation = self.installation_for_remote(&r.remote);
+                let installation = if present {
+                    self.installation_for_remote(&r.remote)
+                } else {
+                    self.installation
+                };
                 let bundle = r.bundle();
                 Ok(vec![self.step(
                     format!("Installing {name} from {}", r.remote),
@@ -1025,6 +1220,28 @@ impl Source for Flatpak {
                 2,
             )]),
             _ => Ok(Vec::new()),
+        }
+    }
+
+    /// Without flatpak: install the distribution's flatpak package, then add
+    /// Flathub. With flatpak and no remote at all: add Flathub. Otherwise,
+    /// and on a system with no package manager the store knows, nothing.
+    fn setup(&self) -> Option<Setup> {
+        if !self.is_installed() {
+            let package = self.flatpak_package()?;
+            return Some(Setup {
+                ops: vec![Op::Install { package }],
+                steps: vec![self.add_flathub_step()],
+                notice: SETUP_NOTICE.to_string(),
+            });
+        }
+        match self.remotes() {
+            Ok(remotes) if remotes.is_empty() => Some(Setup {
+                ops: Vec::new(),
+                steps: vec![self.add_flathub_step()],
+                notice: ADD_FLATHUB_NOTICE.to_string(),
+            }),
+            _ => None,
         }
     }
 }

@@ -223,6 +223,8 @@ mod tests {
                 available: self.available,
                 reason: (!self.available).then(|| "Not on this machine.".to_string()),
                 detail: None,
+                searchable: false,
+                setup: None,
             }
         }
         fn search(&self, _query: &Query) -> Result<Vec<Package>> {

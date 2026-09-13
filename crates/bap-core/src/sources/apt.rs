@@ -343,6 +343,8 @@ impl Source for Apt {
                 available: false,
                 reason: Some(reason),
                 detail: None,
+                searchable: false,
+                setup: None,
             },
             None => {
                 let suites = self.suites();
@@ -355,6 +357,8 @@ impl Source for Apt {
                     } else {
                         Some(suites.join(", "))
                     },
+                    searchable: false,
+                    setup: None,
                 }
             }
         }
@@ -499,6 +503,8 @@ impl Source for Apt {
                 &["update"],
                 1,
             )]),
+            // The planner expands a setup through `Source::setup`.
+            Op::Setup { .. } => Ok(Vec::new()),
         }
     }
 }

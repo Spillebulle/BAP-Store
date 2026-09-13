@@ -59,6 +59,11 @@ packaging/         desktop entry, AppStream metainfo, polkit policy, linux/ (deb
 - `plan(op) -> Vec<Step>`: how an install, remove or update is carried out,
   as steps the helper or the user session will run. A source never runs
   anything itself.
+- `setup() -> Option<Setup>`: when its tool is missing, how the store would
+  set it up: operations for other sources first (installing `flatpak` through
+  pacman, apt or dnf; `snapd` through the AUR, apt or dnf), then its own steps
+  (adding Flathub; starting snapd), and the sentence the confirm dialog
+  shows. The planner expands `Op::Setup { source }` through it.
 
 Implemented: `pacman`, `aur`, `flatpak`, `snap`, `apt`, `dnf`, `github`,
 `fwupd`, `chwd`. Each is a module; each declares whether its steps need root.
@@ -92,7 +97,10 @@ style guide).
 A separate executable, deliberately tiny. Reads one JSON `Plan` on stdin,
 validates it against a closed list (`pacman -S/-Syu/-Rs/-U`, `apt-get`, `dnf`,
 `snap`, `flatpak --system`, `chwd`, `dpkg -i`, `rpm`, `pacman -U` of a file
-the store downloaded), refuses anything else, runs the steps, streams one
+the store downloaded, and the four exact commands setting a source up needs:
+`flatpak remote-add --if-not-exists --system flathub` with Flathub's own
+address, `systemctl enable --now snapd.socket`, `ln -sfn /var/lib/snapd/snap
+/snap` and `snap wait system seed.loaded`), refuses anything else, runs the steps, streams one
 JSON event per line on stdout. It has no network code, no search, no
 metadata. `packaging/io.github.spillebulle.bapstore.policy` grants it
 `auth_admin_keep`, so a batch of installs is one password.
@@ -154,6 +162,18 @@ colour in this family means state.
 - **A source that cannot work says why and is not drawn as if it could.** The
   sources multi-select lists an unavailable source disabled with the reason
   in its tooltip; a search never silently omits it.
+- **A source that is not installed can still be searched and set up.**
+  Flatpak without flatpak and Snap without snapd are `searchable`: a search
+  asks their public stores (Flathub's search API, api.snapcraft.io) so their
+  editions sit beside the distribution's. Installing one of those results
+  sets the tool up first in the same plan (`Op::Setup` before the install:
+  the tool's package through the distribution's source, then adding Flathub
+  or starting snapd), and the confirm dialog says so in one sentence. The
+  helper's closed list allows exactly the post-install commands that needs
+  and no other spelling of them. Plan steps keep the order of the operations
+  that produced them, because a setup chain depends on it; only adjacent
+  package-manager calls are joined. After the plan the store detects its
+  sources again, so the source is available without a restart.
 - **Progress is honest.** A fraction is shown only when the total is known
   (steps in a plan, bytes of a download with a length). pacman and flatpak
   output is streamed as a log; the rail stays empty with a sentence beside it

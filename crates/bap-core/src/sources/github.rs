@@ -853,6 +853,8 @@ impl Source for Github {
             available: true,
             reason: None,
             detail: Some("public API, 10 searches a minute without a token".to_string()),
+            searchable: false,
+            setup: None,
         }
     }
 
@@ -1011,7 +1013,8 @@ impl Source for Github {
                     .unwrap_or_else(|| PathBuf::from("/tmp"));
                 remove_steps(&record, &home)
             }
-            Op::Refresh { .. } => Ok(Vec::new()),
+            // The planner expands a setup through `Source::setup`.
+            Op::Refresh { .. } | Op::Setup { .. } => Ok(Vec::new()),
         }
     }
 
@@ -1044,7 +1047,7 @@ impl Source for Github {
                 })
             }
             Op::Remove { package } => self.forget_install(&package.id),
-            Op::UpdateAll { .. } | Op::Refresh { .. } => Ok(()),
+            Op::UpdateAll { .. } | Op::Refresh { .. } | Op::Setup { .. } => Ok(()),
         };
         if let Err(e) = outcome {
             log::warn!("GitHub could not update its install record: {}", e.message);

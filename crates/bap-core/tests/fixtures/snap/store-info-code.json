@@ -1,0 +1,66 @@
+{
+ "channel-map": [
+  {
+   "channel": {
+    "architecture": "amd64",
+    "name": "stable",
+    "released-at": "2026-09-10T12:37:38.614829+00:00",
+    "risk": "stable",
+    "track": "latest"
+   },
+   "confinement": "classic",
+   "revision": 263,
+   "version": "645f29cc"
+  }
+ ],
+ "default-track": null,
+ "name": "code",
+ "snap": {
+  "categories": [
+   {
+    "featured": true,
+    "name": "development"
+   }
+  ],
+  "description": "Visual Studio Code is a new choice of tool that combines the\nsimplicity of a code editor with what developers need for the core\nedit-build-debug cycle.\n",
+  "license": "Proprietary",
+  "links": {
+   "contact": [
+    "https://twitter.com/code"
+   ],
+   "website": [
+    "https://code.visualstudio.com/"
+   ]
+  },
+  "media": [
+   {
+    "height": 512,
+    "type": "icon",
+    "url": "https://dashboard.snapcraft.io/site_media/appmedia/2019/05/code_ozwVHSV.png",
+    "width": 512
+   },
+   {
+    "height": 520,
+    "type": "screenshot",
+    "url": "https://dashboard.snapcraft.io/site_media/appmedia/2017/09/home-screenshot-linux.png",
+    "width": 617
+   },
+   {
+    "height": null,
+    "type": "video",
+    "url": "https://www.youtube.com/watch?v=Sdg0ef2PpBw",
+    "width": null
+   }
+  ],
+  "publisher": {
+   "display-name": "Visual Studio Code",
+   "id": "qXCsqdX95tRyVlJUKTKESXEAuNRPfJob",
+   "username": "vscode",
+   "validation": "verified"
+  },
+  "store-url": "https://snapcraft.io/code",
+  "summary": "Code editing. Redefined.",
+  "title": "code"
+ },
+ "snap-id": "Ht0aUHi7ofh9Fbwh6m7jUN2pAy6kzBiu"
+}

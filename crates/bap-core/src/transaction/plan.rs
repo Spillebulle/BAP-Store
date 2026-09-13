@@ -1,16 +1,18 @@
 //! Operations to steps. Each source says how its own operations are carried
-//! out; this module orders those steps so that one helper run covers as many
-//! of them as possible, and joins consecutive package-manager calls into one
-//! (`pacman -S a`, `pacman -S b` becomes `pacman -S a b`), which is both one
-//! password and one dependency resolution instead of three.
+//! out; this module expands setups, puts the steps in order and joins
+//! adjacent package-manager calls into one (`pacman -S a`, `pacman -S b`
+//! becomes `pacman -S a b`), which is both one password and one dependency
+//! resolution instead of two.
 //!
-//! The order is refresh steps, then root steps grouped by source, then
-//! session steps. Within a source the order the source gave is kept. A source
-//! whose steps must alternate (download as the user, then `pacman -U` as
-//! root) is not split across lanes; its steps stay together at the end, and
-//! the runner asks for the password once more for them. The alternative,
-//! hoisting that `-U` into the shared root run, would install a file that
-//! has not been downloaded yet.
+//! The order is refresh steps, then every other step in the order of the
+//! operations that produced it, and within one operation the order its
+//! source gave. Nothing is hoisted across operations: a setup chain depends
+//! on its order (on Arch snapd is built from the AUR as the user before the
+//! root step that starts its socket, and `flatpak install` runs after the
+//! root steps that install flatpak and add Flathub), and so does a source
+//! whose steps alternate (download as the user, then `pacman -U` as root).
+//! The runner starts one helper run per stretch of consecutive root steps,
+//! and polkit's `auth_admin_keep` keeps that to one password in practice.
 
 use crate::model::*;
 use crate::{Result, Store};
@@ -21,28 +23,23 @@ use crate::{Result, Store};
 /// so rather than pretending the subset is what runs.
 pub const PARTIAL_UPGRADE_NOTICE: &str = "Arch does not support partial upgrades, so updating any pacman package updates every pacman package. Update all is what runs.";
 
-/// Build the plan for `ops`: ask each source for its steps, order them into
-/// lanes, batch what can be batched.
+/// Build the plan for `ops`: expand each setup, ask each source for its
+/// steps, put refresh steps first, batch what is adjacent and can be
+/// batched.
 pub fn build(store: &Store, ops: &[Op]) -> Result<Plan> {
-    let mut gathered = Vec::new();
-    for (index, op) in ops.iter().enumerate() {
-        let kind = source_of(op);
-        let Some(source) = store.source(kind) else {
-            return Err(crate::Error::new(format!(
-                "{} is not a source on this machine.",
-                kind.label()
-            )));
-        };
-        for step in source.plan(op)? {
-            gathered.push(Gathered {
-                step,
-                op: index,
-                refresh: matches!(op, Op::Refresh { .. }),
-            });
-        }
+    let mut gatherer = Gatherer {
+        store,
+        expanded: Vec::new(),
+        gathered: Vec::new(),
+        set_up: Vec::new(),
+    };
+    for op in ops {
+        gatherer.gather(op)?;
     }
-    let ordered = order(gathered, ops);
-    let steps = batch(ordered, ops);
+    let Gatherer {
+        expanded, gathered, ..
+    } = gatherer;
+    let steps = batch(order(gathered), &expanded);
     Ok(Plan {
         id: new_id(),
         ops: ops.to_vec(),
@@ -50,17 +47,153 @@ pub fn build(store: &Store, ops: &[Op]) -> Result<Plan> {
     })
 }
 
-/// What the page should say beside a plan before it runs. Today that is one
-/// sentence: a pacman update that leaves other pending pacman updates out is
-/// a partial upgrade, which Arch does not support, so what runs is an update
-/// of everything. The sentence is shown whenever the plan updates some pacman
-/// packages but not all of them, when the pending list cannot be read
-/// (because then nobody can say the update is complete), and whenever a
-/// pacman refresh is planned beside a pacman install or update without an
-/// "Update all", because a refresh followed by an install is that same
+/// The sentence for a setup the source cannot give on this machine.
+pub fn cannot_set_up(kind: SourceKind) -> String {
+    format!(
+        "{} cannot be set up on this system by BAP Store.",
+        kind.label()
+    )
+}
+
+/// Walks the operations, expanding each `Setup` into the operations and
+/// steps its source gives. `expanded` is every operation a step came from,
+/// setup operations included, so a batched title can say what the batch
+/// does.
+struct Gatherer<'a> {
+    store: &'a Store,
+    expanded: Vec<Op>,
+    gathered: Vec<Gathered>,
+    /// Sources already set up in this plan: a second `Setup` for one, or
+    /// a setup chain that comes back to it, adds nothing.
+    set_up: Vec<SourceKind>,
+}
+
+impl Gatherer<'_> {
+    fn gather(&mut self, op: &Op) -> Result<()> {
+        let kind = op.source();
+        let Some(source) = self.store.source(kind) else {
+            return Err(crate::Error::new(format!(
+                "{} is not a source on this machine.",
+                kind.label()
+            )));
+        };
+        let index = self.expanded.len();
+        self.expanded.push(op.clone());
+        if let Op::Setup { .. } = op {
+            if self.set_up.contains(&kind) {
+                return Ok(());
+            }
+            self.set_up.push(kind);
+            let Some(setup) = source.setup() else {
+                return Err(crate::Error::from_source(kind, cannot_set_up(kind)));
+            };
+            for inner in &setup.ops {
+                self.gather(inner)?;
+            }
+            for step in setup.steps {
+                self.gathered.push(Gathered {
+                    step,
+                    op: index,
+                    refresh: false,
+                });
+            }
+            return Ok(());
+        }
+        for step in source.plan(op)? {
+            self.gathered.push(Gathered {
+                step,
+                op: index,
+                refresh: matches!(op, Op::Refresh { .. }),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// What the page should say beside a plan before it runs.
+///
+/// A setup says what setting its source up does ("Flatpak is not
+/// installed. It is installed and Flathub is added."), and when the plan
+/// then installs something from that source, the two are one sentence
+/// ("..., then GNU Image Manipulation Program is installed from it.").
+///
+/// A pacman update that leaves other pending pacman updates out is a
+/// partial upgrade, which Arch does not support, so what runs is an update
+/// of everything. That sentence is shown whenever the plan updates some
+/// pacman packages but not all of them, when the pending list cannot be
+/// read (because then nobody can say the update is complete), and whenever
+/// a pacman refresh is planned beside a pacman install or update without
+/// an "Update all", because a refresh followed by an install is that same
 /// partial upgrade in two steps.
 pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
-    let mut notices = Vec::new();
+    let mut notices = setup_notices(store, ops);
+    if let Some(partial) = partial_upgrade_notice(store, ops) {
+        notices.push(partial);
+    }
+    notices
+}
+
+fn setup_notices(store: &Store, ops: &[Op]) -> Vec<String> {
+    let mut notices: Vec<String> = Vec::new();
+    let mut said: Vec<SourceKind> = Vec::new();
+    for (i, op) in ops.iter().enumerate() {
+        let Op::Setup { source: kind } = op else {
+            continue;
+        };
+        if said.contains(kind) {
+            continue;
+        }
+        said.push(*kind);
+        let Some(setup) = store.source(*kind).and_then(|s| s.setup()) else {
+            continue;
+        };
+        let then = ops[i + 1..].iter().find_map(|later| match later {
+            Op::Install { package } if package.source == *kind => Some(package),
+            _ => None,
+        });
+        let sentence = match then {
+            Some(package) => combined_notice(&setup.notice, &display_name(store, package)),
+            None => setup.notice.clone(),
+        };
+        notices.push(sentence);
+    }
+    notices
+}
+
+/// "Flatpak is not installed. It is installed and Flathub is added." and a
+/// name become "Flatpak is not installed. It is installed and Flathub is
+/// added first, then GIMP is installed from it."
+pub fn combined_notice(setup_notice: &str, name: &str) -> String {
+    format!(
+        "{} first, then {name} is installed from it.",
+        setup_notice.trim_end().trim_end_matches('.')
+    )
+}
+
+/// The name the notice gives a package: its source's record where the
+/// source can give one, else the id's last segment.
+fn display_name(store: &Store, package: &PackageRef) -> String {
+    store
+        .source(package.source)
+        .and_then(|s| s.details(&package.id).ok())
+        .map(|p| p.name)
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| {
+            let id = package.id.trim_end_matches('/');
+            let parts: Vec<&str> = id.split('/').collect();
+            if package.source == SourceKind::Flatpak && parts.len() >= 4 {
+                // A Flatpak ref ends in the application id, arch and
+                // branch; the id's last part is the name Flatpak's own
+                // messages use ("GIMP" for org.gimp.GIMP).
+                let app_id = parts[parts.len() - 3];
+                app_id.rsplit('.').next().unwrap_or(app_id).to_string()
+            } else {
+                parts.last().copied().unwrap_or(id).to_string()
+            }
+        })
+}
+
+fn partial_upgrade_notice(store: &Store, ops: &[Op]) -> Option<String> {
     let is_pacman = |package: &PackageRef| package.source == SourceKind::Pacman;
     let updates_all = ops.iter().any(|op| {
         matches!(
@@ -89,11 +222,10 @@ pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
         })
         .collect();
     if updates_all {
-        return notices;
+        return None;
     }
     if refreshes && (installs || !chosen.is_empty()) {
-        notices.push(PARTIAL_UPGRADE_NOTICE.to_string());
-        return notices;
+        return Some(PARTIAL_UPGRADE_NOTICE.to_string());
     }
     if !chosen.is_empty() {
         let pending = store
@@ -103,10 +235,10 @@ pub fn notices(store: &Store, ops: &[Op]) -> Vec<String> {
             !p.is_empty() && p.iter().all(|u| chosen.contains(&u.package.id.as_str()))
         });
         if !complete {
-            notices.push(PARTIAL_UPGRADE_NOTICE.to_string());
+            return Some(PARTIAL_UPGRADE_NOTICE.to_string());
         }
     }
-    notices
+    None
 }
 
 pub fn new_id() -> String {
@@ -117,82 +249,22 @@ pub fn new_id() -> String {
     format!("plan-{t}")
 }
 
-fn source_of(op: &Op) -> SourceKind {
-    match op {
-        Op::Install { package } | Op::Remove { package } | Op::Update { package } => package.source,
-        Op::UpdateAll { source } | Op::Refresh { source } => *source,
-    }
-}
-
 struct Gathered {
     step: Step,
-    /// Index into the plan's ops, so a batched title can say what the batch
-    /// does and a source's steps can be told apart from another's.
+    /// Index into the expanded ops, so a batched title can say what the
+    /// batch does.
     op: usize,
     refresh: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Lane {
-    Refresh,
-    Root,
-    Session,
-}
-
-/// Stable ordering by (lane, source rank, sequence). The rank of a source is
-/// where it first appears in `ops`, so the user's order still shows through
-/// where nothing forces another.
-fn order(gathered: Vec<Gathered>, ops: &[Op]) -> Vec<Gathered> {
-    let ranks: Vec<SourceKind> = ops
-        .iter()
-        .map(source_of)
-        .fold(Vec::new(), |mut ranks, kind| {
-            if !ranks.contains(&kind) {
-                ranks.push(kind);
-            }
-            ranks
-        });
-    let bound: Vec<SourceKind> = ranks
-        .iter()
-        .copied()
-        .filter(|kind| order_bound(gathered.iter().filter(|g| g.step.source == *kind)))
-        .collect();
-    let mut indexed: Vec<(Lane, usize, usize, Gathered)> = gathered
-        .into_iter()
-        .enumerate()
-        .map(|(sequence, g)| {
-            let lane = if g.refresh {
-                Lane::Refresh
-            } else if bound.contains(&g.step.source) {
-                Lane::Session
-            } else if g.step.needs_root {
-                Lane::Root
-            } else {
-                Lane::Session
-            };
-            let rank = ranks
-                .iter()
-                .position(|k| *k == g.step.source)
-                .unwrap_or(ranks.len());
-            (lane, rank, sequence, g)
-        })
-        .collect();
-    indexed.sort_by_key(|(lane, rank, sequence, _)| (*lane, *rank, *sequence));
-    indexed.into_iter().map(|(_, _, _, g)| g).collect()
-}
-
-/// A source whose non-refresh steps put a root step after a session step
-/// depends on that order (a build, then an install of what was built).
-fn order_bound<'a>(steps: impl Iterator<Item = &'a Gathered>) -> bool {
-    let mut seen_session = false;
-    for g in steps.filter(|g| !g.refresh) {
-        if !g.step.needs_root {
-            seen_session = true;
-        } else if seen_session {
-            return true;
-        }
-    }
-    false
+/// Refresh steps first, then the rest, each part in the order it was
+/// gathered. That order is the order of the operations and, within one,
+/// the order its source gave; nothing else is moved.
+fn order(gathered: Vec<Gathered>) -> Vec<Gathered> {
+    let (mut refresh, rest): (Vec<Gathered>, Vec<Gathered>) =
+        gathered.into_iter().partition(|g| g.refresh);
+    refresh.extend(rest);
+    refresh
 }
 
 /// One batchable shape: `program verb` where the arguments after the verb are
@@ -427,7 +499,7 @@ fn batched_title(op_indexes: &[usize], ops: &[Op], count: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Query, Source};
+    use crate::{Query, Setup, Source};
 
     /// A source that answers `plan` from a table, so the planner is tested
     /// without pacman or the network.
@@ -435,6 +507,7 @@ mod tests {
         kind: SourceKind,
         steps: fn(&Op) -> Vec<Step>,
         pending: Vec<&'static str>,
+        setup: fn() -> Option<Setup>,
     }
 
     impl Source for Fake {
@@ -447,6 +520,8 @@ mod tests {
                 available: true,
                 reason: None,
                 detail: None,
+                searchable: false,
+                setup: None,
             }
         }
         fn search(&self, _: &Query) -> Result<Vec<Package>> {
@@ -482,6 +557,9 @@ mod tests {
         fn plan(&self, op: &Op) -> Result<Vec<Step>> {
             Ok((self.steps)(op))
         }
+        fn setup(&self) -> Option<Setup> {
+            (self.setup)()
+        }
     }
 
     fn step(source: SourceKind, title: &str, program: &str, args: &[&str], root: bool) -> Step {
@@ -506,6 +584,7 @@ mod tests {
             }
             Op::UpdateAll { .. } => "all".to_string(),
             Op::Refresh { .. } => "refresh".to_string(),
+            Op::Setup { .. } => "setup".to_string(),
         }
     }
 
@@ -543,6 +622,7 @@ mod tests {
                 &["-Sy"],
                 true,
             )],
+            Op::Setup { .. } => panic!("the planner never asks a source to plan a setup"),
         }
     }
 
@@ -631,6 +711,7 @@ mod tests {
             kind,
             steps,
             pending: Vec::new(),
+            setup: || None,
         })
     }
 
@@ -831,7 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn sources_are_grouped_so_interleaved_ops_still_batch() {
+    fn steps_keep_the_order_of_their_ops_and_only_adjacent_steps_batch() {
         let store = store(vec![
             fake(SourceKind::Pacman, pacman_steps),
             fake(SourceKind::Flatpak, flatpak_steps),
@@ -839,25 +920,45 @@ mod tests {
         let ops = [
             install(SourceKind::Flatpak, "org.gimp.GIMP"),
             install(SourceKind::Pacman, "a"),
-            install(SourceKind::Flatpak, "org.inkscape.Inkscape"),
             install(SourceKind::Pacman, "b"),
+            install(SourceKind::Flatpak, "org.inkscape.Inkscape"),
+            install(SourceKind::Pacman, "c"),
         ];
         let plan = build(&store, &ops).unwrap();
-        assert_eq!(plan.steps.len(), 2);
+        let shape: Vec<(SourceKind, Vec<&str>)> =
+            plan.steps.iter().map(|s| (s.source, args(s))).collect();
         assert_eq!(
-            plan.steps[0].source,
-            SourceKind::Flatpak,
-            "first appearance wins"
+            shape,
+            [
+                (
+                    SourceKind::Flatpak,
+                    vec!["install", "--system", "-y", "flathub", "org.gimp.GIMP"]
+                ),
+                (
+                    SourceKind::Pacman,
+                    vec!["-Syu", "--noconfirm", "--needed", "a", "b"]
+                ),
+                (
+                    SourceKind::Flatpak,
+                    vec![
+                        "install",
+                        "--system",
+                        "-y",
+                        "flathub",
+                        "org.inkscape.Inkscape"
+                    ]
+                ),
+                (
+                    SourceKind::Pacman,
+                    vec!["-Syu", "--noconfirm", "--needed", "c"]
+                ),
+            ]
         );
-        assert_eq!(plan.steps[1].source, SourceKind::Pacman);
-        assert_eq!(
-            args(&plan.steps[1]),
-            ["-Syu", "--noconfirm", "--needed", "a", "b"]
-        );
+        assert_eq!(plan.steps[1].title, "Installing 2 packages");
     }
 
     #[test]
-    fn refresh_first_then_root_then_session() {
+    fn refresh_first_then_the_order_of_the_ops() {
         let store = store(vec![
             fake(SourceKind::Pacman, pacman_steps),
             fake(SourceKind::Aur, aur_steps),
@@ -880,16 +981,17 @@ mod tests {
             [
                 (SourceKind::Pacman, "pacman", true),
                 (SourceKind::Aur, "pacman", true),
-                (SourceKind::Pacman, "pacman", true),
                 (SourceKind::Aur, "makepkg", false),
-            ]
+                (SourceKind::Pacman, "pacman", true),
+            ],
+            "a session step is never jumped by a later op's root step"
         );
         assert_eq!(args(&plan.steps[0]), ["-Sy"]);
         assert_eq!(plan.steps[1].title, "Installing build dependencies");
     }
 
     #[test]
-    fn a_download_then_install_source_is_not_split_across_lanes() {
+    fn a_download_then_install_source_keeps_its_order() {
         let store = store(vec![
             fake(SourceKind::Pacman, pacman_steps),
             fake(SourceKind::Github, github_steps),
@@ -904,11 +1006,253 @@ mod tests {
             .iter()
             .map(|s| (s.command.program.as_str(), s.needs_root))
             .collect();
-        assert_eq!(shape, [("pacman", true), ("curl", false), ("pacman", true)]);
+        assert_eq!(shape, [("curl", false), ("pacman", true), ("pacman", true)]);
         assert_eq!(
-            args(&plan.steps[2]),
+            args(&plan.steps[1]),
             ["-U", "/tmp/x.pkg.tar.zst"],
             "the -U is never batched"
+        );
+    }
+
+    fn flatpak_setup() -> Option<Setup> {
+        Some(Setup {
+            ops: vec![install(SourceKind::Pacman, "flatpak")],
+            steps: vec![step(
+                SourceKind::Flatpak,
+                "Adding Flathub",
+                "flatpak",
+                &[
+                    "remote-add",
+                    "--if-not-exists",
+                    "--system",
+                    "flathub",
+                    "https://dl.flathub.org/repo/flathub.flatpakrepo",
+                ],
+                true,
+            )],
+            notice: "Flatpak is not installed. It is installed and Flathub is added.".to_string(),
+        })
+    }
+
+    fn snap_setup() -> Option<Setup> {
+        Some(Setup {
+            ops: vec![install(SourceKind::Aur, "snapd")],
+            steps: vec![
+                step(
+                    SourceKind::Snap,
+                    "Starting snapd",
+                    "systemctl",
+                    &["enable", "--now", "snapd.socket"],
+                    true,
+                ),
+                step(
+                    SourceKind::Snap,
+                    "Linking /snap",
+                    "ln",
+                    &["-sfn", "/var/lib/snapd/snap", "/snap"],
+                    true,
+                ),
+            ],
+            notice: "snapd is not installed. It is built from the AUR and started.".to_string(),
+        })
+    }
+
+    fn snap_steps(op: &Op) -> Vec<Step> {
+        vec![step(
+            SourceKind::Snap,
+            &format!("Installing {}", id_of(op)),
+            "snap",
+            &["install", &id_of(op)],
+            true,
+        )]
+    }
+
+    fn with_setup(
+        kind: SourceKind,
+        steps: fn(&Op) -> Vec<Step>,
+        setup: fn() -> Option<Setup>,
+    ) -> Box<dyn Source> {
+        Box::new(Fake {
+            kind,
+            steps,
+            pending: Vec::new(),
+            setup,
+        })
+    }
+
+    fn shape(plan: &Plan) -> Vec<(SourceKind, String, bool)> {
+        plan.steps
+            .iter()
+            .map(|s| {
+                (
+                    s.source,
+                    format!("{} {}", s.command.program, s.command.args.join(" ")),
+                    s.needs_root,
+                )
+            })
+            .collect()
+    }
+
+    fn setup(kind: SourceKind) -> Op {
+        Op::Setup { source: kind }
+    }
+
+    #[test]
+    fn a_flatpak_setup_installs_flatpak_then_adds_flathub_then_installs_from_it() {
+        let store = store(vec![
+            fake(SourceKind::Pacman, pacman_steps),
+            with_setup(SourceKind::Flatpak, flatpak_steps, flatpak_setup),
+        ]);
+        let ops = [
+            setup(SourceKind::Flatpak),
+            install(SourceKind::Flatpak, "org.gimp.GIMP"),
+        ];
+        let plan = build(&store, &ops).unwrap();
+        assert_eq!(
+            shape(&plan),
+            [
+                (
+                    SourceKind::Pacman,
+                    "pacman -Syu --noconfirm --needed flatpak".to_string(),
+                    true
+                ),
+                (
+                    SourceKind::Flatpak,
+                    "flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo".to_string(),
+                    true
+                ),
+                (
+                    SourceKind::Flatpak,
+                    "flatpak install --system -y flathub org.gimp.GIMP".to_string(),
+                    true
+                ),
+            ]
+        );
+        assert_eq!(plan.ops, ops, "the plan keeps the ops as asked");
+        assert_eq!(plan.steps[0].title, "Installing flatpak");
+    }
+
+    #[test]
+    fn a_setup_joins_an_adjacent_pacman_install() {
+        let store = store(vec![
+            fake(SourceKind::Pacman, pacman_steps),
+            with_setup(SourceKind::Flatpak, flatpak_steps, flatpak_setup),
+        ]);
+        let plan = build(
+            &store,
+            &[
+                install(SourceKind::Pacman, "gimp"),
+                setup(SourceKind::Flatpak),
+            ],
+        )
+        .unwrap();
+        assert_eq!(plan.steps.len(), 2);
+        assert_eq!(
+            args(&plan.steps[0]),
+            ["-Syu", "--noconfirm", "--needed", "gimp", "flatpak"]
+        );
+        assert_eq!(plan.steps[0].title, "Installing 2 packages");
+    }
+
+    #[test]
+    fn a_snap_setup_on_arch_builds_snapd_before_starting_it() {
+        let store = store(vec![
+            fake(SourceKind::Pacman, pacman_steps),
+            fake(SourceKind::Aur, aur_steps),
+            with_setup(SourceKind::Snap, snap_steps, snap_setup),
+        ]);
+        let ops = [setup(SourceKind::Snap), install(SourceKind::Snap, "code")];
+        let plan = build(&store, &ops).unwrap();
+        let programs: Vec<(String, bool)> = shape(&plan)
+            .into_iter()
+            .map(|(_, command, root)| (command, root))
+            .collect();
+        assert_eq!(
+            programs,
+            [
+                ("pacman -S --needed --asdeps cmake".to_string(), true),
+                ("makepkg -si".to_string(), false),
+                ("systemctl enable --now snapd.socket".to_string(), true),
+                ("ln -sfn /var/lib/snapd/snap /snap".to_string(), true),
+                ("snap install code".to_string(), true),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_setup_is_expanded_once_and_a_source_without_one_is_an_error() {
+        let store = store(vec![
+            fake(SourceKind::Pacman, pacman_steps),
+            with_setup(SourceKind::Flatpak, flatpak_steps, flatpak_setup),
+            fake(SourceKind::Snap, snap_steps),
+        ]);
+        let plan = build(
+            &store,
+            &[setup(SourceKind::Flatpak), setup(SourceKind::Flatpak)],
+        )
+        .unwrap();
+        assert_eq!(plan.steps.len(), 2, "{:?}", shape(&plan));
+
+        let err = build(&store, &[setup(SourceKind::Snap)]).unwrap_err();
+        assert_eq!(
+            err.message,
+            "Snap cannot be set up on this system by BAP Store."
+        );
+        assert_eq!(
+            cannot_set_up(SourceKind::Flatpak),
+            "Flatpak cannot be set up on this system by BAP Store."
+        );
+    }
+
+    #[test]
+    fn setup_notices_say_what_happens_and_join_the_install_that_follows() {
+        let store = store(vec![
+            fake(SourceKind::Pacman, pacman_steps),
+            with_setup(SourceKind::Flatpak, flatpak_steps, flatpak_setup),
+            with_setup(SourceKind::Snap, snap_steps, snap_setup),
+        ]);
+        assert_eq!(
+            notices(&store, &[setup(SourceKind::Flatpak)]),
+            ["Flatpak is not installed. It is installed and Flathub is added."]
+        );
+        assert_eq!(
+            notices(
+                &store,
+                &[
+                    setup(SourceKind::Flatpak),
+                    install(
+                        SourceKind::Flatpak,
+                        "flathub/app/org.gimp.GIMP/x86_64/stable"
+                    )
+                ]
+            ),
+            [
+                "Flatpak is not installed. It is installed and Flathub is added first, then GIMP is installed from it."
+            ],
+            "the fake has no details, so the name is the ref's application id tail"
+        );
+        assert_eq!(
+            notices(
+                &store,
+                &[
+                    install(SourceKind::Snap, "code"),
+                    setup(SourceKind::Snap),
+                    setup(SourceKind::Flatpak),
+                    install(SourceKind::Snap, "vlc"),
+                ]
+            ),
+            [
+                "snapd is not installed. It is built from the AUR and started first, then vlc is installed from it.",
+                "Flatpak is not installed. It is installed and Flathub is added.",
+            ],
+            "only an install after the setup joins it, and each setup is said once"
+        );
+        assert_eq!(
+            combined_notice(
+                "Flatpak is not installed. It is installed and Flathub is added.",
+                "GNU Image Manipulation Program"
+            ),
+            "Flatpak is not installed. It is installed and Flathub is added first, then GNU Image Manipulation Program is installed from it."
         );
     }
 
@@ -1004,6 +1348,7 @@ mod tests {
             kind: SourceKind::Pacman,
             steps: pacman_steps,
             pending: vec!["a", "b", "c"],
+            setup: || None,
         });
         let store = store(vec![pacman]);
         assert_eq!(
@@ -1056,6 +1401,7 @@ mod tests {
             kind: SourceKind::Pacman,
             steps: pacman_steps,
             pending: vec!["a"],
+            setup: || None,
         });
         let store = store(vec![pacman]);
         let refresh = || Op::Refresh {

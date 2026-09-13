@@ -825,6 +825,8 @@ impl Source for Pacman {
                 available: false,
                 reason,
                 detail: None,
+                searchable: false,
+                setup: None,
             };
         }
         let conf = std::fs::read_to_string(&self.paths.conf).unwrap_or_default();
@@ -843,6 +845,8 @@ impl Source for Pacman {
             available: true,
             reason: None,
             detail: Some(detail),
+            searchable: false,
+            setup: None,
         }
     }
 
@@ -979,6 +983,8 @@ impl Source for Pacman {
                 self.own_source(*source)?;
                 return Ok(Vec::new());
             }
+            // The planner expands a setup through `Source::setup`.
+            Op::Setup { .. } => return Ok(Vec::new()),
         };
         Ok(vec![step])
     }

@@ -884,6 +884,8 @@ impl Source for Aur {
             available: false,
             reason: Some(reason.to_string()),
             detail: None,
+            searchable: false,
+            setup: None,
         };
         if !self.system.is_arch_like() {
             return unavailable("The AUR needs an Arch-based system.");
@@ -894,6 +896,8 @@ impl Source for Aur {
                 available: true,
                 reason: None,
                 detail: Some(detail),
+                searchable: false,
+                setup: None,
             },
             None => unavailable(NO_BUILDER),
         }
@@ -1009,7 +1013,8 @@ impl Source for Aur {
                     2,
                 )])
             }
-            Op::Refresh { .. } => Ok(Vec::new()),
+            // The planner expands a setup through `Source::setup`.
+            Op::Refresh { .. } | Op::Setup { .. } => Ok(Vec::new()),
             Op::UpdateAll { .. } => self.update_all_steps(),
         }
     }

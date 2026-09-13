@@ -10,7 +10,7 @@ page edits every key below; the file is for a machine set up by hand.
 | Key | Default | What it does |
 |---|---|---|
 | `theme` | `system` | `dark`, `light`, or `system` to follow the desktop. |
-| `enabled_sources` | all | Comma list of sources searched by default: `pacman,aur,flatpak,snap,apt,dnf,github,fwupd,chwd`. A source not on this machine stays listed, disabled, with the reason. |
+| `enabled_sources` | all | Comma list of sources searched by default: `pacman,aur,flatpak,snap,apt,dnf,github,fwupd,chwd`. A source not on this machine stays listed, disabled, with the reason; Flatpak and Snap are still searched through their public stores and can be set up from Settings or by installing one of their results. |
 | `show_packages` | `false` | Search shows only applications unless this is on or the toolbar toggle is used. |
 | `aur_helper` | `auto` | `auto` uses paru, then yay, then the built-in makepkg path. `paru`, `yay` or `builtin` force one. |
 | `flatpak_scope` | `system` | Whether Flatpak installs go to the system installation (asks polkit) or to `~/.local/share/flatpak` (`user`, no password). |

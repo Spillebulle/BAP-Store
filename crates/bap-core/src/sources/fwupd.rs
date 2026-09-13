@@ -301,6 +301,8 @@ impl Fwupd {
                 available: false,
                 reason: Some("fwupd is not installed.".to_string()),
                 detail: None,
+                searchable: false,
+                setup: None,
             };
         }
         match system::run("fwupdmgr", &["get-devices", "--json"]) {
@@ -309,12 +311,16 @@ impl Fwupd {
                 available: true,
                 reason: None,
                 detail: daemon_version(),
+                searchable: false,
+                setup: None,
             },
             Err(_) => SourceStatus {
                 kind,
                 available: false,
                 reason: Some("The fwupd service is not running.".to_string()),
                 detail: None,
+                searchable: false,
+                setup: None,
             },
         }
     }
@@ -405,6 +411,8 @@ impl Source for Fwupd {
             }
             Op::UpdateAll { .. } => Ok(vec![update_all_step()]),
             Op::Refresh { .. } => Ok(vec![refresh_step()]),
+            // The planner expands a setup through `Source::setup`.
+            Op::Setup { .. } => Ok(Vec::new()),
             Op::Install { .. } | Op::Remove { .. } => Err(err(
                 "Firmware is updated, not installed, and cannot be removed.",
             )),

@@ -7,11 +7,15 @@
 use bap_core::appstream::{Catalogue, Component};
 use bap_core::http::Client;
 use bap_core::sources::flatpak::{
-    FlathubApi, Flatpak, Installation, LiveFlathub, NO_REMOTES, NOT_INSTALLED, ScriptedFlathub,
-    ScriptedRunner, parse_hits, parse_list, parse_operation, parse_progress, parse_remote_ls,
-    parse_remotes,
+    ADD_FLATHUB_NOTICE, FlathubApi, Flatpak, Installation, LiveFlathub, NO_REMOTES, NOT_INSTALLED,
+    NOT_INSTALLED_NO_SETUP, NOT_INSTALLED_SEARCHABLE, SETUP_NOTICE, SETUP_SENTENCE,
+    ScriptedFlathub, ScriptedRunner, parse_hits, parse_list, parse_operation, parse_progress,
+    parse_remote_ls, parse_remotes,
 };
-use bap_core::{Op, PackageKind, PackageRef, Picture, Query, Source, SourceKind, Step};
+use bap_core::transaction::allow::{Allowed, check_step};
+use bap_core::{
+    Op, PackageKind, PackageRef, Picture, Query, Source, SourceKind, SourceSetup, Step, SystemInfo,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
@@ -195,7 +199,14 @@ fn status_on_this_machine_is_honest_about_flatpak() {
     match bap_core::system::which("flatpak") {
         None => {
             assert!(!status.available);
-            assert_eq!(status.reason.as_deref(), Some(NOT_INSTALLED));
+            assert!(status.searchable, "Flathub's API still answers");
+            assert!(
+                status
+                    .reason
+                    .as_deref()
+                    .is_some_and(|r| r.starts_with(NOT_INSTALLED)),
+                "{status:?}"
+            );
             assert_eq!(status.detail, None);
         }
         // A machine with flatpak: the status is whatever its remotes say;
@@ -204,20 +215,277 @@ fn status_on_this_machine_is_honest_about_flatpak() {
     }
 }
 
+fn arch() -> SystemInfo {
+    bap_core::system::from_os_release("ID=cachyos\nID_LIKE=arch\n")
+}
+
+fn without_flatpak() -> Flatpak {
+    Flatpak::with_parts("x86_64", ScriptedRunner::absent(), flathub(), catalogue())
+        .with_system(&arch())
+}
+
 #[test]
-fn without_flatpak_every_question_says_to_install_it() {
-    let source = Flatpak::with_parts("x86_64", ScriptedRunner::absent(), flathub(), catalogue());
+fn without_flatpak_it_is_searchable_and_can_be_set_up() {
+    let source = without_flatpak();
     let status = source.status();
     assert!(!status.available);
-    assert_eq!(status.reason.as_deref(), Some(NOT_INSTALLED));
-    house_style(NOT_INSTALLED);
+    assert!(status.searchable);
+    assert_eq!(status.reason.as_deref(), Some(NOT_INSTALLED_SEARCHABLE));
     assert_eq!(
-        source.search(&Query::new("gimp")).unwrap_err().message,
-        NOT_INSTALLED
+        status.setup,
+        Some(SourceSetup {
+            label: "Install Flatpak".to_string(),
+            sentence: "Installs Flatpak and adds Flathub, then Flatpak applications can be installed and updated here.".to_string(),
+        })
     );
+    for sentence in [
+        NOT_INSTALLED,
+        NOT_INSTALLED_SEARCHABLE,
+        NOT_INSTALLED_NO_SETUP,
+        SETUP_SENTENCE,
+        SETUP_NOTICE,
+        ADD_FLATHUB_NOTICE,
+    ] {
+        house_style(sentence);
+    }
+    // What needs the command still needs it.
     assert_eq!(source.installed().unwrap_err().message, NOT_INSTALLED);
     assert_eq!(source.updates().unwrap_err().message, NOT_INSTALLED);
-    assert_eq!(source.details(GIMP).unwrap_err().message, NOT_INSTALLED);
+
+    // On a distribution the store has no package manager for, it is still
+    // searchable and says it cannot be set up.
+    let elsewhere = Flatpak::with_parts("x86_64", ScriptedRunner::absent(), flathub(), catalogue());
+    let status = elsewhere.status();
+    assert!(status.searchable);
+    assert_eq!(status.setup, None);
+    assert_eq!(status.reason.as_deref(), Some(NOT_INSTALLED_NO_SETUP));
+    assert!(elsewhere.setup().is_none());
+}
+
+#[test]
+fn without_flatpak_search_comes_from_flathub_as_flathub_refs() {
+    let source = Flatpak::with_parts(
+        "x86_64",
+        ScriptedRunner::absent(),
+        flathub(),
+        Catalogue::from_components(Vec::new()),
+    );
+    let found = source.search(&Query::new("gimp")).unwrap();
+    let ids: Vec<&str> = found.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            GIMP,
+            "flathub/app/com.github.vikdevelop.photopea_app/x86_64/stable",
+            "flathub/app/com.github.unrud.djpdf/x86_64/stable",
+        ]
+    );
+    let gimp = &found[0];
+    assert_eq!(gimp.source, SourceKind::Flatpak);
+    assert_eq!(gimp.name, "GNU Image Manipulation Program");
+    assert_eq!(gimp.kind, PackageKind::App);
+    assert_eq!(gimp.repo.as_deref(), Some("flathub"));
+    assert_eq!(gimp.appstream_id.as_deref(), Some("org.gimp.GIMP"));
+    assert_eq!(
+        gimp.summary.as_deref(),
+        Some("High-end image creation and manipulation")
+    );
+    assert_eq!(gimp.developer.as_deref(), Some("The GIMP team"));
+    assert!(matches!(&gimp.icon, Some(Picture::Url(u)) if u.ends_with("org.gimp.GIMP.png")));
+    assert!(gimp.popularity.is_some_and(|p| p > 0.6));
+    assert!(gimp.sandboxed);
+    assert!(!gimp.installed, "nothing is installed without flatpak");
+
+    let arm = Flatpak::with_parts(
+        "aarch64",
+        ScriptedRunner::absent(),
+        flathub(),
+        Catalogue::from_components(Vec::new()),
+    );
+    assert_eq!(
+        arm.search(&Query::new("gimp")).unwrap()[0].id,
+        "flathub/app/org.gimp.GIMP/aarch64/stable"
+    );
+
+    let mut query = Query::new("gimp");
+    query.limit = 1;
+    assert_eq!(source.search(&query).unwrap().len(), 1);
+    assert_eq!(source.search(&Query::new("  ")).unwrap(), Vec::new());
+
+    let offline = Flatpak::with_parts(
+        "x86_64",
+        ScriptedRunner::absent(),
+        ScriptedFlathub::offline(),
+        catalogue(),
+    );
+    let e = offline.search(&Query::new("gimp")).unwrap_err();
+    assert_eq!(e.source_kind, Some(SourceKind::Flatpak));
+    assert!(
+        e.message.starts_with("Flathub's search did not answer"),
+        "{}",
+        e.message
+    );
+    house_style(&e.message);
+}
+
+#[test]
+fn without_flatpak_details_come_from_flathub() {
+    let source = Flatpak::with_parts(
+        "x86_64",
+        ScriptedRunner::absent(),
+        flathub(),
+        Catalogue::from_components(Vec::new()),
+    );
+    let p = source.details(GIMP).unwrap();
+    assert_eq!(p.name, "GNU Image Manipulation Program");
+    assert!(!p.installed);
+    assert!(p.description.is_some());
+    assert!(!p.screenshots.is_empty());
+    assert!(p.facts.iter().any(|(k, v)| k == "Remote" && v == "flathub"));
+
+    let offline = Flatpak::with_parts(
+        "x86_64",
+        ScriptedRunner::absent(),
+        ScriptedFlathub::offline(),
+        Catalogue::from_components(Vec::new()),
+    );
+    let e = offline.details(GIMP).unwrap_err();
+    house_style(&e.message);
+    assert!(e.message.contains("org.gimp.GIMP"), "{}", e.message);
+}
+
+#[test]
+fn setting_flatpak_up_installs_the_distribution_s_package_then_adds_flathub() {
+    let flatpak = |ops: &[Op]| -> Vec<(SourceKind, String)> {
+        ops.iter()
+            .map(|op| match op {
+                Op::Install { package } => (package.source, package.id.clone()),
+                other => panic!("a setup installs, it does not {other:?}"),
+            })
+            .collect()
+    };
+    for (os_release, source) in [
+        ("ID=cachyos\nID_LIKE=arch\n", SourceKind::Pacman),
+        ("ID=arch\n", SourceKind::Pacman),
+        ("ID=ubuntu\nID_LIKE=debian\n", SourceKind::Apt),
+        ("ID=debian\n", SourceKind::Apt),
+        ("ID=fedora\n", SourceKind::Dnf),
+        (
+            "ID=rocky\nID_LIKE=\"rhel centos fedora\"\n",
+            SourceKind::Dnf,
+        ),
+    ] {
+        let system = bap_core::system::from_os_release(os_release);
+        let setup = Flatpak::with_parts("x86_64", ScriptedRunner::absent(), flathub(), catalogue())
+            .with_system(&system)
+            .setup()
+            .unwrap_or_else(|| panic!("{os_release} has a setup"));
+        assert_eq!(
+            flatpak(&setup.ops),
+            [(source, "flatpak".to_string())],
+            "{os_release}"
+        );
+        assert_eq!(setup.notice, SETUP_NOTICE);
+        assert_eq!(setup.steps.len(), 1);
+        let add = &setup.steps[0];
+        assert_eq!(add.source, SourceKind::Flatpak);
+        assert_eq!(add.command.program, "flatpak");
+        assert_eq!(
+            args(add),
+            [
+                "remote-add",
+                "--if-not-exists",
+                "--system",
+                "flathub",
+                "https://dl.flathub.org/repo/flathub.flatpakrepo"
+            ]
+        );
+        assert!(
+            add.needs_root,
+            "the system installation goes through the helper"
+        );
+        assert_eq!(
+            check_step(add, &Allowed::system()),
+            Ok(()),
+            "the helper allows exactly this step"
+        );
+    }
+    let nowhere = bap_core::system::from_os_release("ID=gentoo\n");
+    assert!(
+        Flatpak::with_parts("x86_64", ScriptedRunner::absent(), flathub(), catalogue())
+            .with_system(&nowhere)
+            .setup()
+            .is_none()
+    );
+
+    let mut user = without_flatpak();
+    user.installation = Installation::User;
+    let setup = user.setup().unwrap();
+    let add = &setup.steps[0];
+    assert!(
+        !add.needs_root,
+        "the user's own installation needs no helper"
+    );
+    assert_eq!(
+        args(add),
+        [
+            "remote-add",
+            "--if-not-exists",
+            "--user",
+            "flathub",
+            "https://dl.flathub.org/repo/flathub.flatpakrepo"
+        ]
+    );
+}
+
+#[test]
+fn with_flatpak_there_is_nothing_to_set_up_unless_there_is_no_remote() {
+    let s = source().with_system(&arch());
+    assert!(s.status().available);
+    assert_eq!(s.status().setup, None);
+    assert!(
+        !s.status().searchable,
+        "an available source is simply searched"
+    );
+    assert!(s.setup().is_none());
+
+    let bare = Flatpak::with_parts(
+        "x86_64",
+        ScriptedRunner::present()
+            .answers(&REMOTES_SYSTEM, "")
+            .answers(&REMOTES_USER, ""),
+        flathub(),
+        catalogue(),
+    );
+    let setup = bare.setup().unwrap();
+    assert!(setup.ops.is_empty(), "flatpak is there already");
+    assert_eq!(setup.notice, ADD_FLATHUB_NOTICE);
+    assert_eq!(args(&setup.steps[0])[0], "remote-add");
+    assert_eq!(
+        bare.status().setup.map(|s| s.label).as_deref(),
+        Some("Add Flathub")
+    );
+}
+
+#[test]
+fn without_flatpak_an_install_plans_into_the_preferred_installation() {
+    let steps = without_flatpak()
+        .plan(&Op::Install {
+            package: package_ref(GIMP),
+        })
+        .unwrap();
+    assert_eq!(steps.len(), 1);
+    assert_eq!(
+        args(&steps[0]),
+        [
+            "install",
+            "-y",
+            "--noninteractive",
+            "--system",
+            "flathub",
+            "app/org.gimp.GIMP/x86_64/stable"
+        ]
+    );
 }
 
 #[test]
@@ -243,7 +511,7 @@ fn status_with_remotes_names_them_once_each() {
 }
 
 #[test]
-fn status_without_remotes_is_unavailable_and_search_finds_nothing() {
+fn status_without_remotes_is_unavailable_and_search_asks_flathub() {
     let runner = ScriptedRunner::present()
         .answers(&REMOTES_SYSTEM, "")
         .answers(&REMOTES_USER, "");
@@ -256,7 +524,9 @@ fn status_without_remotes_is_unavailable_and_search_finds_nothing() {
     assert_eq!(status.reason.as_deref(), Some(NO_REMOTES));
     assert_eq!(status.detail.as_deref(), Some("no remotes"));
     house_style(NO_REMOTES);
-    assert_eq!(source.search(&Query::new("gimp")).unwrap(), Vec::new());
+    assert!(status.searchable);
+    let found = source.search(&Query::new("gimp")).unwrap();
+    assert_eq!(found[0].id, GIMP, "Flathub's own search stands in");
 }
 
 #[test]

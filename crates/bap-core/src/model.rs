@@ -273,6 +273,26 @@ pub struct SourceStatus {
     pub reason: Option<String>,
     /// A short line for the status bar: "paru 2.1.0", "flathub, fedora".
     pub detail: Option<String>,
+    /// The source can answer a search through its public store even though
+    /// `available` is false (Flathub's API without flatpak, the Snap Store
+    /// without snapd). Installed and updates still need `available`.
+    #[serde(default)]
+    pub searchable: bool,
+    /// How the store can set the source up from inside, when it can:
+    /// `Op::Setup { source }` then plans it. `None` when the source is
+    /// available, or when this system has no way to install the tool.
+    #[serde(default)]
+    pub setup: Option<SourceSetup>,
+}
+
+/// What the page says about setting a source up: the button and the
+/// sentence under it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceSetup {
+    /// "Install Flatpak", "Install snapd", "Add Flathub".
+    pub label: String,
+    /// What setting it up does, one or two sentences.
+    pub sentence: String,
 }
 
 /// What the user asked for. A plan is built from a list of these.
@@ -296,6 +316,24 @@ pub enum Op {
     Refresh {
         source: SourceKind,
     },
+    /// Set the source up on this machine: install its tool through the
+    /// distribution's source, then the source's own steps (adding Flathub,
+    /// starting snapd). The planner expands it; see `Source::setup`.
+    Setup {
+        source: SourceKind,
+    },
+}
+
+impl Op {
+    /// The source that carries the operation out, or is set up by it.
+    pub fn source(&self) -> SourceKind {
+        match self {
+            Op::Install { package } | Op::Remove { package } | Op::Update { package } => {
+                package.source
+            }
+            Op::UpdateAll { source } | Op::Refresh { source } | Op::Setup { source } => *source,
+        }
+    }
 }
 
 /// A process to run. The helper validates `program` and `args` against its
@@ -452,4 +490,65 @@ pub struct DriversReport {
     pub firmware_available: bool,
     pub firmware_note: Option<String>,
     pub firmware: Vec<FirmwareDevice>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shapes `frontend/src/types.ts` mirrors, pinned here so a change
+    /// on either side shows up as a failing test rather than a blank page.
+    #[test]
+    fn a_source_status_and_a_setup_op_serialise_as_the_page_expects() {
+        let status = SourceStatus {
+            kind: SourceKind::Flatpak,
+            available: false,
+            reason: Some("Flatpak is not installed.".to_string()),
+            detail: None,
+            searchable: true,
+            setup: Some(SourceSetup {
+                label: "Install Flatpak".to_string(),
+                sentence: "Installs Flatpak and adds Flathub.".to_string(),
+            }),
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "kind": "flatpak",
+                "available": false,
+                "reason": "Flatpak is not installed.",
+                "detail": null,
+                "searchable": true,
+                "setup": {"label": "Install Flatpak", "sentence": "Installs Flatpak and adds Flathub."}
+            })
+        );
+        let back: SourceStatus = serde_json::from_value(json).unwrap();
+        assert_eq!(back, status);
+        // A status written before the two fields existed still reads.
+        let old: SourceStatus = serde_json::from_str(
+            r#"{"kind":"pacman","available":true,"reason":null,"detail":"core, extra"}"#,
+        )
+        .unwrap();
+        assert!(!old.searchable);
+        assert_eq!(old.setup, None);
+
+        let op = Op::Setup {
+            source: SourceKind::Snap,
+        };
+        let json = serde_json::to_value(&op).unwrap();
+        assert_eq!(json, serde_json::json!({"op": "setup", "source": "snap"}));
+        assert_eq!(serde_json::from_value::<Op>(json).unwrap(), op);
+        assert_eq!(op.source(), SourceKind::Snap);
+        assert_eq!(
+            Op::Install {
+                package: PackageRef {
+                    source: SourceKind::Aur,
+                    id: "snapd".to_string()
+                }
+            }
+            .source(),
+            SourceKind::Aur
+        );
+    }
 }

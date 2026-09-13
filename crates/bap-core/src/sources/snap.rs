@@ -1,8 +1,11 @@
 //! The Snap Store, through snapd's REST API on `/run/snapd.socket`.
 //!
-//! snapd is the only way in. The public store API at api.snapcraft.io can
-//! search without it, but a result the machine cannot install is a lie, so
-//! when snapd is absent this source says why and does nothing else. The API
+//! snapd is the way in when it is running. When it is not, the public store
+//! API at api.snapcraft.io answers searches and details instead, and
+//! [`Source::setup`] says how snapd is installed (through the distribution's
+//! package manager, or the AUR on Arch) and started, in the same plan as the
+//! first install from the Snap Store, so a result found that way can be
+//! installed. snapd's API
 //! is HTTP/1.1 over a unix socket, and rather than pull in a crate for that
 //! a minimal client lives here: one request line, four headers, a status
 //! line, headers, and a body by content-length or chunked. That is all snapd
@@ -32,8 +35,9 @@
 //! Go's HTTP server sends small bodies with `Content-Length` and larger
 //! ones chunked, so both are needed in practice, not just for completeness.
 
+use crate::http::Client;
 use crate::model::*;
-use crate::{Error, Op, Query, Result, Source};
+use crate::{Error, Op, Query, Result, Setup, Source};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -49,6 +53,188 @@ pub const SOCKET_PATH: &str = "/run/snapd.socket";
 /// Where snaps are mounted: `/snap` on Ubuntu and Debian, the second on
 /// Arch and Fedora, which do not put a directory in `/`.
 const MOUNT_DIRS: [&str; 2] = ["/snap", "/var/lib/snapd/snap"];
+
+/// The public Snap Store API, which answers without snapd.
+pub const STORE_API: &str = "https://api.snapcraft.io/v2/snaps";
+
+/// The fields a store search and a store lookup ask for: what the mapping
+/// to a package reads.
+pub const STORE_FIELDS: &str = "title,summary,description,media,publisher,version,license,store-url,revision,categories,confinement,links";
+
+/// The button and the sentence for setting snapd up, and on Arch the
+/// sentence that follows it.
+pub const SETUP_LABEL: &str = "Install snapd";
+pub const SETUP_SENTENCE: &str = "Installs snapd and starts its service, then Snap applications can be installed and updated here.";
+pub const SETUP_FROM_AUR: &str = "snapd comes from the AUR.";
+/// The button and the sentence for a snapd that is installed and stopped.
+pub const START_LABEL: &str = "Start snapd";
+pub const START_SENTENCE: &str =
+    "Starts snapd's service, then Snap applications can be installed and updated here.";
+
+/// The public Snap Store, behind a trait so a search without snapd is
+/// tested with no network. Answers are raw JSON.
+pub trait SnapStore: Send + Sync {
+    /// `GET /v2/snaps/find?q=<term>&fields=...` with `Snap-Device-Series: 16`.
+    fn find(&self, term: &str) -> Result<serde_json::Value>;
+
+    /// `GET /v2/snaps/info/<name>?fields=...`, the same header.
+    fn info(&self, name: &str) -> Result<serde_json::Value>;
+}
+
+/// The real store, through the shared HTTP client.
+pub struct LiveSnapStore {
+    client: Arc<Client>,
+}
+
+impl LiveSnapStore {
+    pub fn new(client: Arc<Client>) -> LiveSnapStore {
+        LiveSnapStore { client }
+    }
+}
+
+/// The store API refuses a request without a device series; 16 is the only
+/// one there has ever been.
+const SERIES: [(&str, &str); 1] = [("Snap-Device-Series", "16")];
+
+impl SnapStore for LiveSnapStore {
+    fn find(&self, term: &str) -> Result<serde_json::Value> {
+        self.client.get_json(
+            &format!("{STORE_API}/find?q={}&fields={STORE_FIELDS}", encode(term)),
+            &SERIES,
+        )
+    }
+
+    fn info(&self, name: &str) -> Result<serde_json::Value> {
+        self.client.get_json(
+            &format!("{STORE_API}/info/{}?fields={STORE_FIELDS}", encode(name)),
+            &SERIES,
+        )
+    }
+}
+
+/// The store from a script: one find answer and answers by name. Anything
+/// not scripted fails the way an offline machine would.
+#[derive(Debug, Default)]
+pub struct ScriptedSnapStore {
+    pub find: Option<serde_json::Value>,
+    pub info: HashMap<String, serde_json::Value>,
+}
+
+impl SnapStore for ScriptedSnapStore {
+    fn find(&self, _term: &str) -> Result<serde_json::Value> {
+        self.find
+            .clone()
+            .ok_or_else(|| snap_error("Could not reach api.snapcraft.io.".to_string()))
+    }
+
+    fn info(&self, name: &str) -> Result<serde_json::Value> {
+        self.info
+            .get(name)
+            .cloned()
+            .ok_or_else(|| snap_error("Could not reach api.snapcraft.io.".to_string()))
+    }
+}
+
+/// The store's spelling of an architecture Rust reports.
+pub fn store_arch(rust_arch: &str) -> &str {
+    match rust_arch {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        "x86" => "i386",
+        "arm" => "armhf",
+        other => other,
+    }
+}
+
+/// A store API record as the `SnapInfo` snapd would have sent: the `snap`
+/// object holds the metadata, `revision` (find) or the chosen channel
+/// entry (info) the version, revision and confinement.
+fn store_record(name: &str, snap: &serde_json::Value, release: &serde_json::Value) -> SnapInfo {
+    let mut info: SnapInfo = serde_json::from_value(snap.clone()).unwrap_or_default();
+    info.name = name.to_string();
+    // Every store result is something a desktop user would install; the
+    // store API does not say the type unless asked, and snapd's own find
+    // leaves bases out of a search the same way.
+    info.kind = "app".to_string();
+    let text_of = |key: &str| {
+        release
+            .get(key)
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Number(n) => n.to_string(),
+                _ => String::new(),
+            })
+            .unwrap_or_default()
+    };
+    info.version = text_of("version");
+    info.revision = text_of("revision");
+    info.confinement = text_of("confinement");
+    info.channel = release
+        .pointer("/channel/name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("stable")
+        .to_string();
+    if info.website.is_empty()
+        && let Some(site) = snap
+            .pointer("/links/website/0")
+            .and_then(serde_json::Value::as_str)
+    {
+        info.website = site.to_string();
+    }
+    info
+}
+
+/// The results of a store search.
+pub fn parse_store_find(json: &serde_json::Value) -> Vec<SnapInfo> {
+    json.get("results")
+        .and_then(serde_json::Value::as_array)
+        .map(|results| {
+            results
+                .iter()
+                .filter_map(|r| {
+                    let name = r.get("name")?.as_str()?;
+                    let snap = r.get("snap")?;
+                    let release = r.get("revision").cloned().unwrap_or_default();
+                    Some(store_record(name, snap, &release))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// A store lookup, on the channel an install takes: `latest/stable` for this
+/// architecture where there is one, else the first stable entry, else the
+/// first entry of any kind.
+pub fn parse_store_info(json: &serde_json::Value, arch: &str) -> Option<SnapInfo> {
+    let name = json.get("name")?.as_str()?;
+    let snap = json.get("snap")?;
+    let map = json
+        .get("channel-map")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let field = |c: &serde_json::Value, key: &str| {
+        c.pointer(&format!("/channel/{key}"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let here = |c: &&serde_json::Value| field(c, "architecture") == arch;
+    let release = map
+        .iter()
+        .filter(here)
+        .find(|c| field(c, "track") == "latest" && field(c, "risk") == "stable")
+        .or_else(|| {
+            map.iter()
+                .filter(here)
+                .find(|c| field(c, "risk") == "stable")
+        })
+        .or_else(|| map.iter().find(|c| field(c, "risk") == "stable"))
+        .or_else(|| map.first())
+        .cloned()
+        .unwrap_or_default();
+    Some(store_record(name, snap, &release))
+}
 
 /// What of snapd is on this machine, as far as the status line needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -690,7 +876,14 @@ pub fn to_package(info: &SnapInfo, local: Option<&SnapInfo>, mount_dirs: &[PathB
 /// The source.
 pub struct Snap {
     transport: Box<dyn Transport>,
+    /// The public store, for when snapd is not there to ask.
+    store: Box<dyn SnapStore>,
+    system: SystemInfo,
     arch_like: bool,
+    /// Whether the AUR can build a package here, which on Arch is the only
+    /// way to set snapd up. `None` asks `PATH` for makepkg, which paru and
+    /// yay need as well.
+    aur_builds: Option<bool>,
     /// Where to look for an installed snap's icon file; snapd's answer to
     /// `/v2/system-info` goes to the front once it has been read.
     mount_dirs: Mutex<Vec<PathBuf>>,
@@ -705,22 +898,125 @@ pub struct Snap {
 }
 
 impl Snap {
-    /// The HTTP client every source is handed is not used here: the public
-    /// store API could search when snapd is absent, but a result that cannot
-    /// be installed is a lie, so that path was rejected and the status says
-    /// why instead.
-    pub fn new(system: &SystemInfo, _client: Arc<crate::http::Client>) -> Snap {
+    /// The HTTP client reaches the public store, which answers when snapd
+    /// is not running; a result found that way is installable because the
+    /// plan sets snapd up first.
+    pub fn new(system: &SystemInfo, client: Arc<Client>) -> Snap {
         Snap::with_transport(system, Box::new(SocketTransport::new()))
+            .with_store(Box::new(LiveSnapStore::new(client)))
     }
 
+    /// A source over another transport. The public store is an offline
+    /// script until [`Snap::with_store`] says otherwise.
     pub fn with_transport(system: &SystemInfo, transport: Box<dyn Transport>) -> Snap {
         Snap {
             transport,
+            store: Box::new(ScriptedSnapStore::default()),
+            system: system.clone(),
+            aur_builds: None,
             arch_like: system.is_arch_like(),
             mount_dirs: Mutex::new(MOUNT_DIRS.iter().map(PathBuf::from).collect()),
             mount_dir_known: AtomicBool::new(false),
             confinement: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Ask this store when snapd is not running.
+    pub fn with_store(mut self, store: Box<dyn SnapStore>) -> Snap {
+        self.store = store;
+        self
+    }
+
+    /// Say whether the AUR can build here instead of looking for makepkg.
+    pub fn with_aur_builds(mut self, builds: bool) -> Snap {
+        self.aur_builds = Some(builds);
+        self
+    }
+
+    fn aur_builds(&self) -> bool {
+        self.aur_builds
+            .unwrap_or_else(|| crate::system::which("makepkg").is_some())
+    }
+
+    /// The distribution's snapd package, as an install through its own
+    /// source: the AUR on Arch (when it can build), apt, dnf. `None` where
+    /// the store knows no way.
+    pub fn snapd_package(&self) -> Option<PackageRef> {
+        let source = if self.system.is_arch_like() {
+            if !self.aur_builds() {
+                return None;
+            }
+            SourceKind::Aur
+        } else if self.system.is_debian_like() {
+            SourceKind::Apt
+        } else if self.system.is_fedora_like() {
+            SourceKind::Dnf
+        } else {
+            return None;
+        };
+        Some(PackageRef {
+            source,
+            id: "snapd".to_string(),
+        })
+    }
+
+    /// The root steps that make an installed snapd usable: its socket
+    /// enabled and started, the `/snap` link where the distribution mounts
+    /// snaps elsewhere, and a wait for snapd to finish seeding, which it
+    /// does once on first start and refuses installs until it has.
+    pub fn start_steps(&self) -> Vec<Step> {
+        let mut steps = vec![root_step(
+            "Starting snapd".to_string(),
+            "systemctl",
+            &["enable", "--now", "snapd.socket"],
+            1,
+        )];
+        if self.system.is_arch_like() || self.system.is_fedora_like() {
+            // Arch and Fedora mount snaps under /var/lib/snapd/snap, but a
+            // classic snap is built against /snap and refuses to install
+            // without it; the link is what their snapd packages tell the
+            // user to make by hand.
+            steps.push(root_step(
+                "Linking /snap for classic snaps".to_string(),
+                "ln",
+                &["-sfn", "/var/lib/snapd/snap", "/snap"],
+                1,
+            ));
+        }
+        steps.push(root_step(
+            "Waiting for snapd to be ready".to_string(),
+            "snap",
+            &["wait", "system", "seed.loaded"],
+            2,
+        ));
+        steps
+    }
+
+    /// A search through the public store, for when snapd cannot answer.
+    fn search_store(&self, term: &str, limit: usize) -> Result<Vec<Package>> {
+        let json = self.store.find(term).map_err(|e| {
+            snap_error(format!(
+                "The Snap Store did not answer ({}). Check the connection and try again.",
+                e.message.trim_end_matches('.')
+            ))
+        })?;
+        Ok(parse_store_find(&json)
+            .iter()
+            .take(limit)
+            .map(|s| self.package(s, None, &[]))
+            .collect())
+    }
+
+    /// One snap from the public store, or `None` when it has no such name.
+    fn store_one(&self, name: &str) -> Result<Option<SnapInfo>> {
+        let json = match self.store.info(name) {
+            Ok(json) => json,
+            // The store answers an unknown name with a 404, which the
+            // client reports as a sentence naming the status.
+            Err(e) if e.message.contains(" 404") => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        Ok(parse_store_info(&json, store_arch(&self.system.arch)))
     }
 
     /// Look for installed snaps' icon files here instead of the system
@@ -827,10 +1123,12 @@ impl Snap {
         {
             return c == "classic";
         }
-        if self.transport.presence() != Presence::Socket {
-            return false;
-        }
-        match self.find_one(name) {
+        let found = if self.transport.presence() == Presence::Socket {
+            self.find_one(name)
+        } else {
+            self.store_one(name)
+        };
+        match found {
             Ok(Some(info)) => {
                 self.package(&info, None, &[]);
                 info.confinement == "classic"
@@ -884,11 +1182,15 @@ fn api_sentence(err: &ApiError, status: u16) -> String {
 }
 
 fn step(title: String, args: &[&str], weight: u32) -> Step {
+    root_step(title, "snap", args, weight)
+}
+
+fn root_step(title: String, program: &str, args: &[&str], weight: u32) -> Step {
     Step {
         source: SourceKind::Snap,
         title,
         command: Command {
-            program: "snap".to_string(),
+            program: program.to_string(),
             args: args.iter().map(|a| a.to_string()).collect(),
             env: Vec::new(),
             cwd: None,
@@ -909,24 +1211,51 @@ impl Source for Snap {
             available: false,
             reason: Some(reason),
             detail: None,
+            searchable: false,
+            setup: None,
         };
         match self.transport.presence() {
             Presence::Absent => {
-                let mut reason = "snapd is not installed. Install the snapd package to search the Snap Store.".to_string();
-                if self.arch_like {
-                    reason.push_str(" On Arch it is the snapd package in the AUR.");
+                let setup = self.snapd_package().map(|_| {
+                    let mut sentence = SETUP_SENTENCE.to_string();
+                    if self.arch_like {
+                        sentence.push(' ');
+                        sentence.push_str(SETUP_FROM_AUR);
+                    }
+                    SourceSetup {
+                        label: SETUP_LABEL.to_string(),
+                        sentence,
+                    }
+                });
+                let reason = if setup.is_some() {
+                    "snapd is not installed. The Snap Store is searched through its website, and installing from it sets snapd up first.".to_string()
+                } else if self.arch_like {
+                    "snapd is not installed. The Snap Store is searched through its website; install base-devel so snapd can be built from the AUR.".to_string()
+                } else {
+                    "snapd is not installed. The Snap Store is searched through its website; install the snapd package to install from it.".to_string()
+                };
+                SourceStatus {
+                    searchable: true,
+                    setup,
+                    ..unavailable(reason)
                 }
-                unavailable(reason)
             }
-            Presence::ProgramOnly => {
-                unavailable("snapd is installed but not running. Start it with systemctl enable --now snapd.socket.".to_string())
-            }
+            Presence::ProgramOnly => SourceStatus {
+                searchable: true,
+                setup: Some(SourceSetup {
+                    label: START_LABEL.to_string(),
+                    sentence: START_SENTENCE.to_string(),
+                }),
+                ..unavailable("snapd is installed but not running. Start it with systemctl enable --now snapd.socket.".to_string())
+            },
             Presence::Socket => match self.system_info() {
                 Ok(info) => SourceStatus {
                     kind: SourceKind::Snap,
                     available: true,
                     reason: None,
                     detail: text(&info.version).map(|v| format!("snapd {v}")),
+                    searchable: false,
+                    setup: None,
                 },
                 Err(e) => unavailable(e.message),
             },
@@ -937,6 +1266,9 @@ impl Source for Snap {
         let term = query.text.trim();
         if term.is_empty() {
             return Ok(Vec::new());
+        }
+        if self.transport.presence() != Presence::Socket {
+            return self.search_store(term, query.limit);
         }
         let found: Vec<SnapInfo> = self.call(&format!("/v2/find?q={}", encode(term)))?;
         // A result says whether it is installed without a second call; if
@@ -1001,6 +1333,12 @@ impl Source for Snap {
     }
 
     fn details(&self, id: &str) -> Result<Package> {
+        if self.transport.presence() != Presence::Socket {
+            return match self.store_one(id)? {
+                Some(info) => Ok(self.package(&info, None, &[])),
+                None => Err(snap_error(format!("{id} is not in the Snap Store."))),
+            };
+        }
         let local = self.local_one(id)?;
         let mount_dirs = self.mount_dirs();
         match (local, self.find_one(id)) {
@@ -1054,8 +1392,36 @@ impl Source for Snap {
                 "Updating every {} package is not a Snap operation.",
                 source.label()
             ))),
-            // snapd keeps its own catalogue fresh; there is nothing to refresh.
-            Op::Refresh { .. } => Ok(Vec::new()),
+            // snapd keeps its own catalogue fresh; there is nothing to
+            // refresh. The planner expands a setup through `setup`.
+            Op::Refresh { .. } | Op::Setup { .. } => Ok(Vec::new()),
+        }
+    }
+
+    /// Without snapd: install it through the distribution's source (the AUR
+    /// on Arch), then start it. With snapd installed and stopped: start it.
+    /// With snapd running, or no way to install it here: nothing.
+    fn setup(&self) -> Option<Setup> {
+        match self.transport.presence() {
+            Presence::Socket => None,
+            Presence::ProgramOnly => Some(Setup {
+                ops: Vec::new(),
+                steps: self.start_steps(),
+                notice: "snapd is not running. It is started.".to_string(),
+            }),
+            Presence::Absent => {
+                let package = self.snapd_package()?;
+                let notice = if package.source == SourceKind::Aur {
+                    "snapd is not installed. It is built from the AUR and started."
+                } else {
+                    "snapd is not installed. It is installed and started."
+                };
+                Some(Setup {
+                    ops: vec![Op::Install { package }],
+                    steps: self.start_steps(),
+                    notice: notice.to_string(),
+                })
+            }
         }
     }
 }
