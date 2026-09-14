@@ -247,7 +247,7 @@ fn pacman(args: &[&str], allowed: &Allowed) -> Result<(), String> {
 
 fn apt_get(args: &[&str], allowed: &Allowed) -> Result<(), String> {
     const VERBS: [&str; 4] = ["install", "remove", "update", "upgrade"];
-    const OPTIONS: [&str; 2] = ["-y", "--only-upgrade"];
+    const OPTIONS: [&str; 3] = ["-y", "--only-upgrade", "--with-new-pkgs"];
     let (verb, _, positionals) = verb_options_positionals("apt-get", args, &VERBS, &OPTIONS)?;
     match verb {
         "install" => {
@@ -633,6 +633,7 @@ mod tests {
         ok("apt-get", &["remove", "-y", "steam"]);
         ok("apt-get", &["update"]);
         ok("apt-get", &["upgrade", "-y"]);
+        ok("apt-get", &["upgrade", "--with-new-pkgs", "-y"]);
         ok("dnf", &["install", "-y", "steam", "nodejs:20"]);
         ok(
             "dnf",

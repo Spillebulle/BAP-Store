@@ -11,6 +11,15 @@
 //! catalogue is keyed by package name, so [`Catalogue::by_pkgname`] gives
 //! the icon, the display name and whether it is an application.
 //!
+//! Which updates apt will apply is apt's answer, not the newest version in the
+//! lists: pins (Pop!_OS prefers its own repository over Ubuntu's), suites apt
+//! never upgrades from by itself (backports) and Ubuntu's phased updates all
+//! keep a newer version back. So the Updates page lists what
+//! `apt-get upgrade --simulate --with-new-pkgs` says it would install, the one
+//! read-only question this module asks apt itself, and Update all runs the
+//! same command for real. 0.1.3 listed 78 updates on a Pop!_OS machine that
+//! apt answered with "is already the newest version".
+//!
 //! Versions are ordered by dpkg's own algorithm ([`dpkg_compare`]), which is
 //! not pacman's: `~` sorts before everything including the end of the
 //! string, and letters sort before punctuation. Getting that wrong would
@@ -27,11 +36,22 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 
 /// The name of this store's own Debian package, so its update is flagged.
 const SELF_PACKAGE: &str = "brokey";
+
+/// The arguments of apt's answer to "what would an upgrade install". The
+/// verb first, so a failure reads "apt-get upgrade failed". Update all runs
+/// [`UPGRADE`], the same command without `--simulate`.
+const SIMULATE_UPGRADE: [&str; 3] = ["upgrade", "--simulate", "--with-new-pkgs"];
+const UPGRADE: [&str; 3] = ["upgrade", "--with-new-pkgs", "-y"];
+
+/// Asks apt what an upgrade would install and returns what it printed.
+/// Read-only and without root (apt-get simulates without the lock); a
+/// closure so the fixture tests answer from recorded output.
+pub type Simulate = Box<dyn Fn() -> Result<String> + Send + Sync>;
 
 pub struct Apt {
     system: SystemInfo,
@@ -41,6 +61,7 @@ pub struct Apt {
     apt_get: Option<PathBuf>,
     /// Debian's name for the machine's architecture: "amd64", "arm64".
     arch: String,
+    simulate: Simulate,
     /// The parsed lists, rebuilt when any file's size or mtime changes.
     /// Parsing bookworm's main list takes a noticeable fraction of a
     /// second, and a search must not pay that every keystroke.
@@ -78,8 +99,25 @@ impl Apt {
             lists_dir,
             status_path,
             apt_get,
+            simulate: Box::new(|| {
+                crate::system::run("apt-get", &SIMULATE_UPGRADE).map_err(|e| {
+                    Error::from_source(
+                        SourceKind::Apt,
+                        format!(
+                            "apt could not say which updates it would install. {}",
+                            e.message
+                        ),
+                    )
+                })
+            }),
             cache: Mutex::new(None),
         }
+    }
+
+    /// The same source with apt's upgrade simulation answered by `simulate`.
+    pub fn with_simulation(mut self, simulate: Simulate) -> Apt {
+        self.simulate = simulate;
+        self
     }
 
     /// Why this machine cannot use apt, or `None` when it can.
@@ -231,6 +269,7 @@ impl Apt {
             stamp,
             available,
             installed,
+            upgrades: OnceLock::new(),
         })
     }
 
@@ -242,6 +281,19 @@ impl Apt {
         let base = avail.or(inst)?;
         let mut pkg = Package::new(SourceKind::Apt, name, name);
         pkg.version = avail.map(|a| a.version.clone());
+        // A newer version apt will not install is not on offer: the version
+        // shown is the one apt would upgrade to, or the installed one.
+        if let (Some(a), Some(i)) = (avail, inst)
+            && dpkg_is_newer(&a.version, &i.version)
+            && let Ok(upgrades) = self.upgrades(index)
+        {
+            pkg.version = Some(
+                upgrades
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| i.version.clone()),
+            );
+        }
         pkg.installed_version = inst.map(|i| i.version.clone());
         pkg.installed = inst.is_some();
         pkg.repo = avail.and_then(|a| a.repo.clone());
@@ -264,23 +316,47 @@ impl Apt {
         Some(pkg)
     }
 
-    fn pending_updates(&self, index: &Index) -> Vec<Update> {
+    /// What an upgrade would install, name to version, by apt's own answer.
+    /// Asked once per index, and not at all when no list has a newer
+    /// version of anything installed, so a machine that is up to date and
+    /// the fixtures without updates never run apt-get.
+    fn upgrades<'a>(&self, index: &'a Index) -> Result<&'a HashMap<String, String>> {
+        static NONE: OnceLock<HashMap<String, String>> = OnceLock::new();
+        let any_newer = index.installed.iter().any(|(name, inst)| {
+            index
+                .available
+                .get(name)
+                .is_some_and(|avail| dpkg_is_newer(&avail.version, &inst.version))
+        });
+        if !any_newer {
+            return Ok(NONE.get_or_init(HashMap::new));
+        }
+        index
+            .upgrades
+            .get_or_init(|| {
+                (self.simulate)()
+                    .map(|text| parse_simulation(&text, &self.arch).into_iter().collect())
+                    .map_err(|e| e.message)
+            })
+            .as_ref()
+            .map_err(|message| Error::from_source(SourceKind::Apt, message.clone()))
+    }
+
+    fn pending_updates(&self, index: &Index) -> Result<Vec<Update>> {
         let mut out = Vec::new();
-        for (name, inst) in &index.installed {
-            // apt-get upgrade leaves a held package alone, so listing it
-            // would show an update that "Update all" does not apply.
-            if inst.is_held() {
-                continue;
-            }
-            let Some(avail) = index.available.get(name) else {
+        for (name, to) in self.upgrades(index)? {
+            // apt leaves a held package alone and never lists it; checked
+            // here too so a stale answer cannot offer one.
+            let Some(inst) = index.installed.get(name) else {
                 continue;
             };
-            if dpkg_compare(&avail.version, &inst.version) != Ordering::Greater {
+            if inst.is_held() {
                 continue;
             }
             let Some(pkg) = self.to_package(name, index, false) else {
                 continue;
             };
+            let avail = index.available.get(name).filter(|a| &a.version == to);
             out.push(Update {
                 package: pkg.reference(),
                 name: pkg.name,
@@ -288,14 +364,14 @@ impl Apt {
                 summary: pkg.summary,
                 icon: pkg.icon,
                 from: Some(inst.version.clone()),
-                to: avail.version.clone(),
-                download_size: avail.size,
+                to: to.clone(),
+                download_size: avail.and_then(|a| a.size),
                 published: None,
                 is_self: name == SELF_PACKAGE,
             });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
-        out
+        Ok(out)
     }
 
     fn step(&self, title: String, args: &[&str], weight: u32) -> Step {
@@ -409,7 +485,7 @@ impl Source for Apt {
             return Err(Error::from_source(SourceKind::Apt, reason));
         }
         let index = self.index()?;
-        Ok(self.pending_updates(&index))
+        self.pending_updates(&index)
     }
 
     fn details(&self, id: &str) -> Result<Package> {
@@ -480,16 +556,13 @@ impl Source for Apt {
             Op::Update { package } => {
                 self.own(package)?;
                 let name = package.id.as_str();
-                let Some(inst) = index.installed.get(name) else {
+                if !index.installed.contains_key(name) {
                     return Err(Error::from_source(
                         SourceKind::Apt,
                         format!("{name} is not installed, so there is nothing to update."),
                     ));
-                };
-                let newer = index.available.get(name).is_some_and(|avail| {
-                    dpkg_compare(&avail.version, &inst.version) == Ordering::Greater
-                });
-                if !newer {
+                }
+                if !self.upgrades(&index)?.contains_key(name) {
                     return Ok(Vec::new());
                 }
                 Ok(vec![self.step(
@@ -499,7 +572,7 @@ impl Source for Apt {
                 )])
             }
             Op::UpdateAll { .. } => {
-                let count = self.pending_updates(&index).len() as u32;
+                let count = self.pending_updates(&index)?.len() as u32;
                 if count == 0 {
                     return Ok(Vec::new());
                 }
@@ -508,7 +581,7 @@ impl Source for Apt {
                         "Updating {count} apt {}",
                         if count == 1 { "package" } else { "packages" }
                     ),
-                    &["upgrade", "-y"],
+                    &UPGRADE,
                     3 * count,
                 )])
             }
@@ -551,6 +624,9 @@ struct Index {
     available: HashMap<String, DebPackage>,
     /// Status entries whose `Status` ends in "installed".
     installed: HashMap<String, DebPackage>,
+    /// apt's answer for these lists and this status file, asked on first
+    /// use. The error is kept as its sentence.
+    upgrades: OnceLock<std::result::Result<HashMap<String, String>, String>>,
 }
 
 /// One stanza of a Packages or status file, reduced to what the store
@@ -1103,6 +1179,33 @@ pub fn parse_progress(line: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// The upgrades in `apt-get --simulate` output, as (name, new version).
+/// Each is a line `Inst name [installed] (new origin [arch])`; a line with
+/// no bracketed installed version is a new package pulled in, not an
+/// upgrade. A foreign-architecture package (`libc6:i386`) is left out, as
+/// the lists are read for this architecture only.
+pub fn parse_simulation(text: &str, arch: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let rest = line.strip_prefix("Inst ")?;
+            let (name, rest) = rest.split_once(' ')?;
+            let name = match name.split_once(':') {
+                Some((base, a)) if a == arch || a == "all" => base,
+                Some(_) => return None,
+                None => name,
+            };
+            let rest = rest.trim_start().strip_prefix('[')?;
+            let (_, rest) = rest.split_once(']')?;
+            let version = rest
+                .trim_start()
+                .strip_prefix('(')?
+                .split_whitespace()
+                .next()?;
+            Some((name.to_string(), version.to_string()))
+        })
+        .collect()
 }
 
 /// dpkg's version ordering, transcribed from `lib/dpkg/version.c`.

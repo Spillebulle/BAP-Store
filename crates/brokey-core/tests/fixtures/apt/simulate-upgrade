@@ -1,0 +1,19 @@
+NOTE: This is only a simulation!
+      apt-get needs root privileges for real execution.
+      Keep also in mind that locking is deactivated,
+      so don't depend on the relevance to the real current situation!
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages have been kept back:
+  libgimp2.0
+The following packages will be upgraded:
+  brokey firefox-esr gimp
+3 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.
+Inst brokey [0.1.0-1] (0.2.0-1 apt.example.org:bookworm [amd64])
+Inst firefox-esr [115.6.0esr-1~deb12u1] (115.8.0esr-1~deb12u1 Debian-Security:12/stable-security [amd64])
+Inst gimp [2.10.34-1+deb12u1] (2.10.34-1+deb12u2 Debian:12.5/stable [amd64])
+Conf brokey (0.2.0-1 apt.example.org:bookworm [amd64])
+Conf firefox-esr (115.8.0esr-1~deb12u1 Debian-Security:12/stable-security [amd64])
+Conf gimp (2.10.34-1+deb12u2 Debian:12.5/stable [amd64])

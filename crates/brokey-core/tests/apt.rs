@@ -6,7 +6,7 @@
 
 use brokey_core::appstream::Catalogue;
 use brokey_core::sources::apt::{
-    Apt, ListName, dpkg_compare, dpkg_is_newer, parse_control, parse_progress,
+    Apt, ListName, dpkg_compare, dpkg_is_newer, parse_control, parse_progress, parse_simulation,
 };
 use brokey_core::{Op, PackageKind, PackageRef, Query, Source, SourceKind, SystemInfo};
 use std::cmp::Ordering;
@@ -48,8 +48,15 @@ fn apt_get() -> Option<PathBuf> {
     Some(PathBuf::from("/usr/bin/apt-get"))
 }
 
-/// The source as a Debian machine with the fixture lists would build it.
+/// The source as a Debian machine with the fixture lists would build it,
+/// with apt's upgrade simulation answered from what apt-get printed for them.
 fn source() -> Apt {
+    let recorded = std::fs::read_to_string(fixtures().join("simulate-upgrade")).unwrap();
+    source_simulating(recorded)
+}
+
+fn source_simulating(simulation: impl Into<String>) -> Apt {
+    let simulation = simulation.into();
     Apt::at(
         &debian(),
         catalogue(),
@@ -57,6 +64,7 @@ fn source() -> Apt {
         fixtures().join("status"),
         apt_get(),
     )
+    .with_simulation(Box::new(move || Ok(simulation.clone())))
 }
 
 fn apt_ref(name: &str) -> PackageRef {
@@ -146,8 +154,20 @@ fn on_this_machine_apt_says_why_it_is_unavailable() {
     let status = apt.status();
     assert_eq!(status.kind, SourceKind::Apt);
     if system.is_debian_like() {
-        // The development machine is Arch; on a Debian machine this test
-        // has nothing to say and the fixture tests carry the weight.
+        // CI's Ubuntu runner: the real apt-get, run without root, answers
+        // the upgrade simulation, and every upgrade read from it is newer
+        // than what is installed. The fixtures carry the rest.
+        if status.available {
+            for update in apt.updates().expect("apt answers the upgrade simulation") {
+                let from = update.from.as_deref().unwrap_or("");
+                assert!(
+                    dpkg_is_newer(&update.to, from),
+                    "{} {from} -> {}",
+                    update.name,
+                    update.to
+                );
+            }
+        }
         return;
     }
     assert!(!status.available);
@@ -339,7 +359,7 @@ fn installed_is_every_status_entry_that_is_fully_installed() {
 }
 
 #[test]
-fn updates_are_installed_packages_with_a_newer_list_version_and_never_held_ones() {
+fn updates_are_what_apt_would_upgrade_and_never_held_ones() {
     let updates = source().updates().unwrap();
     let rows: Vec<(&str, Option<&str>, &str)> = updates
         .iter()
@@ -368,6 +388,89 @@ fn updates_are_installed_packages_with_a_newer_list_version_and_never_held_ones(
     );
     assert_eq!(updates[2].kind, PackageKind::Package);
     assert_eq!(updates[2].published, None);
+}
+
+#[test]
+fn a_newer_version_apt_keeps_back_is_not_an_update() {
+    // Pop!_OS pins its own repository above Ubuntu's, backports are never
+    // upgraded to by themselves, and phased updates wait: in each the lists
+    // hold a newer version and apt says it will not install it. Here apt
+    // keeps firefox-esr back.
+    let apt = source_simulating(
+        "Inst brokey [0.1.0-1] (0.2.0-1 apt.example.org:bookworm [amd64])\n\
+         Inst gimp [2.10.34-1+deb12u1] (2.10.34-1+deb12u2 Debian:12.5/stable [amd64])\n",
+    );
+    let names: Vec<String> = apt.updates().unwrap().into_iter().map(|u| u.name).collect();
+    assert_eq!(names, ["brokey", "gimp"]);
+    assert!(
+        apt.plan(&Op::Update {
+            package: apt_ref("firefox-esr")
+        })
+        .unwrap()
+        .is_empty(),
+        "an update apt would answer with \"is already the newest version\""
+    );
+    let all = apt
+        .plan(&Op::UpdateAll {
+            source: SourceKind::Apt,
+        })
+        .unwrap();
+    assert_eq!(all[0].title, "Updating 2 apt packages");
+    let firefox = apt.details("firefox-esr").unwrap();
+    assert_eq!(
+        firefox.version, firefox.installed_version,
+        "no update on offer"
+    );
+}
+
+#[test]
+fn when_apt_cannot_say_what_it_would_upgrade_the_updates_say_so() {
+    let apt = Apt::at(
+        &debian(),
+        catalogue(),
+        fixtures().join("lists"),
+        fixtures().join("status"),
+        apt_get(),
+    )
+    .with_simulation(Box::new(|| {
+        Err(brokey_core::Error::from_source(
+            SourceKind::Apt,
+            "apt could not say which updates it would install. apt-get upgrade failed: E: The package lists or status file could not be parsed or opened.",
+        ))
+    }));
+    let err = apt.updates().unwrap_err();
+    assert!(
+        err.message.starts_with("apt could not say which updates"),
+        "{}",
+        err.message
+    );
+    // Search and details still work, showing the lists' version.
+    assert_eq!(
+        apt.details("gimp").unwrap().version.as_deref(),
+        Some("2.10.34-1+deb12u2")
+    );
+}
+
+#[test]
+fn simulation_output_gives_upgrades_only() {
+    let text = "\
+Inst systemd [255.4-1ubuntu8.15pop0~1778766128~24.04~85b5073] (255.4-1ubuntu8.16 Ubuntu:24.04/noble-updates [amd64])
+Inst linux-image-6.19.1-generic (6.19.1-76061901.202609 pop-os-release:24.04/noble [amd64])
+Inst libc6:i386 [2.39-0ubuntu8.4] (2.39-0ubuntu8.5 Ubuntu:24.04/noble-updates [i386])
+Inst libc6 [2.39-0ubuntu8.4] (2.39-0ubuntu8.5 Ubuntu:24.04/noble-updates [amd64])
+Inst tzdata:all [2024a-3ubuntu1.1] (2024a-3ubuntu1.2 Ubuntu:24.04/noble-updates [all])
+Conf systemd (255.4-1ubuntu8.16 Ubuntu:24.04/noble-updates [amd64])
+3 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+";
+    assert_eq!(
+        parse_simulation(text, "amd64"),
+        [
+            ("systemd".to_string(), "255.4-1ubuntu8.16".to_string()),
+            ("libc6".to_string(), "2.39-0ubuntu8.5".to_string()),
+            ("tzdata".to_string(), "2024a-3ubuntu1.2".to_string()),
+        ],
+        "a new package and a foreign architecture are not upgrades here"
+    );
 }
 
 #[test]
@@ -452,7 +555,7 @@ fn plans_are_apt_get_as_root_with_a_quiet_frontend() {
             source: SourceKind::Apt,
         })
         .unwrap();
-    assert_eq!(all[0].command.args, ["upgrade", "-y"]);
+    assert_eq!(all[0].command.args, ["upgrade", "--with-new-pkgs", "-y"]);
     assert_eq!(all[0].title, "Updating 3 apt packages");
     assert!(
         all[0].weight > update[0].weight,

@@ -2,6 +2,11 @@
 
 Newest first. Each section is the release's notes, published verbatim.
 
+## 0.1.4
+
+- On Debian, Ubuntu and Pop!_OS the Updates page lists what apt will actually install. Before, it listed every newer version in the package lists, including ones apt keeps back because of Pop!_OS's pinned repository, backports or Ubuntu's phased updates, and updating them did nothing.
+- Update all on apt also installs the new packages an update needs, as `apt upgrade` does, instead of keeping those updates back.
+
 ## 0.1.3
 
 - The .deb installs beside Umber, Muster and any other application from the Spillebulle archive. 0.1.2 and earlier refused, because each package claimed the archive's key as its own file.
