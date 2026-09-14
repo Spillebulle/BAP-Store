@@ -105,9 +105,10 @@ echo "==> building brokey_${version}_${arch}.deb"
 deb="$work/deb"
 stage_tree "$deb/usr"
 mkdir -p "$deb/DEBIAN"
-if [ -n "$archive_key" ]; then
-    install -Dm644 "$work/$ARCHIVE_KEYRING.gpg" "$deb/usr/share/keyrings/$ARCHIVE_KEYRING.gpg"
-fi
+# The keyring is not in the package's file list. Every application from the
+# archive needs the same file at the same path, and dpkg refuses a second
+# package that ships a file another already owns, so Brokey would not install
+# beside Umber. The postinst writes it instead, like the source file below.
 size=$(du -ks "$deb/usr" | cut -f1)
 cat > "$deb/DEBIAN/control" <<EOF2
 Package: brokey
@@ -137,7 +138,26 @@ EOF2
 # The source file is written by the scriptlet, never shipped: a conffile is
 # removed on purge, and this file is shared with every application from the
 # archive. Created, never overwritten; a `.disabled` marker is honoured.
+#
+# The keyring the same way, written when missing. An older package from the
+# archive may still own it, and dpkg deletes it when that package is removed
+# or upgraded past shipping it; the file trigger runs this postinst again at
+# that moment, so the source never names a key that is gone.
 if [ -n "$archive_key" ]; then
+    key_b64=$(base64 < "$work/$ARCHIVE_KEYRING.gpg")
+    cat >> "$deb/DEBIAN/postinst" <<EOF2
+
+keyring=/usr/share/keyrings/$ARCHIVE_KEYRING.gpg
+if [ ! -s "\$keyring" ]; then
+    mkdir -p /usr/share/keyrings
+    base64 -d > "\$keyring.new" <<'KEY'
+$key_b64
+KEY
+    chmod 644 "\$keyring.new"
+    mv "\$keyring.new" "\$keyring"
+fi
+EOF2
+    echo "interest-noawait /usr/share/keyrings/$ARCHIVE_KEYRING.gpg" > "$deb/DEBIAN/triggers"
     cat >> "$deb/DEBIAN/postinst" <<EOF2
 
 sources=/etc/apt/sources.list.d/spillebulle.sources
