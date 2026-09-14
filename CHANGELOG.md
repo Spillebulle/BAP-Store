@@ -2,6 +2,10 @@
 
 Newest first. Each section is the release's notes, published verbatim.
 
+## 0.1.3
+
+- The .deb installs beside Umber, Muster and any other application from the Spillebulle archive. 0.1.2 and earlier refused, because each package claimed the archive's key as its own file.
+
 ## 0.1.2
 
 - The Update Brokey button appears in the notice for a new version. In 0.1.0 and 0.1.1 the notice said what would happen but had nothing to click, so install 0.1.2 by hand once; updates work from the notice after that.

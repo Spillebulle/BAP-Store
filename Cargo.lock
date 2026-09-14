@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "brokey"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "brokey-core",
  "directories",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "brokey-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "directories",
@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "brokey-helper"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "brokey-core",
  "serde",
