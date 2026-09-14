@@ -36,13 +36,19 @@ Description: Stand-in for an application that ships the archive keyring
 EOF
 dpkg-deb --build --root-owner-group "$work/other" "$work/other.deb" >/dev/null
 
-# Brokey's own dependencies (WebKit and so on) are not what is under test.
-install_brokey() { dpkg -i --force-depends "$deb" >/dev/null || fail "$1"; }
+# With its real dependencies: dpkg leaves the triggers of a package whose
+# dependencies are missing pending, and the trigger is what is under test.
+install_brokey() {
+    apt-get install -y -qq "$(realpath "$deb")" >/dev/null || fail "$1"
+}
 key_is_there() {
-    cmp -s "$keyring" "$work/expected.gpg" || fail "$1"
+    cmp -s "$keyring" "$work/expected.gpg" && return
+    dpkg -l brokey spillebulle-other >&2 || true
+    ls -l /usr/share/keyrings >&2
+    fail "$1"
 }
 clean() {
-    dpkg --purge --force-depends brokey spillebulle-other >/dev/null 2>&1 || true
+    dpkg --purge brokey spillebulle-other >/dev/null 2>&1 || true
     rm -f "$keyring" "$sources"
 }
 
@@ -55,7 +61,7 @@ key_is_there "the keyring changed when Brokey was installed"
 dpkg -r spillebulle-other >/dev/null
 key_is_there "removing the other package took the keyring away from Brokey"
 ok "the keyring survives removing the package that owned it"
-dpkg --purge --force-depends brokey >/dev/null
+dpkg --purge brokey >/dev/null
 key_is_there "purging Brokey removed the keyring"
 [ -f "$sources" ] || fail "purging Brokey removed the source file"
 ok "purging Brokey leaves the keyring and the source file"
